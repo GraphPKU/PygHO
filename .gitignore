@@ -1,0 +1,6 @@
+out/*
+*.out
+*.test
+plot/*
+__pycache__
+dataset/*
