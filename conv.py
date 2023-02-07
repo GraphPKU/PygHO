@@ -32,14 +32,14 @@ class GCNConv(MessagePassing):
             deg += deg == 0
             deg.rsqrt_()
 
-            norm = deg[row] * deg[col]
+            norm = (deg[row] * deg[col]).reshape(-1, 1)
         return self.propagate(edge_index, x=x, edge_attr=edge_embedding, norm=norm) 
 
     def message(self, x_j, edge_attr, norm):
         if norm is None:
             return x_j * edge_attr
         else:
-            return norm.view(-1, 1) * x_j * edge_attr
+            return norm * x_j * edge_attr
 
     def update(self, aggr_out):
         return aggr_out
