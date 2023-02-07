@@ -20,7 +20,6 @@ def set_seed(seed):
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
 
-
 def train(model, device, loader, optimizer, task_type, alpha=1e1, gamma=1e-4):
     model.train()
     losss = []
@@ -31,23 +30,34 @@ def train(model, device, loader, optimizer, task_type, alpha=1e1, gamma=1e-4):
 
         if True:
             optimizer.zero_grad()
-            pred, logprob, negentropy = model(batch)
-            ## ignore nan targets (unlabeled) when computing training loss.
-            is_labeled = batch.y == batch.y
+            preds, logprob, negentropy = model(batch)
+            y = batch.y.to(torch.float32)
+            finalpred = preds[-1].mean(dim=0)
+            # preds [num_anchor+1, multi_anchor, N, num_task]
+            # logprob [num_anchor, multi_anchor, N] 
+            # negentropy [num_anchor, multi_anchor, N] 
+            # y [N, 1]
             if "classification" in task_type:
-                loss = cls_criterion(pred[is_labeled],
-                                     batch.y.to(torch.float32)[is_labeled])
+                value_loss = torch.mean(cls_criterion(finalpred, y))
             else:
-                loss = reg_criterion(pred[is_labeled],
-                                     batch.y.to(torch.float32)[is_labeled])
+                value_loss = torch.mean(reg_criterion(finalpred, y))
+            y = y.unsqueeze(0).unsqueeze(0).expand(preds.shape[0], preds.shape[1], -1, -1)
+            with torch.no_grad():
+                if "classification" in task_type:
+                    loss = cls_criterion(preds.detach(), y)
+                else:
+                    loss = reg_criterion(preds.detach(), y)
+                # loss [num_anchor+1, multi_anchor, N, num_task]
+                loss = loss.sum(dim=-1)
+                loss = torch.diff(loss, dim=0)
+                # loss [num_anchor, multi_anchor, N]
             policy_loss = (loss.detach() * logprob)
             policy_loss = torch.mean(policy_loss)
             entropy_loss = torch.mean(negentropy)
-            loss = torch.mean(loss)
-            totalloss = loss + alpha * policy_loss + gamma * entropy_loss
+            totalloss = value_loss + alpha * policy_loss + gamma * entropy_loss
             totalloss.backward()
             optimizer.step()
-            losss.append(loss)
+            losss.append(value_loss)
             policy_losss.append(policy_loss)
             entropy_losss.append(entropy_loss)
     return np.average([_.item() for _ in losss]), np.average([
@@ -66,7 +76,7 @@ def eval(model, device, loader, evaluator):
         steplen = batch.y.shape[0]
         y_true[step:step + steplen] = batch.y
         batch = batch.to(device, non_blocking=True)
-        y_pred[step:step + steplen] = model(batch)[0]
+        y_pred[step:step + steplen] = model(batch)
         step += steplen
     assert step == y_true.shape[0]
     y_true = y_true.numpy()
@@ -124,7 +134,7 @@ def main():
                         action="store_true")
     parser.add_argument('--set2set_concat',
                         action="store_true")
-    parser.add_argument('--multi_anchor', type=int)
+    parser.add_argument('--multi_anchor', type=int, default=1)
     parser.add_argument('--rand_sample', action="store_true")
     parser.add_argument("--num_anchor", type=int, default=0)
 

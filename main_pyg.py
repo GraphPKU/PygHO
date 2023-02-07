@@ -25,15 +25,14 @@ def train(model, device, loader, optimizer, task_type):
             optimizer.zero_grad()
             pred = model(batch)
             ## ignore nan targets (unlabeled) when computing training loss.
-            is_labeled = batch.y == batch.y
             if "classification" in task_type:
                 loss = cls_criterion(
-                    pred.to(torch.float32)[is_labeled],
-                    batch.y.to(torch.float32)[is_labeled])
+                    pred.to(torch.float32),
+                    batch.y.to(torch.float32))
             else:
                 loss = reg_criterion(
-                    pred.to(torch.float32)[is_labeled],
-                    batch.y.to(torch.float32)[is_labeled])
+                    pred.to(torch.float32),
+                    batch.y.to(torch.float32))
             loss.backward()
             optimizer.step()
             losss.append(loss)
@@ -152,11 +151,11 @@ def main():
                 args.norm,
                 virtual_node=False,
                 residual=args.res,
-                dp=args.dp,
                 JK=args.jk,
                 graph_pooling=args.pool,
                 use_elin=args.use_elin,
-                mlplayer=args.mlplayer).to(device)
+                mlplayer=args.mlplayer,
+                mlp={"dp":args.dp}).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 

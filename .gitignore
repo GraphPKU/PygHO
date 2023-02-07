@@ -5,3 +5,4 @@ plot/*
 __pycache__
 dataset/*
 *.db
+past

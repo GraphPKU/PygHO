@@ -23,7 +23,7 @@ class GNN(nn.Module):
                  graph_pooling="mean",
                  dims=None,
                  outlayer: int = 1,
-                 node2nodelayer: int=0,
+                 node2nodelayer: int = 0,
                  **kwargs):
         '''
             num_tasks (int): number of labels to be predicted
@@ -52,7 +52,11 @@ class GNN(nn.Module):
                                      norm=norm,
                                      dims=dims,
                                      **kwargs)
-        self.node2node = MLP(emb_dim, emb_dim, node2nodelayer, tailact=True, **kwargs["mlp"])
+        self.node2node = MLP(emb_dim,
+                             emb_dim,
+                             node2nodelayer,
+                             tailact=True,
+                             **kwargs["mlp"])
         ### Pooling function to generate whole-graph embeddings
         if self.graph_pooling == "sum":
             self.pool = SumAggregation()
@@ -65,7 +69,11 @@ class GNN(nn.Module):
         else:
             raise ValueError("Invalid graph pooling type.")
         outdim = 2 * self.emb_dim if graph_pooling == "set2set" else self.emb_dim
-        self.pred_lin = MLP(outdim, num_tasks, outlayer, tailact=False, **kwargs["mlp"])
+        self.pred_lin = MLP(outdim,
+                            num_tasks,
+                            outlayer,
+                            tailact=False,
+                            **kwargs["mlp"])
 
     def forward(self, batched_data):
         h_node = self.gnn_node(batched_data)
@@ -87,14 +95,15 @@ class NodeAnchor(GNN):
                  JK="last",
                  set2set="mindist",
                  **kwargs):
-        '''
-            num_tasks (int): number of labels to be predicted
-            virtual_node (bool): whether to add virtual node or not
-        '''
         assert num_tasks == 1
-        super().__init__(1, num_layer, emb_dim, norm, virtual_node, residual, JK, "mean", **kwargs)
+        super().__init__(1, num_layer, emb_dim, norm, virtual_node, residual,
+                         JK, "mean", **kwargs)
         if set2set.startswith("id"):
-            self.set2set = MLP(emb_dim, emb_dim, 0, tailact=False, **kwargs["mlp"])
+            self.set2set = MLP(emb_dim,
+                               emb_dim,
+                               0,
+                               tailact=False,
+                               **kwargs["mlp"])
             self.distlin = nn.Linear(emb_dim, 1)
         elif set2set.startswith("mindist"):
             self.set2set = MinDist()
@@ -277,43 +286,84 @@ class UniAnchorGNN(GNN):
             outdim = (emb_dim if feat else 1) + (emb_dim if concat else 0)
         else:
             raise NotImplementedError
-        self.distlin = MLP(outdim, 1, anchor_outlayer, tailact=False, **kwargs["mlp"])
-    
+        self.distlin = MLP(outdim,
+                           1,
+                           anchor_outlayer,
+                           tailact=False,
+                           **kwargs["mlp"])
+        self.h_node = None
+
+    def get_h_node(self, batched_data):
+        self.h_node = self.gnn_node(batched_data)
+
+    def fresh_h_node(self):
+        self.h_node = None
+
     def anchorforward(self, batched_data, T: float = 1):
+        assert self.h_node is not None
         batch = batched_data.batch
         if self.rand_anchor:
-            prob = torch.ones_like(batch, dtype=torch.float).unsqueeze_(0).repeat(self.multi_anchor, 1)
+            prob = torch.ones_like(batch,
+                                   dtype=torch.float).unsqueeze_(0).repeat(
+                                       self.multi_anchor, 1)
             rawsample = multinomial_sample_batch(prob, batch)
-            return rawsample, 0, 0
-        h_node = self.gnn_node(batched_data)
-        h_node = self.set2set(h_node, batch)
+            if self.training:
+                return rawsample, 0, 0
+            else:
+                return rawsample
+        h_node = self.set2set(self.h_node, batch)
         pred = self.distlin(h_node).squeeze(-1)
-        prob = softmax(pred*T, batch, dim=-1)
-        logprob = torch.log(prob + 1e-15)
-        negentropy = scatter_add(prob * logprob, batch, dim=-1)
+        prob = softmax(pred * T, batch, dim=-1)
         rawsample = multinomial_sample_batch(prob, batch)
-        return rawsample, torch.gather(logprob, -1, rawsample), negentropy
+        if self.training:
+            logprob = torch.log(prob + 1e-15)
+            negentropy = scatter_add(prob * logprob, batch, dim=-1)
+            return rawsample, torch.gather(logprob, -1, rawsample), negentropy
+        else:
+            return rawsample
 
     def graph_forward(self, batched_data):
-        h_node = self.gnn_node(batched_data)
-        h_node = self.node2node(h_node)
+        assert self.h_node is not None
+        h_node = self.node2node(self.h_node)
         h_graph = self.pool(h_node, batched_data.batch)
         return self.pred_lin(h_graph)
 
-
-    def forward(self, batched_data, T: float=1):
-        logprob = torch.tensor(0., device=batched_data.x.device)
-        negentropy = torch.tensor(0., device=batched_data.x.device)
-        batched_data.x = batched_data.x.unsqueeze(0).repeat(self.multi_anchor, 1, 1)
-        for i in range(self.num_anchor):
-            rawsample, tlogprob, tnegentropy = self.anchorforward(
+    def forward(self, batched_data, T: float = 1):
+        self.fresh_h_node()
+        if self.training:
+            logprob = []
+            negentropy = []
+            preds = []
+            batched_data.x = batched_data.x.unsqueeze(0).repeat(
+                self.multi_anchor, 1, 1)
+            for i in range(self.num_anchor):
+                self.get_h_node(batched_data)
+                rawsample, tlogprob, tnegentropy = self.anchorforward(
                     batched_data, T)
-            logprob = logprob + tlogprob
-            negentropy = negentropy + tnegentropy
-            label = torch.zeros_like(batched_data.x[:, :, 0])
-            label.scatter_(-1, rawsample, 1).unsqueeze_(-1)
-            batched_data.x = torch.cat((batched_data.x, label), dim=-1)
-        return self.graph_forward(batched_data).mean(dim=0), logprob.mean(dim=0), negentropy.mean(dim=0)
+                logprob.append(tlogprob)
+                negentropy.append(tnegentropy)
+                preds.append(self.graph_forward(batched_data))
+                self.fresh_h_node()
+                label = torch.zeros_like(batched_data.x[:, :, 0])
+                label.scatter_(-1, rawsample, 1).unsqueeze_(-1)
+                batched_data.x = torch.cat((batched_data.x, label), dim=-1)
+            self.get_h_node(batched_data)
+            preds.append(self.graph_forward(batched_data))
+            return torch.stack(preds, dim=0), torch.stack(
+                logprob,
+                dim=0), torch.stack(negentropy,
+                                    dim=0)  # List[(M, N, 1), (M, N), (M, N)]
+        else:
+            batched_data.x = batched_data.x.unsqueeze(0).repeat(
+                self.multi_anchor, 1, 1)
+            for i in range(self.num_anchor):
+                self.get_h_node(batched_data)
+                rawsample = self.anchorforward(batched_data, T)
+                label = torch.zeros_like(batched_data.x[:, :, 0])
+                label.scatter_(-1, rawsample, 1).unsqueeze_(-1)
+                batched_data.x = torch.cat((batched_data.x, label), dim=-1)
+            self.get_h_node(batched_data)
+            return self.graph_forward(batched_data).mean(dim=0)
 
 
 if __name__ == '__main__':
