@@ -15,6 +15,7 @@ from torch_geometric.data import InMemoryDataset
 from torch_geometric.data.data import Data
 from torch_geometric.utils import to_undirected
 from torch_geometric.datasets import TUDataset, ZINC, GNNBenchmarkDataset, QM9
+from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 
 
 class PlanarSATPairsDataset(InMemoryDataset):
@@ -157,32 +158,42 @@ class SRDataset(InMemoryDataset):
         torch.save((data, slices), self.processed_paths[0])
 
 
-  # each graph is a unique class
+class myEvaluator(Evaluator):
+    def __init__(self, name):
+        super().__init__(name=name)
+    
+    def __call__(self, y_pred, y_true):
+        return super().eval({"y_pred": y_pred, "y_true": y_true})
+        
 
+from torchmetrics import Accuracy, MeanAbsoluteError
+from typing import Iterable, Callable, Optional
+from torch_geometric.data import Dataset
 
-def loaddataset(name: str, **kwargs):
+def loaddataset(name: str, y_slice: int=0, **kwargs)-> Iterable[Dataset], str, Callable, str:
     if name == "sr":
-        dataset = SRDataset()
+        dataset = SRDataset(**kwargs)
         dataset.data.x = dataset.data.x.long()
-        dataset.data.y = torch.arange(len(dataset.data.y)).long()
-        return dataset, "10-fold-9-0-1" #?? "all for training, test valid"
-    elif name == "subgcount":
-        dataset = GraphCountDataset()
-        return dataset[dataset.train_idx], dataset[dataset.val_idx], dataset[dataset.test_idx], "fixed"
+        return (dataset,), "10-fold-9-0-1", Accuracy("multiclass", num_classes=15), "cls"
     elif name == "EXP":
-        return PlanarSATPairsDataset(pre_transform=EXP_node_feature_transform), "10-fold-8-1-1"
-    elif name in ["MUTAG", "DD", "PROTEINS", "PTC", "IMDBBINARY"]:
-        return TUDataset("dataset", name=name), "10-fold-9-0-1"
-    elif name == "zinc":
-        return ZINC("dataset/ZINC", subset=True, split="train"), ZINC("dataset/ZINC", subset=True, split="val"), ZINC("dataset/ZINC", subset=True, split="test"), "fixed"
+        return (PlanarSATPairsDataset(pre_transform=EXP_node_feature_transform),**kwargs),  "fold-8-1-1", Accuracy("binary"), "bincls"
     elif name == "CSL":
         def CSL_node_feature_transform(data):
             if "x" not in data:
                 data.x = torch.ones([data.num_nodes, 1], dtype=torch.float)
             return data
-        return GNNBenchmarkDataset("dataset", "CSL", pre_transform=CSL_node_feature_transform), "10-Fold-8-1-1"
+        return (GNNBenchmarkDataset("dataset", "CSL", pre_transform=CSL_node_feature_transform),**kwargs), "fold-8-1-1", Accuracy("multiclass", num_classes=10), "cls"
+    elif name == "subgcount":
+        dataset = GraphCountDataset(**kwargs)
+        dataset.data.y = dataset.data.y[:, y_slice]
+        return (dataset[dataset.train_idx], dataset[dataset.val_idx], dataset[dataset.test_idx]), "fixed", MeanAbsoluteError(), "reg"
+    elif name in ["MUTAG", "DD", "PROTEINS", "PTC", "IMDBBINARY"]:
+        return (TUDataset("dataset", name=name, **kwargs),), "fold-9-0-1", Accuracy("binary"), "bincls"
+    elif name == "zinc":
+        return (ZINC("dataset/ZINC", subset=True, split="train", **kwargs), ZINC("dataset/ZINC", subset=True, split="val"), ZINC("dataset/ZINC", subset=True, split="test")), "fixed", MeanAbsoluteError(), "reg"
     elif name == "QM9":
-        dataset = QM9("dataset/qm9")
+        dataset = QM9("dataset/qm9", **kwargs)
+        dataset.data.y = dataset.data.y[:, y_slice]
         dataset = dataset.shuffle()
 
         # Normalize targets to mean = 0 and std = 1.
@@ -192,8 +203,6 @@ def loaddataset(name: str, **kwargs):
         dataset.data.y = (dataset.data.y - mean) / std
 
         train_dataset = dataset[2 * tenpercent:]
-
-        cont_feat_start_dim = 5
         if kwargs["normalize_x"]:
             x_mean = train_dataset.data.x[:, cont_feat_start_dim:].mean(dim=0)
             x_std = train_dataset.data.x[:, cont_feat_start_dim:].std(dim=0)
@@ -203,7 +212,12 @@ def loaddataset(name: str, **kwargs):
         test_dataset = dataset[:tenpercent]
         val_dataset = dataset[tenpercent:2 * tenpercent]
         train_dataset = dataset[2 * tenpercent:]
-        return train_dataset, val_dataset, test_dataset, "8-1-1"
+        return (train_dataset, val_dataset, test_dataset), "8-1-1", MeanAbsoluteError(), "reg"
+    elif name.startswith("ogbg-"):
+        dataset = PygGraphPropPredDataset(name=name)
+        split_idx = dataset.get_idx_split()
+        return (dataset[split_idx["train"]], dataset[split_idx["valid"]], dataset[split_idx["test"]]), "fixed", myEvaluator(name)
+
 
 if __name__ == "__main__":
     loaddataset("sr")

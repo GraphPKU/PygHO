@@ -33,10 +33,6 @@ def train(model, device, loader, optimizer, task_type, alpha=1e1, gamma=1e-4):
             preds, logprob, negentropy, finalpred = model(batch)
             y = batch.y.to(torch.float32)
             finalpred = preds[-1].mean(dim=0)
-            # preds [num_anchor+1, multi_anchor, N, num_task]
-            # logprob [num_anchor, multi_anchor, N] 
-            # negentropy [num_anchor, multi_anchor, N] 
-            # y [N, 1]
             if "classification" in task_type:
                 value_loss = torch.mean(cls_criterion(finalpred, y))
             else:
