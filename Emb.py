@@ -7,14 +7,14 @@ full_bond_feature_dims = get_bond_feature_dims()
 
 class AtomEncoder(torch.nn.Module):
 
-    def __init__(self, emb_dim, dims = None, orthoinit=False):
+    def __init__(self, emb_dim, dims = None, lastzeropad = 0, orthoinit=False):
         super(AtomEncoder, self).__init__()
         if dims is None:
             dims = full_atom_feature_dims
         self.atom_embedding_list = torch.nn.ModuleList()
 
         for i, dim in enumerate(dims):
-            emb = torch.nn.Embedding(dim, emb_dim)
+            emb = torch.nn.Embedding(dim, emb_dim, padding_idx=0 if len(dims) - i <= lastzeropad else None)
             if orthoinit:
                 torch.nn.init.orthogonal_(emb.weight.data)
             else:

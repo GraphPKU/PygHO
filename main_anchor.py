@@ -127,6 +127,8 @@ def main():
     parser.add_argument('--gamma', type=float, default=1e-4)
     parser.add_argument('--alpha', type=float, default=1e1)
     parser.add_argument('--repeat', type=int, default=10)
+    parser.add_argument('--save', type=str, default=None)
+    parser.add_argument('--load', type=str, default=None)
     args = parser.parse_args()
     print(args)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -184,6 +186,8 @@ def main():
                           rand_anchor=args.rand_sample,
                           uni_sample=args.uni_sample).to(device)
 
+        if args.load is not None:
+            model.load_state_dict(torch.load(f"mod/{args.load}.pt", map_location=device))
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
         valid_curve = []
@@ -208,6 +212,9 @@ def main():
             train_curve.append(loss)
             valid_curve.append(valid_perf[dataset.eval_metric])
             test_curve.append(test_perf[dataset.eval_metric])
+            if valid_curve[-1] >= np.max(valid_curve):
+                if args.save is not None:
+                    torch.save(model.state_dict(), f"mod/{args.save}.pt")
 
         if 'classification' in dataset.task_type:
             best_val_epoch = np.argmax(np.array(valid_curve))

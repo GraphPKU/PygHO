@@ -60,6 +60,7 @@ class GNN_node(nn.Module):
                  use_elin=False,
                  mlplayer=1,
                  dims=None,
+                 lastzeropad=0,
                  **kwargs):
         '''
             emb_dim (int): node embedding dimensionality
@@ -75,7 +76,7 @@ class GNN_node(nn.Module):
         if self.num_layer < 2:
             raise ValueError("Number of GNN layers must be greater than 1.")
 
-        self.atom_encoder = AtomEncoder(emb_dim, dims=dims)
+        self.atom_encoder = AtomEncoder(emb_dim, dims=dims, lastzeropad=lastzeropad)
         self.bond_encoder = BondEncoder(emb_dim)
         ###List of GNNs
         self.convs = torch.nn.ModuleList()

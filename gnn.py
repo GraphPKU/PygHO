@@ -253,6 +253,9 @@ class UniAnchorGNN(GNN):
                  anchor_outlayer: int = 1,
                  outlayer: int = 1,
                  node2nodelayer: int = 1,
+                 policy_detach: bool=False,
+                 policy_eval: bool=False,
+                 vis=False,
                  **kwargs):
         super().__init__(num_tasks,
                          num_layer,
@@ -265,8 +268,11 @@ class UniAnchorGNN(GNN):
                          dims=full_atom_feature_dims + num_anchor * [2],
                          node2nodelayer=node2nodelayer,
                          outlayer=outlayer,
+                         lastzeropad=num_anchor,
                          **kwargs)
-
+        self.policy_detach = policy_detach
+        self.policy_eval = policy_eval
+        self.vis = vis
         self.num_anchor = num_anchor
         self.multi_anchor = multi_anchor
         self.anchorsampler = nn.ModuleList()
@@ -311,7 +317,11 @@ class UniAnchorGNN(GNN):
                 return rawsample, 0, 0
             else:
                 return rawsample
-        h_node = self.set2set(self.h_node, batch)
+        if self.policy_detach:
+            h_node = self.h_node.detach()
+        else:
+            h_node = self.h_node
+        h_node = self.set2set(h_node, batch)
         pred = self.distlin(h_node).squeeze(-1)
         prob = softmax(pred * T, batch, dim=-1)
         rawsample = multinomial_sample_batch(prob, batch)
@@ -320,7 +330,10 @@ class UniAnchorGNN(GNN):
             negentropy = scatter_add(prob * logprob, batch, dim=-1)
             return rawsample, torch.gather(logprob, -1, rawsample), negentropy
         else:
-            return rawsample
+            if not self.vis:
+                return rawsample
+            else:
+                return rawsample, [h_node, prob]
 
     def graph_forward(self, batched_data):
         assert self.h_node is not None
@@ -337,7 +350,11 @@ class UniAnchorGNN(GNN):
             batched_data.x = batched_data.x.unsqueeze(0).repeat(
                 self.multi_anchor, 1, 1)
             for i in range(self.num_anchor):
+                if self.policy_eval:
+                    self.eval()
                 self.get_h_node(batched_data)
+                if self.policy_eval:
+                    self.train()
                 rawsample, tlogprob, tnegentropy = self.anchorforward(
                     batched_data, T)
                 logprob.append(tlogprob)
@@ -347,23 +364,51 @@ class UniAnchorGNN(GNN):
                 label = torch.zeros_like(batched_data.x[:, :, 0])
                 label.scatter_(-1, rawsample, 1).unsqueeze_(-1)
                 batched_data.x = torch.cat((batched_data.x, label), dim=-1)
-            self.get_h_node(batched_data)
-            preds.append(self.graph_forward(batched_data))
+            if self.policy_eval:
+                self.eval()
+                self.get_h_node(batched_data)
+                self.train()
+                preds.append(self.graph_forward(batched_data))
+                self.get_h_node(batched_data)
+                finalpred = self.graph_forward(batched_data).mean(dim=0)
+            else:
+                self.get_h_node(batched_data)
+                preds.append(self.graph_forward(batched_data))
+                finalpred = preds[-1].mean(dim=0)
             return torch.stack(preds, dim=0), torch.stack(
                 logprob,
                 dim=0), torch.stack(negentropy,
-                                    dim=0)  # List[(M, N, 1), (M, N), (M, N)]
+                                    dim=0), finalpred
         else:
             batched_data.x = batched_data.x.unsqueeze(0).repeat(
-                self.multi_anchor, 1, 1)
-            for i in range(self.num_anchor):
+                    self.multi_anchor, 1, 1)
+            if not self.vis:
+                for i in range(self.num_anchor):
+                    self.get_h_node(batched_data)
+                    rawsample = self.anchorforward(batched_data, T)
+                    label = torch.zeros_like(batched_data.x[:, :, 0])
+                    label.scatter_(-1, rawsample, 1).unsqueeze_(-1)
+                    batched_data.x = torch.cat((batched_data.x, label), dim=-1)
                 self.get_h_node(batched_data)
-                rawsample = self.anchorforward(batched_data, T)
-                label = torch.zeros_like(batched_data.x[:, :, 0])
-                label.scatter_(-1, rawsample, 1).unsqueeze_(-1)
-                batched_data.x = torch.cat((batched_data.x, label), dim=-1)
-            self.get_h_node(batched_data)
-            return self.graph_forward(batched_data).mean(dim=0)
+                return self.graph_forward(batched_data).mean(dim=0)
+            else:
+                vis = {}
+                for i in range(self.num_anchor):
+                    self.get_h_node(batched_data)
+                    rawsample, tvis = self.anchorforward(batched_data, T)
+                    vis[f"match_h_node{i}"] = tvis[0]
+                    vis[f"prob{i}"] = tvis[1]
+                    vis[f"h_node{i}"] = self.h_node
+                    vis[f"pred{i}"] = self.graph_forward(batched_data)
+                    label = torch.zeros_like(batched_data.x[:, :, 0])
+                    label.scatter_(-1, rawsample, 1).unsqueeze_(-1)
+                    batched_data.x = torch.cat((batched_data.x, label), dim=-1)
+                self.get_h_node(batched_data)
+                vis["h_node-1"]=self.h_node
+                vis["pred-1"]=self.graph_forward(batched_data)
+                vis["input"]=batched_data
+                return vis
+
 
 
 if __name__ == '__main__':

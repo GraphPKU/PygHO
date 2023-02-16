@@ -30,7 +30,7 @@ def train(model, device, loader, optimizer, task_type, alpha=1e1, gamma=1e-4):
 
         if True:
             optimizer.zero_grad()
-            preds, logprob, negentropy = model(batch)
+            preds, logprob, negentropy, finalpred = model(batch)
             y = batch.y.to(torch.float32)
             finalpred = preds[-1].mean(dim=0)
             # preds [num_anchor+1, multi_anchor, N, num_task]
@@ -86,9 +86,7 @@ def eval(model, device, loader, evaluator):
 
     return evaluator.eval(input_dict)
 
-
-def main():
-    # Training settings
+def parserarg():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default="ogbg-molhiv")
     parser.add_argument('--feature', type=str, default="full")
@@ -137,14 +135,50 @@ def main():
     parser.add_argument('--multi_anchor', type=int, default=1)
     parser.add_argument('--rand_sample', action="store_true")
     parser.add_argument("--num_anchor", type=int, default=0)
+    parser.add_argument('--policy_detach',
+                        action="store_true")
+    parser.add_argument('--policy_eval',
+                        action="store_true")
 
     parser.add_argument('--gamma', type=float, default=1e-4)
     parser.add_argument('--alpha', type=float, default=1e1)
     
+    parser.add_argument('--save', type=str, default=None)
+    parser.add_argument('--load', type=str, default=None)
+
     args = parser.parse_args()
     print(args)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return args
 
+def buildModel(args, dataset, device):
+    kwargs = {"mlp":{"dp": args.dp, "bn": args.bn, "ln": args.ln, "act": args.act}}
+    model = UniAnchorGNN(dataset.num_tasks,
+                          args.num_anchor,
+                          args.num_layer,
+                          args.emb_dim,
+                          args.norm,
+                          virtual_node=False,
+                          residual=args.res,
+                          JK=args.jk,
+                          graph_pooling=args.pool,
+                          set2set=args.set2set+("-feat-" if args.set2set_feat else "-") + ("concat" if args.set2set_concat else "-"),
+                          use_elin=args.use_elin,
+                          mlplayer=args.mlplayer,
+                          rand_anchor=args.rand_sample,
+                          multi_anchor=args.multi_anchor,
+                          anchor_outlayer=args.anchor_outlayer,
+                          outlayer=args.outlayer,
+                          node2nodelayer=args.node2nodelayer,
+                          policy_eval=args.policy_eval,
+                          policy_detach=args.policy_detach,
+                          **kwargs).to(device)
+
+    return model
+
+def main():
+    # Training settings
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    args = parserarg()
     ### automatic dataloading and splitting
     dataset = PygGraphPropPredDataset(name=args.dataset)
 
@@ -175,26 +209,9 @@ def main():
         print(
             f"split {split_idx['train'].shape[0]} {split_idx['valid'].shape[0]} {split_idx['test'].shape[0]}"
         )
-        kwargs = {"mlp":{"dp": args.dp, "bn": args.bn, "ln": args.ln, "act": args.act}}
-        model = UniAnchorGNN(dataset.num_tasks,
-                          args.num_anchor,
-                          args.num_layer,
-                          args.emb_dim,
-                          args.norm,
-                          virtual_node=False,
-                          residual=args.res,
-                          JK=args.jk,
-                          graph_pooling=args.pool,
-                          set2set=args.set2set+("-feat-" if args.set2set_feat else "-") + ("concat" if args.set2set_concat else "-"),
-                          use_elin=args.use_elin,
-                          mlplayer=args.mlplayer,
-                          rand_anchor=args.rand_sample,
-                          multi_anchor=args.multi_anchor,
-                          anchor_outlayer=args.anchor_outlayer,
-                          outlayer=args.outlayer,
-                          node2nodelayer=args.node2nodelayer,
-                          **kwargs).to(device)
-
+        model = buildModel(args, dataset, device)
+        if args.load is not None:
+            model.load_state_dict(torch.load(f"mod/{args.load}.{rep}.pt", map_location=device))
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
         valid_curve = []
@@ -219,7 +236,10 @@ def main():
             train_curve.append(loss)
             valid_curve.append(valid_perf[dataset.eval_metric])
             test_curve.append(test_perf[dataset.eval_metric])
-
+            if valid_curve[-1] >= np.max(valid_curve):
+                if args.save is not None:
+                    torch.save(model.state_dict(), f"mod/{args.save}.{rep}.pt")
+        
         if 'classification' in dataset.task_type:
             best_val_epoch = np.argmax(np.array(valid_curve))
             best_train = min(train_curve)
