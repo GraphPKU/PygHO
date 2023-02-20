@@ -206,26 +206,19 @@ class UniAnchorGNN(GNN):
     def fresh_h_node(self):
         self.h_node = None
 
-    def anchorforward(self,
-                      batched_data,
-                      T: float = 1,
-                      anchor: Optional[Tensor] = None):
-        assert self.h_node is not None
+    def randomsample(self, batched_data: Data, anchor: Optional[Tensor]=None):
         batch = batched_data.batch
-        if self.rand_anchor:
-            prob = torch.ones_like(batch,
+        prob = torch.ones_like(batch,
                                    dtype=torch.float).unsqueeze_(0).repeat(
                                        self.multi_anchor, 1)
-            if anchor is not None:
-                prob[anchor > 0] = 0
-            rawsample = multinomial_sample_batch(prob, batch)
-            if self.training:
-                return rawsample, torch.zeros_like(
-                    rawsample,
-                    dtype=torch.float), torch.zeros_like(rawsample,
-                                                         dtype=torch.float)
-            else:
-                return rawsample
+        if anchor is not None:
+            prob[anchor > 0] = 0
+        rawsample = multinomial_sample_batch(prob, batch)
+        return rawsample
+
+    def anchorprob(self, batched_data: Data, anchor: Optional[Tensor]=None, T: float=1):
+        assert self.h_node is not None
+        batch = batched_data.batch
         if self.policy_detach:
             h_node = self.h_node.detach()
         else:
@@ -235,8 +228,26 @@ class UniAnchorGNN(GNN):
         if anchor is not None:
             pred[anchor > 0] -= 10  # avoid repeated sample
         prob = softmax(pred * T, batch, dim=-1)
+        return prob
+
+    def anchorforward(self,
+                      batched_data: Data,
+                      T: float = 1,
+                      anchor: Optional[Tensor] = None,
+                      retlogprob: bool = False):
+        batch = batched_data.batch
+        if self.rand_anchor:
+            rawsample = self.randomsample(batched_data, anchor)
+            if self.training or retlogprob:
+                return rawsample, torch.zeros_like(
+                    rawsample,
+                    dtype=torch.float), torch.zeros_like(rawsample,
+                                                         dtype=torch.float)
+            else:
+                return rawsample
+        prob = self.anchorprob(batched_data, anchor, T)
         rawsample = multinomial_sample_batch(prob, batch)
-        if self.training:
+        if self.training or retlogprob:
             logprob = torch.log(prob + 1e-15)
             negentropy = scatter_add(prob * logprob, batch, dim=-1)
             return rawsample, torch.gather(logprob, -1, rawsample), negentropy
@@ -249,12 +260,20 @@ class UniAnchorGNN(GNN):
         h_graph = self.pool(h_node, batched_data.batch)
         return self.pred_lin(h_graph)
 
+    def preprocessdata(self, batched_data: Data):
+        batched_data = self.data_encoder(batched_data)
+        batched_data.x = batched_data.x.unsqueeze(0)
+        return batched_data
+
+    def addanchor2x(self, batched_data: Data, anchor: Tensor, tx: Tensor):
+        batched_data.x = tx * self.anchor_encoder(anchor) + tx
+        return batched_data
+
     def forward(self, batched_data, T: float = 1):
         anchor = torch.zeros((self.multi_anchor, batched_data.x.shape[-2]),
                              device=batched_data.x.device,
                              dtype=torch.int64)
-        batched_data = self.data_encoder(batched_data)
-        batched_data.x = batched_data.x.unsqueeze(0)
+        batched_data = self.preprocessdata(batched_data)
         tx = batched_data.x
         if self.training:
             logprob = []
@@ -270,7 +289,7 @@ class UniAnchorGNN(GNN):
                 self.fresh_h_node()
                 anchor = anchor.clone()
                 anchor.scatter_(-1, rawsample, i)
-                batched_data.x = tx * self.anchor_encoder(anchor) + tx
+                batched_data = self.addanchor2x(batched_data, anchor, tx)
             self.get_h_node(batched_data)
             preds.append(self.graph_forward(batched_data))
             finalpred = preds[-1].mean(dim=0)
@@ -286,7 +305,7 @@ class UniAnchorGNN(GNN):
                 self.fresh_h_node()
                 anchor = anchor.clone()
                 anchor.scatter_(-1, rawsample, i)
-                batched_data.x = tx * self.anchor_encoder(anchor) + tx
+                batched_data = self.addanchor2x(batched_data, anchor, tx)
             self.get_h_node(batched_data)
             finalpred = self.graph_forward(batched_data).mean(dim=0)
             return finalpred
@@ -339,100 +358,91 @@ class PPOAnchorGNN(UniAnchorGNN):
         self.tau = tau
 
     def anchorforward(self,
-                      batched_data,
+                      batched_data: Data,
                       T: float = 1,
-                      anchor: Optional[Tensor] = None):
-        assert self.h_node is not None
+                      anchor: Optional[Tensor] = None,
+                      retlogprob: bool = False,
+                      rawsample: Optional[Tensor] = None):
         batch = batched_data.batch
         if self.rand_anchor:
-            prob = torch.ones_like(batch,
-                                   dtype=torch.float).unsqueeze_(0).repeat(
-                                       self.multi_anchor, 1)
-            if anchor is not None:
-                prob[anchor > 0] = 0
-            rawsample = multinomial_sample_batch(prob, batch)
-            if self.training:
+            if rawsample is None:
+                rawsample = self.randomsample(batched_data, anchor)
+            if self.training or retlogprob:
                 return rawsample, torch.zeros_like(
                     rawsample,
                     dtype=torch.float), torch.zeros_like(rawsample,
                                                          dtype=torch.float)
             else:
                 return rawsample
-        if self.policy_detach:
-            h_node = self.h_node.detach()
-        else:
-            h_node = self.h_node
-        h_node = self.set2set(h_node, batch)
-        pred = self.distlin(h_node).squeeze(-1)
-        if anchor is not None:
-            pred[anchor > 0] -= 10  # avoid repeated sample
-        prob = softmax(pred * T, batch, dim=-1)
-        rawsample = multinomial_sample_batch(prob, batch)
-        if self.training:
+        prob = self.anchorprob(batched_data, anchor, T)
+        if rawsample is None:
+            rawsample = multinomial_sample_batch(prob, batch)
+        if self.training or retlogprob:
             logprob = torch.log(prob + 1e-15)
             negentropy = scatter_add(prob * logprob, batch, dim=-1)
             return rawsample, torch.gather(logprob, -1, rawsample), negentropy
         else:
             return rawsample
-
-    def graph_forward(self, batched_data):
-        assert self.h_node is not None
-        h_node = self.node2node(self.h_node)
-        h_graph = self.pool(h_node, batched_data.batch)
-        return self.pred_lin(h_graph)
     
     def updateP(self, tau: Optional[float]=None):
         softsync(self.oldmodel, super(), self.tau if tau is None else tau)
         return
 
     def forward(self, batched_data: Data, T: float = 1):
-        #print(batched_data.x)
         anchor = torch.zeros((self.multi_anchor, batched_data.x.shape[-2]),
                              device=batched_data.x.device,
                              dtype=torch.int64)
-        old_batch_data = batched_data.clone()
-        batched_data = self.data_encoder(batched_data)
-        old_batch_data = self.oldmodel.data_encoder(old_batch_data)
-        batched_data.x = batched_data.x.unsqueeze(0)
-        old_batch_data.x = old_batch_data.x.unsqueeze(0)
+        
+        old_batched_data = batched_data.clone()
+        batched_data = self.preprocessdata(batched_data)
+        old_batched_data = self.oldmodel.preprocessdata(old_batched_data)
         tx = batched_data.x
-        
-        
+        old_tx = old_batched_data.x
         if self.training:
             logprob = []
+            oldlogprob = []
             negentropy = []
             preds = []
             for i in range(1, self.num_anchor + 1):
+                with torch.no_grad():
+                    self.oldmodel.eval()
+                    self.oldmodel.get_h_node(old_batched_data)
+                    rawsample, oldtlogprob, _ = self.oldmodel.anchorforward(
+                        old_batched_data, T, anchor, True)
+                    self.oldmodel.fresh_h_node()
+                    oldlogprob.append(oldtlogprob)
                 self.get_h_node(batched_data)
-                rawsample, tlogprob, tnegentropy = self.anchorforward(
-                    batched_data, T, anchor)
-                logprob.append(tlogprob)
+                _, tlogprob, tnegentropy = self.anchorforward(batched_data, T, anchor, True, rawsample)
                 negentropy.append(tnegentropy)
+                logprob.append(tlogprob)
                 preds.append(self.graph_forward(batched_data))
                 self.fresh_h_node()
                 anchor = anchor.clone()
                 anchor.scatter_(-1, rawsample, i)
-                batched_data.x = tx * self.anchor_encoder(anchor) + tx
+                batched_data = self.addanchor2x(batched_data, anchor, tx)
+                old_batched_data = self.oldmodel.addanchor2x(old_batched_data, anchor, old_tx)
             self.get_h_node(batched_data)
             preds.append(self.graph_forward(batched_data))
             finalpred = preds[-1].mean(dim=0)
             if self.num_anchor > 0:
                 return torch.stack(preds, dim=0), torch.stack(
-                    logprob, dim=0), torch.stack(negentropy, dim=0), finalpred
+                    logprob, dim=0), torch.stack(oldlogprob, dim=0), torch.stack(negentropy, dim=0), finalpred
             else:
-                return torch.stack(preds, dim=0), None, None, finalpred
+                return torch.stack(preds, dim=0), None, None, None, finalpred
         else:
             for i in range(1, self.num_anchor + 1):
-                self.get_h_node(batched_data)
-                rawsample = self.anchorforward(batched_data, T, anchor)
-                self.fresh_h_node()
+                self.oldmodel.get_h_node(old_batched_data)
+                rawsample = self.oldmodel.anchorforward(old_batched_data, T, anchor)
+                self.oldmodel.fresh_h_node()
                 anchor = anchor.clone()
                 anchor.scatter_(-1, rawsample, i)
-                batched_data.x = tx * self.anchor_encoder(anchor) + tx
+                old_batched_data = self.oldmodel.addanchor2x(old_batched_data, anchor, old_tx)
+            batched_data = self.addanchor2x(batched_data, anchor, tx)
             self.get_h_node(batched_data)
             finalpred = self.graph_forward(batched_data).mean(dim=0)
             return finalpred
 
+modeldict = {"policygrad": UniAnchorGNN, "ppo": PPOAnchorGNN}
 
 if __name__ == '__main__':
     GNN(num_tasks=10)

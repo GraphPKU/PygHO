@@ -7,3 +7,4 @@ dataset/*
 *.db
 past
 mod/*
+*.ipynb

@@ -6,9 +6,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("dataset", type=str)
 parser.add_argument("num_anchor", type=int)
 parser.add_argument("dev", type=int)
+parser.add_argument("model", type=str, choices=["ppo", "policy_grad"])
 args = parser.parse_args()
 
-stu = optuna.create_study(storage=f"sqlite:///{args.dataset}.db", study_name=args.num_anchor, load_if_exists=True, direction="maximize")
+stu = optuna.create_study(storage=f"sqlite:///{args.dataset}.db", study_name=f"{args.model}_{args.num_anchor}", load_if_exists=True, direction="maximize")
 
 def obj(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {args.num_anchor} --dataset {dataset} "
@@ -72,7 +73,35 @@ def obj2(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     out = float(ret.split()[-4]) - float(ret.split()[-1]) 
     return out
 
+
+def objppo(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
+    cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {args.num_anchor} --dataset {dataset} --epochs 1000 "
+    cmd += f" --dp 0.0 --num_layer 4 --jk sum  " 
+
+    alpha = trial.suggest_float("alpha", 1e-3, 1e2, log=True)
+    gamma = trial.suggest_float("gamma", 1e-5, 1e2, log=True)
+    T = trial.suggest_float("T", 1e-1, 1e3, log=True)
+    tau = trial.suggest_float("tau", 0.01, 0.99, step=0.01)
+    ppolb = trial.suggest_float("ppolb", -2, 0, step=0.1)
+    ppoub = trial.suggest_float("ppoub", 0, 2, step=0.1)
+    lr = trial.suggest_float("lr", 2e-3, 5e-3, step=1e-4)
+    cmd += f" --set2set id --alpha {alpha} --gamma {gamma} --batch_size 960  --norm mean --pool mean "
+    cmd += f" --mlplayer 1 --bn --lr {lr}  --testT {T}  --set2set_concat  --set2set_feat "
+    cmd += f" --repeat 10 --model ppo --tau {tau} --ppolb {ppolb} --ppoub {ppoub} "
+    
+    cmd += f"--repeat 3 |grep runs:"
+    ret = subprocess.check_output(cmd, shell=True)
+    ret = str(ret, encoding="utf-8")
+    print(cmd, flush=True)
+    print(ret, flush=True)
+    out = float(ret.split()[-4]) - float(ret.split()[-1]) 
+    return out
+
+
 if args.num_anchor < 1:
     stu.optimize(obj, 100)
 else:
-    stu.optimize(obj2, 100)
+    if args.model == "ppo":
+        stu.optimize(objppo, 100)
+    else:
+        stu.optimize(obj2, 100)
