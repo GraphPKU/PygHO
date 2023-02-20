@@ -8,3 +8,6 @@ dataset/*
 past
 mod/*
 *.ipynb
+!dataset/EXP/raw
+!dataset/sr25/raw
+!dataset/subgraphcount/raw
