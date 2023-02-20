@@ -1,0 +1,2 @@
+
+ python main.py --num_anchor 3 --dataset EXP --epochs 1000  --dp 0.0 --num_layer 4 --jk sum   --set2set id --alpha 8 --gamma 0 --batch_size 960  --norm mean --pool mean --mlplayer 1 --bn --lr 0.0022  --testT 135  --set2set_concat  --set2set_feat --repeat 10
