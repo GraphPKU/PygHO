@@ -1,18 +1,15 @@
 '''
 Copied from https://github.com/JiaruiFeng/KP-GNN/tree/a127847ed8aa2955f758476225bc27c6697e7733
 '''
+from sklearn.metrics import accuracy_score
 import torch
-from torch_geometric.data import InMemoryDataset
 import pickle
 import numpy as np
 import scipy.io as sio
 from scipy.special import comb
-from torch_geometric.data import Data
 import networkx as nx
 import numpy as np
-import torch
-from torch_geometric.data import InMemoryDataset
-from torch_geometric.data.data import Data
+from torch_geometric.data import InMemoryDataset, Data
 from torch_geometric.utils import to_undirected
 from torch_geometric.datasets import TUDataset, ZINC, GNNBenchmarkDataset, QM9
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
@@ -163,37 +160,60 @@ class myEvaluator(Evaluator):
         super().__init__(name=name)
     
     def __call__(self, y_pred, y_true):
-        return super().eval({"y_pred": y_pred, "y_true": y_true})
-        
+        ret = super().eval({"y_pred": y_pred, "y_true": y_true})
+        assert len(ret) == 1
+        return list(ret.values())[0]
 
 from torchmetrics import Accuracy, MeanAbsoluteError
-from typing import Iterable, Callable, Optional
+from typing import Iterable, Callable, Optional, Tuple
 from torch_geometric.data import Dataset
 
-def loaddataset(name: str, y_slice: int=0, **kwargs)-> Iterable[Dataset], str, Callable, str:
+def loaddataset(name: str, y_slice: int=0, **kwargs): #-> Iterable[Dataset], str, Callable, str
     if name == "sr":
         dataset = SRDataset(**kwargs)
         dataset.data.x = dataset.data.x.long()
-        return (dataset,), "10-fold-9-0-1", Accuracy("multiclass", num_classes=15), "cls"
+        dataset.data.y = torch.arange(len(dataset))
+        dataset.num_tasks = torch.max(dataset.data.y).item() + 1
+        return (dataset, dataset, dataset), "fixed", Accuracy("multiclass", num_classes=15), "cls" # full training/valid/test??
     elif name == "EXP":
-        return (PlanarSATPairsDataset(pre_transform=EXP_node_feature_transform),**kwargs),  "fold-8-1-1", Accuracy("binary"), "bincls"
+        dataset = PlanarSATPairsDataset(pre_transform=EXP_node_feature_transform, **kwargs)
+        if dataset.data.x.dim() == 1:
+            dataset.data.x = dataset.data.x.unsqueeze(-1)
+        dataset.num_tasks = 1
+        dataset.data.y = dataset.data.y.to(torch.float).reshape(-1, 1)
+        return (dataset,),  "fold-8-1-1", Accuracy("binary"), "bincls"
     elif name == "CSL":
         def CSL_node_feature_transform(data):
             if "x" not in data:
                 data.x = torch.ones([data.num_nodes, 1], dtype=torch.float)
             return data
-        return (GNNBenchmarkDataset("dataset", "CSL", pre_transform=CSL_node_feature_transform),**kwargs), "fold-8-1-1", Accuracy("multiclass", num_classes=10), "cls"
+        dataset = GNNBenchmarkDataset("dataset", "CSL", pre_transform=CSL_node_feature_transform,**kwargs)
+        dataset.num_tasks = torch.max(dataset.data.y).item() + 1
+        return (dataset,), "fold-8-1-1", Accuracy("multiclass", num_classes=10), "cls"
     elif name == "subgcount":
         dataset = GraphCountDataset(**kwargs)
         dataset.data.y = dataset.data.y[:, y_slice]
+        dataset.num_tasks = 1
+        dataset.data.y = dataset.data.y.to(torch.float)
         return (dataset[dataset.train_idx], dataset[dataset.val_idx], dataset[dataset.test_idx]), "fixed", MeanAbsoluteError(), "reg"
-    elif name in ["MUTAG", "DD", "PROTEINS", "PTC", "IMDBBINARY"]:
-        return (TUDataset("dataset", name=name, **kwargs),), "fold-9-0-1", Accuracy("binary"), "bincls"
+    elif name in ["MUTAG", "DD", "PROTEINS", "PTC", "IMDB-BINARY"]:
+        dataset = TUDataset("dataset", name=name, **kwargs)
+        dataset.num_tasks = 1
+        dataset.data.y = dataset.data.y.to(torch.float)
+        return (dataset,), "fold-9-0-1", Accuracy("binary"), "bincls"
     elif name == "zinc":
-        return (ZINC("dataset/ZINC", subset=True, split="train", **kwargs), ZINC("dataset/ZINC", subset=True, split="val"), ZINC("dataset/ZINC", subset=True, split="test")), "fixed", MeanAbsoluteError(), "reg"
+        trn_d = ZINC("dataset/ZINC", subset=True, split="train", **kwargs)
+        val_d = ZINC("dataset/ZINC", subset=True, split="val")
+        tst_d = ZINC("dataset/ZINC", subset=True, split="test")
+        trn_d.num_tasks = 1
+        val_d.num_tasks = 1
+        tst_d.num_tasks = 1
+        return (trn_d, val_d, tst_d), "fixed", MeanAbsoluteError(), "reg"
     elif name == "QM9":
+        raise NotImplementedError
         dataset = QM9("dataset/qm9", **kwargs)
         dataset.data.y = dataset.data.y[:, y_slice]
+        dataset.num_tasks = 1
         dataset = dataset.shuffle()
 
         # Normalize targets to mean = 0 and std = 1.
@@ -203,30 +223,35 @@ def loaddataset(name: str, y_slice: int=0, **kwargs)-> Iterable[Dataset], str, C
         dataset.data.y = (dataset.data.y - mean) / std
 
         train_dataset = dataset[2 * tenpercent:]
+        '''
         if kwargs["normalize_x"]:
             x_mean = train_dataset.data.x[:, cont_feat_start_dim:].mean(dim=0)
             x_std = train_dataset.data.x[:, cont_feat_start_dim:].std(dim=0)
             x_norm = (train_dataset.data.x[:, cont_feat_start_dim:] - x_mean) / x_std
             dataset.data.x = torch.cat([dataset.data.x[:, :cont_feat_start_dim], x_norm], 1)
-
+        '''
         test_dataset = dataset[:tenpercent]
         val_dataset = dataset[tenpercent:2 * tenpercent]
         train_dataset = dataset[2 * tenpercent:]
         return (train_dataset, val_dataset, test_dataset), "8-1-1", MeanAbsoluteError(), "reg"
-    elif name.startswith("ogbg-"):
+    elif name.startswith("ogbg"):
         dataset = PygGraphPropPredDataset(name=name)
         split_idx = dataset.get_idx_split()
-        return (dataset[split_idx["train"]], dataset[split_idx["valid"]], dataset[split_idx["test"]]), "fixed", myEvaluator(name)
-
+        if "molhiv" in name:
+            task = "bincls"
+        elif "pcba"  in name:
+            task = "bincls"
+        else:
+            raise NotImplementedError
+        dataset.data.y = dataset.data.y.to(torch.float)
+        return (dataset[split_idx["train"]], dataset[split_idx["valid"]], dataset[split_idx["test"]]), "fixed", myEvaluator(name), task
+    else:
+        raise NotImplementedError(name)
 
 if __name__ == "__main__":
-    loaddataset("sr")
-    loaddataset("subgcount")
-    loaddataset("zinc")
-    loaddataset("EXP")
-    loaddataset("MUTAG")
-    loaddataset("DD")
-    loaddataset("PROTEINS")
-    #loaddataset("PTC") 
-    loaddataset("IMDBBINARY")
-    
+    datalist = ["sr", "EXP", "CSL", "subgcount", "zinc", "MUTAG", "DD", "PROTEINS", "ogbg-molhiv", "ogbg-molpcba"] # "QM9",  "IMDB-BINARY",
+    for ds in datalist:
+        datasets = loaddataset(ds)[0]
+        dataset = datasets[0]
+        data = dataset[0]
+        print(ds, dataset.num_tasks, data, data.x.dtype, data.y.dtype)

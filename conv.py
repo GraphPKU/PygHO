@@ -1,11 +1,8 @@
 import torch
 from torch_geometric.nn import MessagePassing
-from Emb import AtomEncoder, BondEncoder
 from torch_geometric.utils import degree
 import torch.nn as nn
 from utils import MLP
-from torch import Tensor
-from utils import BatchNorm
 
 ### GCN convolution along the graph structure
 class GCNConv(MessagePassing):
@@ -20,10 +17,10 @@ class GCNConv(MessagePassing):
         else:
             raise NotImplementedError
         self.norm = norm
-        self.bond_encoder = nn.Identity() if not use_elin else MLP(emb_dim, emb_dim, elin_layer, False, **kwargs["mlp"])
+        self.ealin = nn.Identity() if not use_elin else MLP(emb_dim, emb_dim, elin_layer, False, **kwargs["mlp"])
 
     def forward(self, x, edge_index, edge_attr):
-        edge_embedding = self.bond_encoder(edge_attr)
+        edge_embedding = self.ealin(edge_attr)
         norm = None
         if self.norm == "gcn":
             row, col = edge_index
@@ -36,10 +33,16 @@ class GCNConv(MessagePassing):
         return self.propagate(edge_index, x=x, edge_attr=edge_embedding, norm=norm) 
 
     def message(self, x_j, edge_attr, norm):
-        if norm is None:
-            return x_j * edge_attr
+        if edge_attr is None:
+            if norm is None:
+                return x_j
+            else:
+                return norm * x_j
         else:
-            return norm * x_j * edge_attr
+            if norm is None:
+                return x_j * edge_attr
+            else:
+                return norm * x_j * edge_attr
 
     def update(self, aggr_out):
         return aggr_out
@@ -59,8 +62,6 @@ class GNN_node(nn.Module):
                  norm="gcn",
                  use_elin=False,
                  mlplayer=1,
-                 dims=None,
-                 lastzeropad=0,
                  **kwargs):
         '''
             emb_dim (int): node embedding dimensionality
@@ -76,8 +77,6 @@ class GNN_node(nn.Module):
         if self.num_layer < 2:
             raise ValueError("Number of GNN layers must be greater than 1.")
 
-        self.atom_encoder = AtomEncoder(emb_dim, dims=dims, lastzeropad=lastzeropad)
-        self.bond_encoder = BondEncoder(emb_dim)
         ###List of GNNs
         self.convs = torch.nn.ModuleList()
         self.lins = torch.nn.ModuleList()
@@ -88,8 +87,8 @@ class GNN_node(nn.Module):
 
     def pregnn(self, batched_data):
         x, edge_index, edge_attr, batch = batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch
-        h_list = [self.atom_encoder(x)]
-        edge_attr = self.bond_encoder(edge_attr)
+        h_list = [x]
+        edge_attr = edge_attr
         return h_list, edge_index, edge_attr, batch
 
     def postgnn(self, h_list):

@@ -2,8 +2,34 @@ import torch
 from ogb.utils.features import get_atom_feature_dims, get_bond_feature_dims 
 from torch import Tensor
 
+
+def x2dims(x: Tensor):
+    assert x.dim() == 2
+    assert x.dtype == torch.int64
+    ret = torch.max(x, dim=0)[0] + 1
+    return ret.tolist()
+
 full_atom_feature_dims = get_atom_feature_dims()
 full_bond_feature_dims = get_bond_feature_dims()
+
+class MultiEmbedding(torch.nn.Module):
+    def __init__(self, emb_dim, dims, lastzeropad = 0, orthoinit=False):
+        super().__init__()
+        self.embedding_list = torch.nn.ModuleList()
+
+        for i, dim in enumerate(dims):
+            emb = torch.nn.Embedding(dim, emb_dim, padding_idx=0 if len(dims) - i <= lastzeropad else None)
+            if orthoinit:
+                torch.nn.init.orthogonal_(emb.weight.data)
+            else:
+                torch.nn.init.xavier_uniform_(emb.weight.data)
+            self.embedding_list.append(emb)
+
+    def forward(self, x: Tensor):
+        x_embedding = 0
+        for i in range(x.shape[-1]):
+            x_embedding += self.embedding_list[i](x.select(-1, i))
+        return x_embedding
 
 class AtomEncoder(torch.nn.Module):
 

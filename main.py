@@ -7,12 +7,16 @@ from gnn import UniAnchorGNN
 import argparse
 import time
 import numpy as np
+from datasets import loaddataset
 
 ### importing OGB
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 
-cls_criterion = torch.nn.BCEWithLogitsLoss(reduction="none")
-reg_criterion = torch.nn.MSELoss(reduction="none")
+criterion_dict = {
+    "bincls": torch.nn.BCEWithLogitsLoss(reduction="none"),
+    "cls": torch.nn.CrossEntropyLoss(reduction="none"),
+    "reg": torch.nn.MSELoss(reduction="none")
+}
 
 
 def set_seed(seed):
@@ -20,7 +24,7 @@ def set_seed(seed):
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
 
-def train(model, device, loader, optimizer, task_type, alpha=1e1, gamma=1e-4):
+def train(criterion, model, device, loader, optimizer, task_type, alpha=1e1, gamma=1e-4):
     model.train()
     losss = []
     policy_losss = []
@@ -32,24 +36,19 @@ def train(model, device, loader, optimizer, task_type, alpha=1e1, gamma=1e-4):
             optimizer.zero_grad()
             preds, logprob, negentropy, finalpred = model(batch)
             y = batch.y.to(torch.float32)
-            finalpred = preds[-1].mean(dim=0)
-            if "classification" in task_type:
-                value_loss = torch.mean(cls_criterion(finalpred, y))
-            else:
-                value_loss = torch.mean(reg_criterion(finalpred, y))
+            #print(preds.shape)
+            #print(logprob.shape)
+            #print(negentropy.shape)
+            #print(finalpred.shape, y.shape)
+            value_loss = torch.mean(criterion(finalpred, y))
             y = y.unsqueeze(0).unsqueeze(0).expand(preds.shape[0], preds.shape[1], -1, -1)
             with torch.no_grad():
-                if "classification" in task_type:
-                    loss = cls_criterion(preds.detach(), y)
-                else:
-                    loss = reg_criterion(preds.detach(), y)
-                # loss [num_anchor+1, multi_anchor, N, num_task]
+                loss = criterion(preds.detach(), y)
                 loss = loss.sum(dim=-1)
                 loss = torch.diff(loss, dim=0)
-                # loss [num_anchor, multi_anchor, N]
-            policy_loss = (loss.detach() * logprob)
-            policy_loss = torch.mean(policy_loss)
-            entropy_loss = torch.mean(negentropy)
+            policy_loss = 0 if logprob is None else (loss.detach() * logprob)
+            policy_loss = torch.tensor(0) if logprob is None else torch.mean(policy_loss)
+            entropy_loss = torch.tensor(0) if negentropy is None else torch.mean(negentropy)
             totalloss = value_loss + alpha * policy_loss + gamma * entropy_loss
             totalloss.backward()
             optimizer.step()
@@ -62,7 +61,7 @@ def train(model, device, loader, optimizer, task_type, alpha=1e1, gamma=1e-4):
 
 
 @torch.no_grad()
-def eval(model, device, loader, evaluator):
+def eval(model, device, loader, evaluator, T):
     model.eval()
     ylen = len(loader.dataset)
     y_true = torch.empty((ylen, 1), dtype=torch.long)
@@ -72,15 +71,11 @@ def eval(model, device, loader, evaluator):
         steplen = batch.y.shape[0]
         y_true[step:step + steplen] = batch.y
         batch = batch.to(device, non_blocking=True)
-        y_pred[step:step + steplen] = model(batch)
+        y_pred[step:step + steplen] = model(batch, T)
         step += steplen
     assert step == y_true.shape[0]
-    y_true = y_true.numpy()
-    y_pred = y_pred.cpu().numpy()
-
-    input_dict = {"y_true": y_true, "y_pred": y_pred}
-
-    return evaluator.eval(input_dict)
+    y_pred = y_pred.cpu()
+    return evaluator(y_pred, y_true)
 
 def parserarg():
     parser = argparse.ArgumentParser()
@@ -133,11 +128,11 @@ def parserarg():
     parser.add_argument("--num_anchor", type=int, default=0)
     parser.add_argument('--policy_detach',
                         action="store_true")
-    parser.add_argument('--policy_eval',
-                        action="store_true")
 
     parser.add_argument('--gamma', type=float, default=1e-4)
     parser.add_argument('--alpha', type=float, default=1e1)
+
+    parser.add_argument('--testT', type=float, default=1)
     
     parser.add_argument('--save', type=str, default=None)
     parser.add_argument('--load', type=str, default=None)
@@ -146,9 +141,9 @@ def parserarg():
     print(args)
     return args
 
-def buildModel(args, dataset, device):
+def buildModel(args, num_tasks, device, dataset):
     kwargs = {"mlp":{"dp": args.dp, "bn": args.bn, "ln": args.ln, "act": args.act}}
-    model = UniAnchorGNN(dataset.num_tasks,
+    model = UniAnchorGNN(num_tasks,
                           args.num_anchor,
                           args.num_layer,
                           args.emb_dim,
@@ -165,10 +160,9 @@ def buildModel(args, dataset, device):
                           anchor_outlayer=args.anchor_outlayer,
                           outlayer=args.outlayer,
                           node2nodelayer=args.node2nodelayer,
-                          policy_eval=args.policy_eval,
                           policy_detach=args.policy_detach,
+                          dataset=dataset,
                           **kwargs).to(device)
-
     return model
 
 def main():
@@ -176,36 +170,49 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = parserarg()
     ### automatic dataloading and splitting
-    dataset = PygGraphPropPredDataset(name=args.dataset)
-
-    if args.feature == 'full':
-        pass
-    elif args.feature == 'simple':
-        print('using simple feature')
-        dataset.data.x = dataset.data.x[:, :2]
-        dataset.data.edge_attr = dataset.data.edge_attr[:, :2]
-
-    split_idx = dataset.get_idx_split()
-    evaluator = Evaluator(args.dataset)
+    datasets, split, evaluator, task = loaddataset(args.dataset)
+    print(split, task)
     outs = []
+    set_seed(0)
+    if split.startswith("fold"):
+        trn_ratio, val_ratio, tst_ratio = int(split.split("-")[-3]), int(split.split("-")[-2]), int(split.split("-")[-1])
+        num_fold = trn_ratio + val_ratio + tst_ratio
+        trn_ratio /= num_fold
+        val_ratio /= num_fold
+        tst_ratio /= num_fold
+        num_data = len(datasets[0])
+        idx = torch.randperm(num_data)
+        splitsize = num_data//num_fold
+        idxs = [torch.cat((idx[splitsize*_:], idx[:splitsize*_])) for _ in range(num_fold)]
+        num_trn = int(trn_ratio*num_data)
+        num_val = int(val_ratio*num_data)
     for rep in range(args.repeat):
-        train_loader = DataLoader(dataset[split_idx["train"]],
+        set_seed(rep)
+        if "fixed" == split:
+            trn_d, val_d, tst_d = datasets
+        elif split.startswith("fold"):
+            idx = idxs[rep]
+            trn_idx, val_idx, tst_idx = idx[:num_trn], idx[num_trn:num_trn+num_val],  idx[num_trn+num_val:]
+            trn_d, val_d, tst_d = datasets[0][trn_idx], datasets[0][val_idx], datasets[0][tst_idx]
+        else:
+            datasets, split, evaluator, task = loaddataset(args.dataset)
+            trn_d, val_d, tst_d = datasets
+        print(len(trn_d), len(val_d), len(tst_d))
+        train_loader = DataLoader(trn_d,
                                   batch_size=args.batch_size,
                                   shuffle=True,
                                   drop_last=True,
                                   num_workers=args.num_workers)
-        valid_loader = DataLoader(dataset[split_idx["valid"]],
+        valid_loader = DataLoader(val_d,
                                   batch_size=args.batch_size,
                                   shuffle=False,
                                   num_workers=args.num_workers)
-        test_loader = DataLoader(dataset[split_idx["test"]],
+        test_loader = DataLoader(tst_d,
                                  batch_size=args.batch_size,
                                  shuffle=False,
                                  num_workers=args.num_workers)
-        print(
-            f"split {split_idx['train'].shape[0]} {split_idx['valid'].shape[0]} {split_idx['test'].shape[0]}"
-        )
-        model = buildModel(args, dataset, device)
+        print(f"split {len(trn_d)} {len(val_d)} {len(tst_d)}")
+        model = buildModel(args, trn_d.num_tasks, device, trn_d)
         if args.load is not None:
             model.load_state_dict(torch.load(f"mod/{args.load}.{rep}.pt", map_location=device))
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -216,27 +223,27 @@ def main():
 
         for epoch in range(1, args.epochs + 1):
             t1 = time.time()
-            loss, policyloss, entropyloss = train(model, device, train_loader,
-                                                  optimizer, dataset.task_type,
+            loss, policyloss, entropyloss = train(criterion_dict[task], model, device, train_loader,
+                                                  optimizer, task,
                                                   args.alpha, args.gamma)
             print(
                 f"Epoch {epoch} train time : {time.time()-t1:.1f} loss: {loss:.2e} {policyloss:.2e} {entropyloss:.2e}"
             )
 
             t1 = time.time()
-            valid_perf = eval(model, device, valid_loader, evaluator)
-            test_perf = eval(model, device, test_loader, evaluator)
+            valid_perf = eval(model, device, valid_loader, evaluator, args.testT)
+            test_perf = eval(model, device, test_loader, evaluator, args.testT)
             print(
                 f" test time : {time.time()-t1:.1f} Validation {valid_perf} Test {test_perf}"
             )
             train_curve.append(loss)
-            valid_curve.append(valid_perf[dataset.eval_metric])
-            test_curve.append(test_perf[dataset.eval_metric])
+            valid_curve.append(valid_perf)
+            test_curve.append(test_perf)
             if valid_curve[-1] >= np.max(valid_curve):
                 if args.save is not None:
                     torch.save(model.state_dict(), f"mod/{args.save}.{rep}.pt")
         
-        if 'classification' in dataset.task_type:
+        if 'cls' in task:
             best_val_epoch = np.argmax(np.array(valid_curve))
             best_train = min(train_curve)
         else:
