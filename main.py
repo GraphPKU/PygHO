@@ -128,21 +128,20 @@ def train_ppo(criterion,
 
 
 @torch.no_grad()
-def eval(model, device, loader, evaluator, T):
+def eval(model, device, loader: DataLoader, evaluator, T):
     model.eval()
     ylen = len(loader.dataset)
-    y_true = None
+    ty = loader.dataset.data.y
+    if ty.dim() == 1:
+        y_true = torch.empty((ylen), dtype=torch.long)
+    elif ty.dim() == 2:
+        y_true = torch.empty((ylen, ty.shape[1]), dtype=torch.long)
+    else:
+        raise NotImplementedError
     y_pred = torch.empty((ylen, model.num_tasks), device=device)
     step = 0
     for batch in loader:
         steplen = batch.y.shape[0]
-        if y_true is None:
-            if batch.y.dim() == 1:
-                y_true = torch.empty((ylen), dtype=torch.long)
-            elif batch.y.dim() == 2:
-                y_true = torch.empty((ylen, batch.y.shape[1]), dtype=torch.long)
-            else:
-                raise NotImplementedError
         y_true[step:step + steplen] = batch.y
         batch = batch.to(device, non_blocking=True)
         y_pred[step:step + steplen] = model(batch, T)
