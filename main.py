@@ -15,7 +15,7 @@ from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 
 criterion_dict = {
     "bincls": torch.nn.BCEWithLogitsLoss(reduction="none"),
-    "cls": torch.nn.CrossEntropyLoss(reduction="none"),
+    "cls":  torch.nn.CrossEntropyLoss(reduction="none"),
     "reg": torch.nn.MSELoss(reduction="none")
 }
 
@@ -44,23 +44,28 @@ def train(criterion,
         if True:
             optimizer.zero_grad()
             preds, logprob, negentropy, finalpred = model(batch)
-            y = batch.y.to(torch.float32)
+            y = batch.y
             #print(preds.shape)
             #print(logprob.shape)
             #print(negentropy.shape)
             #print(finalpred.shape, y.shape)
             value_loss = torch.mean(criterion(finalpred, y))
-            y = y.unsqueeze(0).unsqueeze(0).expand(preds.shape[0],
-                                                   preds.shape[1], -1, -1)
+            if task_type != "cls":
+                y = y.unsqueeze(0).unsqueeze(0).expand(preds.shape[0],
+                                                    preds.shape[1], -1, -1)
             with torch.no_grad():
-                loss = criterion(preds.detach(), y)
-                loss = loss.sum(dim=-1)
+                if task_type == "cls":
+                    loss = criterion(preds.detach().permute(2, 3, 0, 1), y.reshape(-1, 1, 1).expand(-1, preds.shape[0], -1))
+                    loss = loss.permute(1, 2, 0)
+                else:
+                    loss = criterion(preds.detach(), y)
+                    loss = loss.sum(dim=-1)
                 loss = torch.diff(loss, dim=0)
-            policy_loss = torch.tensor(0) if logprob is None else (
+            policy_loss = torch.tensor(0.0) if logprob is None else (
                 loss.detach() * logprob)
             policy_loss = torch.mean(policy_loss)
             entropy_loss = torch.tensor(
-                0) if negentropy is None else torch.mean(negentropy)
+                0.0) if negentropy is None else torch.mean(negentropy)
             totalloss = value_loss + alpha * policy_loss + gamma * entropy_loss
             totalloss.backward()
             optimizer.step()
@@ -92,20 +97,24 @@ def train_ppo(criterion,
         if True:
             optimizer.zero_grad()
             preds, logprob, oldlogprob, negentropy, finalpred = model(batch)
-            y = batch.y.to(torch.float32)
+            y = batch.y
             value_loss = torch.mean(criterion(finalpred, y))
-            y = y.unsqueeze(0).unsqueeze(0).expand(preds.shape[0],
-                                                   preds.shape[1], -1, -1)
+            if task_type != "cls":
+                y = y.unsqueeze(0).unsqueeze(0).expand(preds.shape[0],
+                                                    preds.shape[1], -1, -1)
             with torch.no_grad():
-                loss = criterion(preds.detach(), y)
+                if task_type == "cls":
+                    loss = criterion(preds.detach().permute(2, 3, 0, 1), y)
+                else:
+                    loss = criterion(preds.detach(), y)
                 loss = loss.sum(dim=-1)
                 loss = torch.diff(loss, dim=0)
-            policy_loss = torch.tensor(0) if logprob is None else (
+            policy_loss = torch.tensor(0.0) if logprob is None else (
                 loss.detach() *
                 torch.exp(torch.clip(logprob - oldlogprob, ppolb, ppoub)))
             policy_loss = torch.mean(policy_loss)
             entropy_loss = torch.tensor(
-                0) if negentropy is None else torch.mean(negentropy)
+                0.0) if negentropy is None else torch.mean(negentropy)
             totalloss = value_loss + alpha * policy_loss + gamma * entropy_loss
             totalloss.backward()
             optimizer.step()
@@ -122,11 +131,17 @@ def train_ppo(criterion,
 def eval(model, device, loader, evaluator, T):
     model.eval()
     ylen = len(loader.dataset)
-    y_true = torch.empty((ylen, 1), dtype=torch.long)
-    y_pred = torch.empty((ylen, 1), device=device)
+    y_true = None#torch.empty((ylen, 1), dtype=torch.long)
+    y_pred = torch.empty((ylen, model.num_tasks), device=device)
     step = 0
     for batch in loader:
         steplen = batch.y.shape[0]
+        if batch.y.dim() == 1:
+            y_true = torch.empty((ylen), dtype=torch.long)
+        elif batch.y.dim() == 2:
+            y_true = torch.empty((ylen, batch.y.shape[1]), dtype=torch.long)
+        else:
+            raise NotImplementedError
         y_true[step:step + steplen] = batch.y
         batch = batch.to(device, non_blocking=True)
         y_pred[step:step + steplen] = model(batch, T)
@@ -199,6 +214,9 @@ def parserarg():
     parser.add_argument("--ppolb", type=float, default=-0.5)
     parser.add_argument("--ppoub", type=float, default=0.5)
     parser.add_argument("--tau", type=float, default=0.99)
+
+    parser.add_argument('--randinit', action="store_true")
+
     args = parser.parse_args()
     print(args)
     return args
@@ -235,6 +253,7 @@ def buildModel(args, num_tasks, device, dataset):
                              node2nodelayer=args.node2nodelayer,
                              policy_detach=args.policy_detach,
                              dataset=dataset,
+                             randinit=args.randinit,
                              **kwargs).to(device)
     elif args.model == "ppo":
         model = PPOAnchorGNN(num_tasks,
