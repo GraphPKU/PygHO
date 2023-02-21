@@ -55,7 +55,7 @@ def train(criterion,
             with torch.no_grad():
                 loss = criterion(preds.detach(), y)
                 loss = loss.sum(dim=-1)
-                loss = torch.diff(loss, dim=0)
+                loss = loss[[-1]] - loss[:-1]
             policy_loss = torch.tensor(0) if logprob is None else (
                 loss.detach() * logprob)
             policy_loss = torch.mean(policy_loss)
@@ -99,7 +99,7 @@ def train_ppo(criterion,
             with torch.no_grad():
                 loss = criterion(preds.detach(), y)
                 loss = loss.sum(dim=-1)
-                loss = torch.diff(loss, dim=0)
+                loss = loss[[-1]] - loss[:-1]
             policy_loss = torch.tensor(0) if logprob is None else (
                 loss.detach() *
                 torch.exp(torch.clip(logprob - oldlogprob, ppolb, ppoub)))
