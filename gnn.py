@@ -160,6 +160,7 @@ class UniAnchorGNN(GNN):
                  node2nodelayer: int = 1,
                  policy_detach: bool = False,
                  dataset=None,
+                 randinit=False,
                  **kwargs):
         super().__init__(num_tasks,
                          num_layer,
@@ -172,11 +173,14 @@ class UniAnchorGNN(GNN):
                          node2nodelayer=node2nodelayer,
                          outlayer=outlayer,
                          **kwargs)
+        self.randinit = randinit
+        if randinit:
+            print("warning: model using random init")
         self.policy_detach = policy_detach
         self.num_anchor = num_anchor
         self.multi_anchor = multi_anchor
         self.rand_anchor = rand_anchor
-        self.data_encoder = InputEncoder(emb_dim, [], False, dataset)
+        self.data_encoder = InputEncoder(emb_dim, [], False, dataset, **kwargs)
         self.anchor_encoder = nn.Embedding(num_anchor + 1, emb_dim, 0)
         if set2set.startswith("id"):
             self.set2set = MLP(0, 0, 0, tailact=False, **kwargs["mlp"])
@@ -274,6 +278,8 @@ class UniAnchorGNN(GNN):
                              device=batched_data.x.device,
                              dtype=torch.int64)
         batched_data = self.preprocessdata(batched_data)
+        if self.randinit:
+            batched_data.x = batched_data.x + torch.rand_like(batched_data.x)
         tx = batched_data.x
         if self.training:
             logprob = []
