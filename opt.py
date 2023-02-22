@@ -57,14 +57,14 @@ def randanchor(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     dim = trial.suggest_int("dim", 16, 128, step=16)
     bs = trial.suggest_int("bs", 15, 15, step=1)
     jk = trial.suggest_categorical("jk", ["sum", "last"])
-    lr = trial.suggest_float("lr", 1e-4, 5e-3, step=1e-4)
-    pool = trial.suggest_categorical("pool", ["sum", "mean", "max"])
+    lr = trial.suggest_float("lr", 1e-4, 1e-2, step=3e-4)
+    pool = "sum" #trial.suggest_categorical("pool", ["sum", "mean", "max"])
     norm = trial.suggest_categorical("norm", ["sum", "mean", "max", "gcn"])
     mlplayer = trial.suggest_int("mlplayer", 1, 2)
     res = trial.suggest_categorical("res", [True, False])
     bn = trial.suggest_categorical("bn", [True, False])
     ln = trial.suggest_categorical("ln", [True, False])
-    ln_out = trial.suggest_categorical("ln_out", [True, False])
+    ln_out = False #trial.suggest_categorical("ln_out", [True, False])
     outlayer = trial.suggest_int("outlayer", 1, 3)
     cmd += f" --dp {dp} --num_layer {layer} --emb_dim {dim} --batch_size {bs} --jk {jk} "
     cmd += f" --norm {norm} --lr {lr} --pool {pool} --mlplayer {mlplayer}  --outlayer {outlayer} "

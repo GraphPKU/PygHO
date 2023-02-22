@@ -46,10 +46,6 @@ def train(criterion,
             optimizer.zero_grad()
             preds, logprob, negentropy, finalpred = model(batch)
             y = batch.y
-            #print(preds.shape)
-            #print(logprob.shape)
-            #print(negentropy.shape)
-            #print(finalpred.shape, y.shape)
             value_loss = torch.mean(criterion(finalpred, y))
             if task_type != "cls":
                 y = y.unsqueeze(0).unsqueeze(0).expand(preds.shape[0],
@@ -167,7 +163,7 @@ def parserarg():
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--lr', type=float, default=0.0026)
 
-    parser.add_argument('--dp', type=float, default=0.9)
+    parser.add_argument('--dp', type=float, default=0.0)
     parser.add_argument("--bn", action="store_true")
     parser.add_argument("--ln", action="store_true")
     parser.add_argument("--ln_out", action="store_true")
@@ -177,6 +173,12 @@ def parserarg():
     parser.add_argument("--anchor_outlayer", type=int, default=1)
     parser.add_argument("--node2nodelayer", type=int, default=1)
     parser.add_argument("--use_elin", action="store_true")
+
+    parser.add_argument('--embdp', type=float, default=0.0)
+    parser.add_argument("--embbn", action="store_true")
+    parser.add_argument("--embln", action="store_true")
+    parser.add_argument("--orthoinit", action="store_true")
+    parser.add_argument("--max_norm", type=float, default=None)
 
     parser.add_argument('--norm',
                         type=str,
@@ -232,8 +234,16 @@ def buildModel(args, num_tasks, device, dataset):
             "bn": args.bn,
             "ln": args.ln,
             "act": args.act
+        },
+        "emb": {
+            "dp": args.embdp,
+            "bn": args.embbn,
+            "ln": args.embln,
+            "orthoinit": args.orthoinit,
+            "max_norm": args.max_norm
         }
     }
+    print("num_task", num_tasks)
     if args.model == "policygrad":
         model = UniAnchorGNN(num_tasks,
                              args.num_anchor,
