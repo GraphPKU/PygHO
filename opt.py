@@ -9,14 +9,14 @@ parser.add_argument("dev", type=int)
 parser.add_argument("model", type=str, choices=["ppo", "policygrad", "debug"])
 args = parser.parse_args()
 
-stu = optuna.create_study(storage=f"sqlite:///{args.dataset}.db", study_name=f"{args.model}_{args.num_anchor}", load_if_exists=True, direction="maximize")
+stu = optuna.create_study(storage=f"sqlite:///{args.dataset}.db", study_name=f"{args.model}_{args.num_anchor}", load_if_exists=True, direction="minimize")
 
 def debug(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor 0 --repeat 3 --randinit --dataset {dataset} --epochs 1000 "
-    dp = trial.suggest_float("dp", 0, 0.9, step=0.05)
+    dp = trial.suggest_float("dp", 0, 0.0, step=0.05)
     layer = trial.suggest_int("layer", 2, 6)
-    dim = trial.suggest_int("dim", 16, 128, step=16)
-    bs = trial.suggest_int("bs", 16, 120, step=16)
+    dim = trial.suggest_int("dim", 1500, 1500, step=100)
+    bs = trial.suggest_int("bs", 15, 15, step=1)
     jk = trial.suggest_categorical("jk", ["sum", "last"])
     lr = trial.suggest_float("lr", 1e-4, 5e-3, step=1e-4)
     pool = trial.suggest_categorical("pool", ["sum", "mean", "max"])

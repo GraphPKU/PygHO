@@ -168,7 +168,7 @@ from torchmetrics import Accuracy, MeanAbsoluteError
 from typing import Iterable, Callable, Optional, Tuple
 from torch_geometric.data import Dataset
 
-def loaddataset(name: str, y_slice: int=0, **kwargs): #-> Iterable[Dataset], str, Callable, str
+def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
     if name == "sr":
         dataset = SRDataset(**kwargs)
         dataset.data.x = dataset.data.x.long()
@@ -190,9 +190,10 @@ def loaddataset(name: str, y_slice: int=0, **kwargs): #-> Iterable[Dataset], str
         dataset = GNNBenchmarkDataset("dataset", "CSL", pre_transform=CSL_node_feature_transform,**kwargs)
         dataset.num_tasks = torch.max(dataset.data.y).item() + 1
         return (dataset,), "fold-8-1-1", Accuracy("multiclass", num_classes=10), "cls"
-    elif name == "subgcount":
+    elif name.startswith("subgcount"):
+        y_slice = int(name[len("subgcount"):])
         dataset = GraphCountDataset(**kwargs)
-        dataset.data.y = dataset.data.y[:, y_slice]
+        dataset.data.y = dataset.data.y[:, [y_slice]]
         dataset.num_tasks = 1
         dataset.data.y = dataset.data.y.to(torch.float)
         return (dataset[dataset.train_idx], dataset[dataset.val_idx], dataset[dataset.test_idx]), "fixed", MeanAbsoluteError(), "reg"
