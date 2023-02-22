@@ -148,6 +148,7 @@ def eval(model, device, loader: DataLoader, evaluator, T):
         step += steplen
     assert step == y_true.shape[0]
     y_pred = y_pred.cpu()
+    #print(y_pred, y_true)
     return evaluator(y_pred, y_true)
 
 
@@ -168,6 +169,7 @@ def parserarg():
     parser.add_argument('--dp', type=float, default=0.9)
     parser.add_argument("--bn", action="store_true")
     parser.add_argument("--ln", action="store_true")
+    parser.add_argument("--ln_out", action="store_true")
     parser.add_argument("--act", type=str, default="relu")
     parser.add_argument("--mlplayer", type=int, default=1)
     parser.add_argument("--outlayer", type=int, default=1)
@@ -254,6 +256,7 @@ def buildModel(args, num_tasks, device, dataset):
                              policy_detach=args.policy_detach,
                              dataset=dataset,
                              randinit=args.randinit,
+                             ln_out=args.ln_out,
                              **kwargs).to(device)
     elif args.model == "ppo":
         model = PPOAnchorGNN(num_tasks,
@@ -278,6 +281,7 @@ def buildModel(args, num_tasks, device, dataset):
                              policy_detach=args.policy_detach,
                              dataset=dataset,
                              tau=args.tau,
+                             ln_out=args.ln_out,
                              **kwargs).to(device)
     else:
         raise NotImplementedError(f"unknown model {args.model}")
@@ -329,6 +333,10 @@ def main():
                                   shuffle=True,
                                   drop_last=True,
                                   num_workers=args.num_workers)
+        train_eval_loader = DataLoader(trn_d,
+                                  batch_size=args.batch_size,
+                                  shuffle=False,
+                                  num_workers=args.num_workers)
         valid_loader = DataLoader(val_d,
                                   batch_size=args.batch_size,
                                   shuffle=False,
@@ -365,11 +373,13 @@ def main():
             )
 
             t1 = time.time()
+            train_perf = eval(model, device, train_eval_loader, evaluator,
+                              args.testT)
             valid_perf = eval(model, device, valid_loader, evaluator,
                               args.testT)
             test_perf = eval(model, device, test_loader, evaluator, args.testT)
             print(
-                f" test time : {time.time()-t1:.1f} Validation {valid_perf} Test {test_perf}"
+                f" test time : {time.time()-t1:.1f} Train {train_perf} Validation {valid_perf} Test {test_perf}"
             )
             train_curve.append(loss)
             valid_curve.append(valid_perf)
@@ -379,10 +389,10 @@ def main():
                     torch.save(model.state_dict(), f"mod/{args.save}.{rep}.pt")
 
         if 'cls' in task:
-            best_val_epoch = np.argmax(np.array(valid_curve))
+            best_val_epoch = np.argmax(np.array(valid_curve)+np.arange(len(valid_curve))*1e-15)
             best_train = min(train_curve)
         else:
-            best_val_epoch = np.argmin(np.array(valid_curve))
+            best_val_epoch = np.argmin(np.array(valid_curve)-np.arange(len(valid_curve))*1e-15)
             best_train = min(train_curve)
 
         print(

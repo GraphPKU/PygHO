@@ -82,6 +82,7 @@ class GNN(nn.Module):
                  graph_pooling="mean",
                  outlayer: int = 1,
                  node2nodelayer: int = 0,
+                 ln_out: bool=False,
                  **kwargs):
         '''
             num_tasks (int): number of labels to be predicted
@@ -126,11 +127,13 @@ class GNN(nn.Module):
         else:
             raise ValueError("Invalid graph pooling type.")
         outdim = 2 * self.emb_dim if graph_pooling == "set2set" else self.emb_dim
-        self.pred_lin = MLP(outdim,
+        if ln_out:
+            print("warning: output is normalized")
+        self.pred_lin = nn.Sequential(MLP(outdim,
                             num_tasks,
                             outlayer,
                             tailact=False,
-                            **kwargs["mlp"])
+                            **kwargs["mlp"]), nn.LayerNorm(num_tasks, elementwise_affine=False) if ln_out else nn.Identity())
 
     def forward(self, batched_data):
         h_node = self.gnn_node(batched_data)
