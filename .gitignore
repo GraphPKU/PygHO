@@ -12,3 +12,5 @@ mod/*
 !dataset/sr25
 !dataset/subgraphcount
 !dataset/CSL
+test/*
+opt/*
