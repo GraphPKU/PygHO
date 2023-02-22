@@ -16,7 +16,8 @@ from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 criterion_dict = {
     "bincls": torch.nn.BCEWithLogitsLoss(reduction="none"),
     "cls":  torch.nn.CrossEntropyLoss(reduction="none"),
-    "reg": torch.nn.MSELoss(reduction="none")
+    "reg": torch.nn.MSELoss(reduction="none"),
+    "l1reg": torch.nn.L1Loss(reduction="none"),
 }
 
 

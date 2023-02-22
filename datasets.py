@@ -196,7 +196,7 @@ def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
         dataset.data.y = dataset.data.y[:, [y_slice]]
         dataset.num_tasks = 1
         dataset.data.y = dataset.data.y.to(torch.float)
-        return (dataset[dataset.train_idx], dataset[dataset.val_idx], dataset[dataset.test_idx]), "fixed", MeanAbsoluteError(), "reg"
+        return (dataset[dataset.train_idx], dataset[dataset.val_idx], dataset[dataset.test_idx]), "fixed", MeanAbsoluteError(), "l1reg"
     elif name in ["MUTAG", "DD", "PROTEINS", "PTC", "IMDB-BINARY"]:
         dataset = TUDataset("dataset", name=name, **kwargs)
         dataset.num_tasks = 1

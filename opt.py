@@ -8,8 +8,11 @@ parser.add_argument("num_anchor", type=int)
 parser.add_argument("dev", type=int)
 parser.add_argument("model", type=str, choices=["ppo", "policygrad", "debug", "randanchor"])
 args = parser.parse_args()
-print(args)
-stu = optuna.create_study(storage=f"sqlite:///{args.dataset}.db", study_name=f"{args.model}_{args.num_anchor}", load_if_exists=True, direction="maximize" if args.dataset not in ["QM9", "subgcount0", "subgcount1", "subgcount2", "subgcount3", "zinc"] else "minimize")
+
+isreg = args.dataset in ["QM9", "subgcount0", "subgcount1", "subgcount2", "subgcount3", "zinc"]
+print(args, isreg)
+
+stu = optuna.create_study(storage=f"sqlite:///{args.dataset}.db", study_name=f"{args.model}_{args.num_anchor}", load_if_exists=True, direction="maximize" if not isreg else "minimize")
 
 def debug(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor 0 --repeat 3 --randinit --dataset {dataset} --epochs 1000 "
@@ -42,17 +45,17 @@ def debug(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     ret = str(ret, encoding="utf-8")
     print(cmd, flush=True)
     print(ret, flush=True)
-    out = float(ret.split()[-4]) - float(ret.split()[-1]) 
+    out = (float(ret.split()[-4]) - float(ret.split()[-1])) if not isreg else (float(ret.split()[-4]) + float(ret.split()[-1]))
     return out
 
 
 def randanchor(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     num_anchor = trial.suggest_int("num_anchor", 0, 10)
-    cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {num_anchor} --repeat 10 --rand_sample --dataset {dataset} --epochs 2000 "
+    cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {num_anchor} --repeat 3 --rand_sample --dataset {dataset} --epochs 2000 "
     dp = trial.suggest_float("dp", 0, 0.0, step=0.05)
     layer = trial.suggest_int("layer", 2, 6)
     dim = trial.suggest_int("dim", 16, 128, step=16)
-    bs = trial.suggest_int("bs", 16, 120, step=16)
+    bs = trial.suggest_int("bs", 1200, 1200, step=16)
     jk = trial.suggest_categorical("jk", ["sum", "last"])
     lr = trial.suggest_float("lr", 1e-4, 5e-3, step=1e-4)
     pool = trial.suggest_categorical("pool", ["sum", "mean", "max"])
@@ -78,7 +81,7 @@ def randanchor(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     ret = str(ret, encoding="utf-8")
     print(cmd, flush=True)
     print(ret, flush=True)
-    out = float(ret.split()[-4]) - float(ret.split()[-1]) 
+    out = (float(ret.split()[-4]) - float(ret.split()[-1])) if not isreg else (float(ret.split()[-4]) + float(ret.split()[-1]))
     return out
 
 
@@ -103,7 +106,7 @@ def obj(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     ret = str(ret, encoding="utf-8")
     print(cmd, flush=True)
     print(ret, flush=True)
-    out = float(ret.split()[-4]) - float(ret.split()[-1]) 
+    out = (float(ret.split()[-4]) - float(ret.split()[-1])) if not isreg else (float(ret.split()[-4]) + float(ret.split()[-1]))
     return out
 
 
@@ -127,7 +130,7 @@ def obj2(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     ret = str(ret, encoding="utf-8")
     print(cmd, flush=True)
     print(ret, flush=True)
-    out = float(ret.split()[-4]) - float(ret.split()[-1]) 
+    out = (float(ret.split()[-4]) - float(ret.split()[-1])) if not isreg else (float(ret.split()[-4]) + float(ret.split()[-1]))
     return out
 
 
@@ -151,7 +154,7 @@ def objppo(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     ret = str(ret, encoding="utf-8")
     print(cmd, flush=True)
     print(ret, flush=True)
-    out = float(ret.split()[-4]) - float(ret.split()[-1]) 
+    out = (float(ret.split()[-4]) - float(ret.split()[-1])) if not isreg else (float(ret.split()[-4]) + float(ret.split()[-1]))
     return out
 
 
