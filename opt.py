@@ -50,12 +50,12 @@ def debug(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
 
 
 def randanchor(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
-    num_anchor = trial.suggest_int("num_anchor", 0, 10)
+    num_anchor = trial.suggest_int("num_anchor", 0, 25)
     cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {num_anchor} --repeat 3 --rand_sample --dataset {dataset} --epochs 2000 "
     dp = trial.suggest_float("dp", 0, 0.0, step=0.05)
     layer = trial.suggest_int("layer", 2, 6)
     dim = trial.suggest_int("dim", 16, 128, step=16)
-    bs = trial.suggest_int("bs", 1200, 1200, step=16)
+    bs = trial.suggest_int("bs", 15, 15, step=1)
     jk = trial.suggest_categorical("jk", ["sum", "last"])
     lr = trial.suggest_float("lr", 1e-4, 5e-3, step=1e-4)
     pool = trial.suggest_categorical("pool", ["sum", "mean", "max"])
@@ -111,7 +111,7 @@ def obj(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
 
 
 def obj2(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
-    cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {args.num_anchor} --repeat 3 --dataset {dataset} --epochs 500  --dp 0.0 --num_layer 5 --emb_dim 32 --batch_size 16 --jk sum  --norm gcn --lr 0.0023 --pool max --mlplayer 1  --outlayer 1  --bn  --ln  --ln_out "
+    cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {args.num_anchor} --dataset {dataset} --epochs 500  --dp 0.0 --num_layer 5 --emb_dim 32 --batch_size 16 --jk sum  --norm gcn --lr 0.0023 --pool max --mlplayer 1  --outlayer 1  --bn  --ln  --ln_out "
     set2set = trial.suggest_categorical("set2set", ["id", "mindist", "maxcos"])
     alpha = trial.suggest_float("alpha", 1e-3, 1e2, log=True)
     gamma = trial.suggest_float("gamma", 1e-5, 1e0, log=True)
@@ -125,7 +125,7 @@ def obj2(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
         cmd += " --set2set_concat "
     if s2sfeat:
         cmd += " --set2set_feat "
-    cmd += f"--repeat 3 |grep runs:"
+    cmd += f" --repeat 10 |grep runs:"
     ret = subprocess.check_output(cmd, shell=True)
     ret = str(ret, encoding="utf-8")
     print(cmd, flush=True)
@@ -147,7 +147,7 @@ def objppo(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     lr = trial.suggest_float("lr", 2e-3, 5e-3, step=1e-4)
     cmd += f" --set2set id --alpha {alpha} --gamma {gamma} --batch_size 960  --norm mean --pool mean "
     cmd += f" --mlplayer 1 --bn --lr {lr}  --testT {T}  --set2set_concat  --set2set_feat "
-    cmd += f" --repeat 10 --model ppo --tau {tau} --ppolb {ppolb} --ppoub {ppoub} "
+    cmd += f" --model ppo --tau {tau} --ppolb {ppolb} --ppoub {ppoub} "
     
     cmd += f"--repeat 3 |grep runs:"
     ret = subprocess.check_output(cmd, shell=True)
