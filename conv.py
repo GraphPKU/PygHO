@@ -74,9 +74,6 @@ class GNN_node(nn.Module):
         ### add residual connection or not
         self.residual = residual
 
-        if self.num_layer < 2:
-            raise ValueError("Number of GNN layers must be greater than 1.")
-
         ###List of GNNs
         self.convs = torch.nn.ModuleList()
         self.lins = torch.nn.ModuleList()

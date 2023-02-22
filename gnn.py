@@ -8,7 +8,7 @@ import torch.nn as nn
 from torch_scatter import scatter_max, scatter_add
 from set2set import MinDist, MaxCos
 from utils import MLP
-from Emb import x2dims, MultiEmbedding
+from Emb import x2dims, MultiEmbedding, SingleEmbedding
 from typing import List, Optional
 from torch import Tensor
 
@@ -26,7 +26,7 @@ class InputEncoder(nn.Module):
             self.x_encoder = MultiEmbedding(
                 emb_dim,
                 dims=exdims,
-                lastzeropad=len(exdims) if not zeropad else 0)
+                lastzeropad=len(exdims) if not zeropad else 0, **kwargs["emb"])
             self.ea_encoder = lambda *args: None
         else:
             x = dataset.data.x
@@ -45,7 +45,7 @@ class InputEncoder(nn.Module):
                 self.x_encoder = MultiEmbedding(
                     emb_dim,
                     dims=dims + exdims,
-                    lastzeropad=len(exdims) if not zeropad else 0)
+                    lastzeropad=len(exdims) if not zeropad else 0, **kwargs["emb"])
             else:
                 raise NotImplementedError
 
@@ -59,7 +59,7 @@ class InputEncoder(nn.Module):
                                       **kwargs["mlp"])
             elif ea.dtype == torch.int64:
                 dims = x2dims(ea)
-                self.ea_encoder = MultiEmbedding(emb_dim, dims=dims)
+                self.ea_encoder = MultiEmbedding(emb_dim, dims=dims, **kwargs["emb"])
             else:
                 raise NotImplementedError
 
@@ -97,8 +97,6 @@ class GNN(nn.Module):
         self.num_tasks = num_tasks
         self.graph_pooling = graph_pooling
 
-        if self.num_layer < 2:
-            raise ValueError("Number of GNN layers must be greater than 1.")
 
         ### GNN to generate node embeddings
         if virtual_node:
@@ -184,7 +182,7 @@ class UniAnchorGNN(GNN):
         self.multi_anchor = multi_anchor
         self.rand_anchor = rand_anchor
         self.data_encoder = InputEncoder(emb_dim, [], False, dataset, **kwargs)
-        self.anchor_encoder = nn.Embedding(num_anchor + 1, emb_dim, 0)
+        self.anchor_encoder = SingleEmbedding(emb_dim, num_anchor + 1, 1, **kwargs["emb"])
         if set2set.startswith("id"):
             self.set2set = MLP(0, 0, 0, tailact=False, **kwargs["mlp"])
             outdim = emb_dim
@@ -269,7 +267,7 @@ class UniAnchorGNN(GNN):
 
     def preprocessdata(self, batched_data: Data):
         batched_data = self.data_encoder(batched_data)
-        batched_data.x = batched_data.x.unsqueeze(0)
+        batched_data.x = batched_data.x.unsqueeze(0).expand(self.multi_anchor, -1, -1)
         return batched_data
 
     def addanchor2x(self, batched_data: Data, anchor: Tensor, tx: Tensor):
