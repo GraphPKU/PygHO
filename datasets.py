@@ -194,14 +194,15 @@ def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
         y_slice = int(name[len("subgcount"):])
         dataset = GraphCountDataset(**kwargs)
         from torch_geometric.utils import degree
-        dataset.data.y = dataset.data.y/dataset.data.y.std(dim=0) 
         dataset.data.y = dataset.data.y - dataset.data.y.mean(dim=0)
+        dataset.data.y = dataset.data.y/dataset.data.y.std(dim=0) 
         # normalize as https://github.com/JiaruiFeng/KP-GNN/blob/main/train_structure_counting.py line 203
         dataset.data.y = dataset.data.y[:, [y_slice]]
-        dataset.data.x.copy_(torch.cat([degree(dat.edge_index[0], num_nodes=dat.num_nodes, dtype=torch.long) for dat in dataset]).reshape(-1, 1))
+        # degree feature
+        # dataset.data.x.copy_(torch.cat([degree(dat.edge_index[0], num_nodes=dat.num_nodes, dtype=torch.long) for dat in dataset]).reshape(-1, 1))
         dataset.num_tasks = 1
         dataset.data.y = dataset.data.y.to(torch.float)
-        return (dataset[dataset.train_idx], dataset[dataset.val_idx], dataset[dataset.test_idx]), "fixed", MeanAbsoluteError(), "l1reg"
+        return (dataset[dataset.train_idx], dataset[dataset.val_idx], dataset[dataset.test_idx]), "fixed", MeanAbsoluteError(), "l1reg" # 
     elif name in ["MUTAG", "DD", "PROTEINS", "PTC-MR", "IMDB-BINARY"]:
         dataset = TUDataset("dataset", name=name, **kwargs)
         dataset.num_tasks = 1

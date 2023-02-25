@@ -39,13 +39,15 @@ def train(criterion,
     losss = []
     policy_losss = []
     entropy_losss = []
-    for step, batch in enumerate(loader):
+    for batch in loader:
         batch = batch.to(device, non_blocking=True)
-
         if True:
             optimizer.zero_grad()
             preds, logprob, negentropy, finalpred = model(batch)
             y = batch.y
+            if task_type != "cls":
+                y = y.to(torch.float)
+            #print(finalpred.shape, y.shape)
             value_loss = torch.mean(criterion(finalpred, y))
             if task_type != "cls":
                 y = y.unsqueeze(0).unsqueeze(0).expand(preds.shape[0],
@@ -69,9 +71,10 @@ def train(criterion,
             losss.append(value_loss)
             policy_losss.append(policy_loss)
             entropy_losss.append(entropy_loss)
-    return np.average([_.item() for _ in losss]), np.average([
-        _.item() for _ in policy_losss
-    ]), np.average([_.item() for _ in entropy_losss])
+    loss = np.average([_.item() for _ in losss])
+    policy_loss = np.average([_.item() for _ in policy_losss])
+    entropy_loss = np.average([_.item() for _ in entropy_losss])
+    return loss, policy_loss, entropy_loss 
 
 
 def train_ppo(criterion,
@@ -88,7 +91,7 @@ def train_ppo(criterion,
     losss = []
     policy_losss = []
     entropy_losss = []
-    for step, batch in enumerate(loader):
+    for batch in loader:
         batch = batch.to(device, non_blocking=True)
 
         if True:
@@ -130,13 +133,14 @@ def eval(model, device, loader: DataLoader, evaluator, T):
     ylen = len(loader.dataset)
     ty = loader.dataset.data.y
     if ty.dim() == 1:
-        y_true = torch.empty((ylen), dtype=torch.long)
+        y_true = torch.empty((ylen), dtype=ty.dtype)
     elif ty.dim() == 2:
-        y_true = torch.empty((ylen, ty.shape[1]), dtype=torch.long)
+        y_true = torch.empty((ylen, ty.shape[1]), dtype=ty.dtype)
     else:
         raise NotImplementedError
     y_pred = torch.empty((ylen, model.num_tasks), device=device)
     step = 0
+    # print(y_true.shape, y_pred.shape)
     for batch in loader:
         steplen = batch.y.shape[0]
         y_true[step:step + steplen] = batch.y
@@ -204,6 +208,7 @@ def parserarg():
     parser.add_argument('--set2set_concat', action="store_true")
     parser.add_argument('--multi_anchor', type=int, default=1)
     parser.add_argument('--rand_sample', action="store_true")
+    parser.add_argument('--fullsample', action="store_true")
     parser.add_argument("--num_anchor", type=int, default=0)
     parser.add_argument('--policy_detach', action="store_true")
 
@@ -268,6 +273,7 @@ def buildModel(args, num_tasks, device, dataset):
                              dataset=dataset,
                              randinit=args.randinit,
                              ln_out=args.ln_out,
+                             fullsample=args.fullsample,
                              **kwargs).to(device)
     elif args.model == "ppo":
         model = PPOAnchorGNN(num_tasks,
@@ -347,14 +353,17 @@ def main():
         train_eval_loader = DataLoader(trn_d,
                                   batch_size=args.batch_size,
                                   shuffle=False,
+                                  drop_last=False,
                                   num_workers=args.num_workers)
         valid_loader = DataLoader(val_d,
                                   batch_size=args.batch_size,
                                   shuffle=False,
+                                  drop_last=False,
                                   num_workers=args.num_workers)
         test_loader = DataLoader(tst_d,
                                  batch_size=args.batch_size,
                                  shuffle=False,
+                                 drop_last=False,
                                  num_workers=args.num_workers)
         print(f"split {len(trn_d)} {len(val_d)} {len(tst_d)}")
         model = buildModel(args, trn_d.num_tasks, device, trn_d)
@@ -384,8 +393,7 @@ def main():
             )
 
             t1 = time.time()
-            train_perf = eval(model, device, train_eval_loader, evaluator,
-                              args.testT)
+            train_perf = 0.0 #eval(model, device, train_eval_loader, evaluator, args.testT)
             valid_perf = eval(model, device, valid_loader, evaluator,
                               args.testT)
             test_perf = eval(model, device, test_loader, evaluator, args.testT)

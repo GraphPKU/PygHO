@@ -11,6 +11,7 @@ from utils import MLP
 from Emb import x2dims, MultiEmbedding, SingleEmbedding
 from typing import List, Optional
 from torch import Tensor
+from torch_geometric.utils import degree
 
 
 class InputEncoder(nn.Module):
@@ -162,6 +163,7 @@ class UniAnchorGNN(GNN):
                  policy_detach: bool = False,
                  dataset=None,
                  randinit=False,
+                 fullsample=False,
                  **kwargs):
         super().__init__(num_tasks,
                          num_layer,
@@ -174,6 +176,9 @@ class UniAnchorGNN(GNN):
                          node2nodelayer=node2nodelayer,
                          outlayer=outlayer,
                          **kwargs)
+        self.fullsample = fullsample
+        if fullsample:
+            assert num_anchor < 2, "TODO"
         self.randinit = randinit
         if randinit:
             print("warning: model using random init")
@@ -213,9 +218,7 @@ class UniAnchorGNN(GNN):
 
     def randomsample(self, batched_data: Data, anchor: Optional[Tensor]=None):
         batch = batched_data.batch
-        prob = torch.ones_like(batch,
-                                   dtype=torch.float).unsqueeze_(0).repeat(
-                                       self.multi_anchor, 1)
+        prob = torch.ones_like(batch, dtype=torch.float).unsqueeze_(0).repeat(self.multi_anchor, 1)
         if anchor is not None:
             prob[anchor > 0] = 0
         rawsample = multinomial_sample_batch(prob, batch)
@@ -275,6 +278,7 @@ class UniAnchorGNN(GNN):
         return batched_data
 
     def forward(self, batched_data, T: float = 1):
+        N = batched_data.y.shape[0]
         anchor = torch.zeros((self.multi_anchor, batched_data.x.shape[-2]),
                              device=batched_data.x.device,
                              dtype=torch.int64)
@@ -286,33 +290,65 @@ class UniAnchorGNN(GNN):
             logprob = []
             negentropy = []
             preds = []
-            for i in range(1, self.num_anchor + 1):
-                self.get_h_node(batched_data)
-                rawsample, tlogprob, tnegentropy = self.anchorforward(
-                    batched_data, T, anchor)
-                logprob.append(tlogprob)
-                negentropy.append(tnegentropy)
-                preds.append(self.graph_forward(batched_data))
-                self.fresh_h_node()
-                anchor = anchor.clone()
-                anchor.scatter_(-1, rawsample, i)
+            if self.fullsample:
+                batch = batched_data.batch
+                graphsizes = degree(batch, dtype=torch.long, num_nodes=N)
+                idx = torch.arange(self.multi_anchor, device=batch.device).unsqueeze_(-1).repeat(1, N)
+                mask = (idx > graphsizes)
+                offseta = torch.zeros_like(graphsizes)
+                torch.cumsum(graphsizes[:-1], dim=0, dtype=torch.long, out=offseta[1:])
+                idx += offseta
+                idx[mask] = batched_data.x.shape[-2]
+                anchor = torch.zeros((self.multi_anchor, batched_data.x.shape[-2]+1),
+                             device=batched_data.x.device,
+                             dtype=torch.int64)
+                anchor.scatter_(-1, idx, 1)
+                anchor = anchor[:, :-1]
                 batched_data = self.addanchor2x(batched_data, anchor, tx)
+            else:
+                for i in range(1, self.num_anchor + 1):
+                    self.get_h_node(batched_data)
+                    rawsample, tlogprob, tnegentropy = self.anchorforward(
+                        batched_data, T, anchor)
+                    logprob.append(tlogprob)
+                    negentropy.append(tnegentropy)
+                    preds.append(self.graph_forward(batched_data))
+                    self.fresh_h_node()
+                    anchor = anchor.clone()
+                    anchor.scatter_(-1, rawsample, i)
+                    batched_data = self.addanchor2x(batched_data, anchor, tx)
             self.get_h_node(batched_data)
             preds.append(self.graph_forward(batched_data))
             finalpred = preds[-1].mean(dim=0)
-            if self.num_anchor > 0:
+            if self.num_anchor > 0 and not self.fullsample:
                 return torch.stack(preds, dim=0), torch.stack(
                     logprob, dim=0), torch.stack(negentropy, dim=0), finalpred
             else:
                 return torch.stack(preds, dim=0), None, None, finalpred
         else:
-            for i in range(1, self.num_anchor + 1):
-                self.get_h_node(batched_data)
-                rawsample = self.anchorforward(batched_data, T, anchor)
-                self.fresh_h_node()
-                anchor = anchor.clone()
-                anchor.scatter_(-1, rawsample, i)
+            if self.fullsample:
+                batch = batched_data.batch
+                graphsizes = degree(batch, dtype=torch.long, num_nodes=N)
+                idx = torch.arange(self.multi_anchor, device=batch.device).unsqueeze_(-1).repeat(1, N)
+                mask = (idx > graphsizes)
+                offseta = torch.zeros_like(graphsizes)
+                torch.cumsum(graphsizes[:-1], dim=0, dtype=torch.long, out=offseta[1:])
+                idx += offseta
+                idx[mask] = batched_data.x.shape[-2]
+                anchor = torch.zeros((self.multi_anchor, batched_data.x.shape[-2]+1),
+                             device=batched_data.x.device,
+                             dtype=torch.int64)
+                anchor.scatter_(-1, idx, 1)
+                anchor = anchor[:, :-1]
                 batched_data = self.addanchor2x(batched_data, anchor, tx)
+            else:
+                for i in range(1, self.num_anchor + 1):
+                    self.get_h_node(batched_data)
+                    rawsample = self.anchorforward(batched_data, T, anchor)
+                    self.fresh_h_node()
+                    anchor = anchor.clone()
+                    anchor.scatter_(-1, rawsample, i)
+                    batched_data = self.addanchor2x(batched_data, anchor, tx)
             self.get_h_node(batched_data)
             finalpred = self.graph_forward(batched_data).mean(dim=0)
             return finalpred
