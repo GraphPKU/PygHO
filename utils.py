@@ -19,7 +19,7 @@ class BatchNorm(nn.Module):
             raise NotImplementedError
 
 class MLP(nn.Module):
-    def __init__(self, hiddim: int, outdim: int, numlayer: int, tailact: bool, dp: float=0, bn: bool=True, ln: bool=False, act: str="relu") -> None:
+    def __init__(self, hiddim: int, outdim: int, numlayer: int, tailact: bool, dp: float=0, bn: bool=True, ln: bool=False, act: str="relu", tailbias=True) -> None:
         super().__init__()
         if ln:
             bn=False
@@ -28,7 +28,7 @@ class MLP(nn.Module):
             assert hiddim == outdim
             self.lin = nn.Identity()
         else:
-            self.lin = nn.Sequential(nn.Linear(hiddim, outdim))
+            self.lin = nn.Sequential(nn.Linear(hiddim, outdim, bias=tailbias))
             if tailact:
                 if ln:
                     self.lin.append(nn.LayerNorm(outdim))

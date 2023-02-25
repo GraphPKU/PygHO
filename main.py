@@ -34,7 +34,8 @@ def train(criterion,
           optimizer,
           task_type,
           alpha=1e1,
-          gamma=1e-4):
+          gamma=1e-4,
+          T: float=1):
     model.train()
     losss = []
     policy_losss = []
@@ -43,18 +44,19 @@ def train(criterion,
         batch = batch.to(device, non_blocking=True)
         if True:
             optimizer.zero_grad()
-            preds, logprob, negentropy, finalpred = model(batch)
+            preds, logprob, negentropy, finalpred = model(batch, T)
             y = batch.y
             if task_type != "cls":
                 y = y.to(torch.float)
-            #print(finalpred.shape, y.shape)
             value_loss = torch.mean(criterion(finalpred, y))
             if task_type != "cls":
                 y = y.unsqueeze(0).unsqueeze(0).expand(preds.shape[0],
                                                     preds.shape[1], -1, -1)
             with torch.no_grad():
                 if task_type == "cls":
-                    loss = criterion(preds.detach().permute(2, 3, 0, 1), y.reshape(-1, 1, 1).expand(-1, preds.shape[0], -1))
+                    ty = y.reshape(-1, 1, 1).expand(-1, preds.shape[0], preds.shape[1])
+                    tpred = preds.detach().permute(2, 3, 0, 1)
+                    loss = criterion(tpred, ty)
                     loss = loss.permute(1, 2, 0)
                 else:
                     loss = criterion(preds.detach(), y)
@@ -86,7 +88,8 @@ def train_ppo(criterion,
               alpha: float = 1e1,
               gamma: float = 1e-4,
               ppolb: float = -0.5,
-              ppoub: float = 0.5):
+              ppoub: float = 0.5,
+              T: float = 1):
     model.train()
     losss = []
     policy_losss = []
@@ -96,7 +99,7 @@ def train_ppo(criterion,
 
         if True:
             optimizer.zero_grad()
-            preds, logprob, oldlogprob, negentropy, finalpred = model(batch)
+            preds, logprob, oldlogprob, negentropy, finalpred = model(batch, T)
             y = batch.y
             value_loss = torch.mean(criterion(finalpred, y))
             if task_type != "cls":
@@ -129,7 +132,7 @@ def train_ppo(criterion,
 
 @torch.no_grad()
 def eval(model, device, loader: DataLoader, evaluator, T):
-    model.eval()
+    model.train() #model.eval()
     ylen = len(loader.dataset)
     ty = loader.dataset.data.y
     if ty.dim() == 1:
@@ -145,7 +148,7 @@ def eval(model, device, loader: DataLoader, evaluator, T):
         steplen = batch.y.shape[0]
         y_true[step:step + steplen] = batch.y
         batch = batch.to(device, non_blocking=True)
-        y_pred[step:step + steplen] = model(batch, T)
+        y_pred[step:step + steplen] = model(batch, T)[-1]
         step += steplen
     assert step == y_true.shape[0]
     y_pred = y_pred.cpu()
@@ -212,9 +215,12 @@ def parserarg():
     parser.add_argument("--num_anchor", type=int, default=0)
     parser.add_argument('--policy_detach', action="store_true")
 
+    parser.add_argument("--nodistlin", action="store_true")
+
     parser.add_argument('--gamma', type=float, default=1e-4)
     parser.add_argument('--alpha', type=float, default=1e1)
 
+    parser.add_argument('--trainT', type=float, default=1)
     parser.add_argument('--testT', type=float, default=1)
 
     parser.add_argument('--save', type=str, default=None)
@@ -274,6 +280,7 @@ def buildModel(args, num_tasks, device, dataset):
                              randinit=args.randinit,
                              ln_out=args.ln_out,
                              fullsample=args.fullsample,
+                             nodistlin=args.nodistlin,
                              **kwargs).to(device)
     elif args.model == "ppo":
         model = PPOAnchorGNN(num_tasks,
@@ -299,6 +306,7 @@ def buildModel(args, num_tasks, device, dataset):
                              dataset=dataset,
                              tau=args.tau,
                              ln_out=args.ln_out,
+                             nodistlin=args.nodistlin,
                              **kwargs).to(device)
     else:
         raise NotImplementedError(f"unknown model {args.model}")
@@ -381,19 +389,19 @@ def main():
             if args.model == "ppo":
                 loss, policyloss, entropyloss = train_ppo(
                     criterion_dict[task], model, device, train_loader,
-                    optimizer, task, args.alpha, args.gamma, args.ppolb, args.ppoub)
+                    optimizer, task, args.alpha, args.gamma, args.ppolb, args.ppoub, args.trainT)
             else:
                 loss, policyloss, entropyloss = train(criterion_dict[task],
                                                       model, device,
                                                       train_loader, optimizer,
                                                       task, args.alpha,
-                                                      args.gamma)
+                                                      args.gamma, args.trainT)
             print(
                 f"Epoch {epoch} train time : {time.time()-t1:.1f} loss: {loss:.2e} {policyloss:.2e} {entropyloss:.2e}"
             )
 
             t1 = time.time()
-            train_perf = 0.0 #eval(model, device, train_eval_loader, evaluator, args.testT)
+            train_perf = 0.0 # eval(model, device, train_loader, evaluator, args.testT)
             valid_perf = eval(model, device, valid_loader, evaluator,
                               args.testT)
             test_perf = eval(model, device, test_loader, evaluator, args.testT)
