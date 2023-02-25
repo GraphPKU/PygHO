@@ -52,19 +52,22 @@ def train(criterion,
             if task_type != "cls":
                 y = y.unsqueeze(0).unsqueeze(0).expand(preds.shape[0],
                                                     preds.shape[1], -1, -1)
-            with torch.no_grad():
-                if task_type == "cls":
-                    ty = y.reshape(-1, 1, 1).expand(-1, preds.shape[0], preds.shape[1])
-                    tpred = preds.detach().permute(2, 3, 0, 1)
-                    loss = criterion(tpred, ty)
-                    loss = loss.permute(1, 2, 0)
-                else:
-                    loss = criterion(preds.detach(), y)
-                    loss = loss.sum(dim=-1)
-                loss = loss[[-1]] - loss[:-1]
-            policy_loss = torch.tensor(0.0) if logprob is None else (
-                loss.detach() * logprob)
-            policy_loss = torch.mean(policy_loss)
+            if preds is None:
+                policy_loss = torch.tensor(0.0)
+            else:
+                with torch.no_grad():
+                    if task_type == "cls":
+                        ty = y.reshape(-1, 1, 1).expand(-1, preds.shape[0], preds.shape[1])
+                        tpred = preds.detach().permute(2, 3, 0, 1)
+                        loss = criterion(tpred, ty)
+                        loss = loss.permute(1, 2, 0)
+                    else:
+                        loss = criterion(preds.detach(), y)
+                        loss = loss.sum(dim=-1)
+                    loss = loss[[-1]] - loss[:-1]
+                policy_loss = torch.tensor(0.0) if logprob is None else (
+                    loss.detach() * logprob)
+                policy_loss = torch.mean(policy_loss)
             entropy_loss = torch.tensor(
                 0.0) if negentropy is None else torch.mean(negentropy)
             totalloss = value_loss + alpha * policy_loss + gamma * entropy_loss
@@ -73,6 +76,9 @@ def train(criterion,
             losss.append(value_loss)
             policy_losss.append(policy_loss)
             entropy_losss.append(entropy_loss)
+    #from torchmetrics import Accuracy, MeanAbsoluteError
+    #print(finalpred, y)
+    #print(Accuracy("multiclass", num_classes=15)(finalpred.cpu(), y.cpu()))
     loss = np.average([_.item() for _ in losss])
     policy_loss = np.average([_.item() for _ in policy_losss])
     entropy_loss = np.average([_.item() for _ in entropy_losss])
@@ -131,28 +137,30 @@ def train_ppo(criterion,
 
 
 @torch.no_grad()
-def eval(model, device, loader: DataLoader, evaluator, T):
-    model.train() #model.eval()
+def eval(model, device, loader: DataLoader, evaluator, T, use_eval: ):
+    model.eval()
     ylen = len(loader.dataset)
     ty = loader.dataset.data.y
     if ty.dim() == 1:
-        y_true = torch.empty((ylen), dtype=ty.dtype)
+        y_true = torch.zeros((ylen), dtype=ty.dtype)
     elif ty.dim() == 2:
-        y_true = torch.empty((ylen, ty.shape[1]), dtype=ty.dtype)
+        y_true = torch.zeros((ylen, ty.shape[1]), dtype=ty.dtype)
     else:
         raise NotImplementedError
-    y_pred = torch.empty((ylen, model.num_tasks), device=device)
+    y_pred = torch.zeros((ylen, model.num_tasks), device=device)
     step = 0
     # print(y_true.shape, y_pred.shape)
     for batch in loader:
         steplen = batch.y.shape[0]
         y_true[step:step + steplen] = batch.y
         batch = batch.to(device, non_blocking=True)
-        y_pred[step:step + steplen] = model(batch, T)[-1]
+        tpred = model(batch, T)[-1]
+        y_pred[step:step + steplen] = tpred
         step += steplen
     assert step == y_true.shape[0]
     y_pred = y_pred.cpu()
     #print(y_pred, y_true)
+    
     return evaluator(y_pred, y_true)
 
 
@@ -203,6 +211,9 @@ def parserarg():
                         choices=["sum", "mean", "max"],
                         default="sum")
 
+    parser.add_argument('--nosharelin', action="store_true")
+    parser.add_argument("--noallshare", action="store_true")
+
     parser.add_argument('--set2set',
                         type=str,
                         choices=["id", "mindist", "maxcos"],
@@ -244,7 +255,9 @@ def buildModel(args, num_tasks, device, dataset):
             "dp": args.dp,
             "bn": args.bn,
             "ln": args.ln,
-            "act": args.act
+            "act": args.act,
+            "sharelin": not args.nosharelin,
+            "allshare": not args.noallshare
         },
         "emb": {
             "dp": args.embdp,
@@ -283,6 +296,7 @@ def buildModel(args, num_tasks, device, dataset):
                              nodistlin=args.nodistlin,
                              **kwargs).to(device)
     elif args.model == "ppo":
+        raise NotImplementedError
         model = PPOAnchorGNN(num_tasks,
                              args.num_anchor,
                              args.num_layer,
@@ -311,6 +325,7 @@ def buildModel(args, num_tasks, device, dataset):
     else:
         raise NotImplementedError(f"unknown model {args.model}")
     model = model.to(device)
+    print(model)
     return model
 
 
@@ -414,7 +429,6 @@ def main():
             if valid_curve[-1] >= np.max(valid_curve):
                 if args.save is not None:
                     torch.save(model.state_dict(), f"mod/{args.save}.{rep}.pt")
-
         if 'cls' in task:
             best_val_epoch = np.argmax(np.array(valid_curve)+np.arange(len(valid_curve))*1e-15)
             best_train = min(train_curve)

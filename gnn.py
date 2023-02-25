@@ -40,6 +40,7 @@ class InputEncoder(nn.Module):
                                      emb_dim,
                                      1,
                                      tailact=True,
+                                     multiparams=1,
                                      **kwargs["mlp"])
             elif x.dtype == torch.int64:
                 dims = x2dims(x)
@@ -57,6 +58,7 @@ class InputEncoder(nn.Module):
                                       emb_dim,
                                       1,
                                       tailact=True,
+                                      multiparams=1,
                                       **kwargs["mlp"])
             elif ea.dtype == torch.int64:
                 dims = x2dims(ea)
@@ -82,8 +84,8 @@ class GNN(nn.Module):
                  JK="last",
                  graph_pooling="mean",
                  outlayer: int = 1,
-                 node2nodelayer: int = 0,
                  ln_out: bool=False,
+                 multiconv: int = 1,
                  **kwargs):
         '''
             num_tasks (int): number of labels to be predicted
@@ -108,12 +110,8 @@ class GNN(nn.Module):
                                      JK=JK,
                                      residual=residual,
                                      norm=norm,
+                                     multiconv=multiconv,
                                      **kwargs)
-        self.node2node = MLP(emb_dim,
-                             emb_dim,
-                             node2nodelayer,
-                             tailact=True,
-                             **kwargs["mlp"])
         ### Pooling function to generate whole-graph embeddings
         if self.graph_pooling == "sum":
             self.pool = SumAggregation()
@@ -134,9 +132,8 @@ class GNN(nn.Module):
                             tailact=False,
                             **kwargs["mlp"]), nn.LayerNorm(num_tasks, elementwise_affine=False) if ln_out else nn.Identity())
 
-    def forward(self, batched_data):
-        h_node = self.gnn_node(batched_data)
-        h_node = self.node2node(h_node)
+    def forward(self, batched_data, idx: int):
+        h_node = self.gnn_node(batched_data, idx)
         h_graph = self.pool(h_node, batched_data.batch)
 
         return self.pred_lin(h_graph)
@@ -159,7 +156,6 @@ class UniAnchorGNN(GNN):
                  multi_anchor: int = 1,
                  anchor_outlayer: int = 1,
                  outlayer: int = 1,
-                 node2nodelayer: int = 1,
                  policy_detach: bool = False,
                  dataset=None,
                  randinit=False,
@@ -174,8 +170,8 @@ class UniAnchorGNN(GNN):
                          residual,
                          JK,
                          graph_pooling,
-                         node2nodelayer=node2nodelayer,
                          outlayer=outlayer,
+                         multiconv=num_anchor+1,
                          **kwargs)
         self.fullsample = fullsample
         if fullsample:
@@ -207,8 +203,8 @@ class UniAnchorGNN(GNN):
         self.distlin = (lambda x: -x) if nodistlin else MLP(outdim,1,anchor_outlayer,tailact=False,tailbias=False,**kwargs["mlp"])
         self.h_node = None
 
-    def get_h_node(self, batched_data):
-        self.h_node = self.gnn_node(batched_data)
+    def get_h_node(self, batched_data, idx: int):
+        self.h_node = self.gnn_node(batched_data, idx)
 
     def fresh_h_node(self):
         self.h_node = None
@@ -229,7 +225,6 @@ class UniAnchorGNN(GNN):
         else:
             h_node = self.h_node
         h_node = self.set2set(h_node, batch)
-        print(torch.min(scatter_min(h_node, batch, dim=-2)[0].flatten()))
         pred =  -h_node.squeeze(-1) # self.distlin(h_node).squeeze(-1) #
         if anchor is not None:
             pred[anchor > 0] -= 10  # avoid repeated sample
@@ -256,8 +251,7 @@ class UniAnchorGNN(GNN):
 
     def graph_forward(self, batched_data):
         assert self.h_node is not None
-        h_node = self.node2node(self.h_node)
-        h_graph = self.pool(h_node, batched_data.batch)
+        h_graph = self.pool(self.h_node, batched_data.batch)
         return self.pred_lin(h_graph)
 
     def preprocessdata(self, batched_data: Data):
@@ -298,23 +292,25 @@ class UniAnchorGNN(GNN):
             batched_data = self.addanchor2x(batched_data, anchor, tx)
         else:
             for i in range(1, self.num_anchor + 1):
-                self.get_h_node(batched_data)
+                self.get_h_node(batched_data, i-1)
                 rawsample, tlogprob, tnegentropy = self.anchorforward(
                     batched_data, T, anchor)
                 logprob.append(tlogprob)
                 negentropy.append(tnegentropy)
+                
                 if self.training:
                     preds.append(self.graph_forward(batched_data))
+                
                 self.fresh_h_node()
                 anchor = anchor.clone()
                 anchor.scatter_(-1, rawsample, i)
                 batched_data = self.addanchor2x(batched_data, anchor, tx)
-        self.get_h_node(batched_data)
+        self.get_h_node(batched_data, self.num_anchor)
         preds.append(self.graph_forward(batched_data))
-
         finalpred = preds[-1].mean(dim=0)
+        # print(self.gnn_node.lins[2].lins[4][1].bn.running_mean) #, self.gnn_node.lins[2].lins[1][1].bn.running_mean
         if self.training and (self.num_anchor > 0 and not self.fullsample):
-            return torch.stack(preds, dim=0), torch.stack(
+            return torch.stack(preds, dim=0), torch.stack( 
                 logprob, dim=0), torch.stack(negentropy, dim=0), finalpred
         else:
             return torch.stack(preds, dim=0), None, None, finalpred
