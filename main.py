@@ -34,7 +34,8 @@ def train(criterion,
           optimizer,
           task_type,
           alpha=1e1,
-          gamma=1e-4):
+          gamma=1e-4,
+          T: float=1):
     model.train()
     losss = []
     policy_losss = []
@@ -43,26 +44,30 @@ def train(criterion,
         batch = batch.to(device, non_blocking=True)
         if True:
             optimizer.zero_grad()
-            preds, logprob, negentropy, finalpred = model(batch)
+            preds, logprob, negentropy, finalpred = model(batch, T)
             y = batch.y
             if task_type != "cls":
                 y = y.to(torch.float)
-            #print(finalpred.shape, y.shape)
             value_loss = torch.mean(criterion(finalpred, y))
             if task_type != "cls":
                 y = y.unsqueeze(0).unsqueeze(0).expand(preds.shape[0],
                                                     preds.shape[1], -1, -1)
-            with torch.no_grad():
-                if task_type == "cls":
-                    loss = criterion(preds.detach().permute(2, 3, 0, 1), y.reshape(-1, 1, 1).expand(-1, preds.shape[0], -1))
-                    loss = loss.permute(1, 2, 0)
-                else:
-                    loss = criterion(preds.detach(), y)
-                    loss = loss.sum(dim=-1)
-                loss = loss[[-1]] - loss[:-1]
-            policy_loss = torch.tensor(0.0) if logprob is None else (
-                loss.detach() * logprob)
-            policy_loss = torch.mean(policy_loss)
+            if preds is None:
+                policy_loss = torch.tensor(0.0)
+            else:
+                with torch.no_grad():
+                    if task_type == "cls":
+                        ty = y.reshape(-1, 1, 1).expand(-1, preds.shape[0], preds.shape[1])
+                        tpred = preds.detach().permute(2, 3, 0, 1)
+                        loss = criterion(tpred, ty)
+                        loss = loss.permute(1, 2, 0)
+                    else:
+                        loss = criterion(preds.detach(), y)
+                        loss = loss.sum(dim=-1)
+                    loss = loss[[-1]] - loss[:-1]
+                policy_loss = torch.tensor(0.0) if logprob is None else (
+                    loss.detach() * logprob)
+                policy_loss = torch.mean(policy_loss)
             entropy_loss = torch.tensor(
                 0.0) if negentropy is None else torch.mean(negentropy)
             totalloss = value_loss + alpha * policy_loss + gamma * entropy_loss
@@ -71,6 +76,9 @@ def train(criterion,
             losss.append(value_loss)
             policy_losss.append(policy_loss)
             entropy_losss.append(entropy_loss)
+    #from torchmetrics import Accuracy, MeanAbsoluteError
+    #print(finalpred, y)
+    #print(Accuracy("multiclass", num_classes=15)(finalpred.cpu(), y.cpu()))
     loss = np.average([_.item() for _ in losss])
     policy_loss = np.average([_.item() for _ in policy_losss])
     entropy_loss = np.average([_.item() for _ in entropy_losss])
@@ -86,7 +94,8 @@ def train_ppo(criterion,
               alpha: float = 1e1,
               gamma: float = 1e-4,
               ppolb: float = -0.5,
-              ppoub: float = 0.5):
+              ppoub: float = 0.5,
+              T: float = 1):
     model.train()
     losss = []
     policy_losss = []
@@ -96,7 +105,7 @@ def train_ppo(criterion,
 
         if True:
             optimizer.zero_grad()
-            preds, logprob, oldlogprob, negentropy, finalpred = model(batch)
+            preds, logprob, oldlogprob, negentropy, finalpred = model(batch, T)
             y = batch.y
             value_loss = torch.mean(criterion(finalpred, y))
             if task_type != "cls":
@@ -133,23 +142,25 @@ def eval(model, device, loader: DataLoader, evaluator, T):
     ylen = len(loader.dataset)
     ty = loader.dataset.data.y
     if ty.dim() == 1:
-        y_true = torch.empty((ylen), dtype=ty.dtype)
+        y_true = torch.zeros((ylen), dtype=ty.dtype)
     elif ty.dim() == 2:
-        y_true = torch.empty((ylen, ty.shape[1]), dtype=ty.dtype)
+        y_true = torch.zeros((ylen, ty.shape[1]), dtype=ty.dtype)
     else:
         raise NotImplementedError
-    y_pred = torch.empty((ylen, model.num_tasks), device=device)
+    y_pred = torch.zeros((ylen, model.num_tasks), device=device)
     step = 0
     # print(y_true.shape, y_pred.shape)
     for batch in loader:
         steplen = batch.y.shape[0]
         y_true[step:step + steplen] = batch.y
         batch = batch.to(device, non_blocking=True)
-        y_pred[step:step + steplen] = model(batch, T)
+        tpred = model(batch, T)[-1]
+        y_pred[step:step + steplen] = tpred
         step += steplen
     assert step == y_true.shape[0]
     y_pred = y_pred.cpu()
     #print(y_pred, y_true)
+    #print("eval", evaluator(tpred.cpu(), batch.y.cpu()))
     return evaluator(y_pred, y_true)
 
 
@@ -168,8 +179,7 @@ def parserarg():
     parser.add_argument('--lr', type=float, default=0.0026)
 
     parser.add_argument('--dp', type=float, default=0.0)
-    parser.add_argument("--bn", action="store_true")
-    parser.add_argument("--ln", action="store_true")
+    parser.add_argument("--nnnorm", type=str, default="none")
     parser.add_argument("--ln_out", action="store_true")
     parser.add_argument("--act", type=str, default="relu")
     parser.add_argument("--mlplayer", type=int, default=1)
@@ -200,6 +210,9 @@ def parserarg():
                         choices=["sum", "mean", "max"],
                         default="sum")
 
+    parser.add_argument('--nosharelin', action="store_true")
+    parser.add_argument("--noallshare", action="store_true")
+
     parser.add_argument('--set2set',
                         type=str,
                         choices=["id", "mindist", "maxcos"],
@@ -212,9 +225,12 @@ def parserarg():
     parser.add_argument("--num_anchor", type=int, default=0)
     parser.add_argument('--policy_detach', action="store_true")
 
+    parser.add_argument("--nodistlin", action="store_true")
+
     parser.add_argument('--gamma', type=float, default=1e-4)
     parser.add_argument('--alpha', type=float, default=1e1)
 
+    parser.add_argument('--trainT', type=float, default=1)
     parser.add_argument('--testT', type=float, default=1)
 
     parser.add_argument('--save', type=str, default=None)
@@ -236,9 +252,10 @@ def buildModel(args, num_tasks, device, dataset):
     kwargs = {
         "mlp": {
             "dp": args.dp,
-            "bn": args.bn,
-            "ln": args.ln,
-            "act": args.act
+            "norm": args.nnnorm,
+            "act": args.act,
+            "sharelin": not args.nosharelin,
+            "allshare": not args.noallshare
         },
         "emb": {
             "dp": args.embdp,
@@ -274,8 +291,10 @@ def buildModel(args, num_tasks, device, dataset):
                              randinit=args.randinit,
                              ln_out=args.ln_out,
                              fullsample=args.fullsample,
+                             nodistlin=args.nodistlin,
                              **kwargs).to(device)
     elif args.model == "ppo":
+        raise NotImplementedError
         model = PPOAnchorGNN(num_tasks,
                              args.num_anchor,
                              args.num_layer,
@@ -299,10 +318,12 @@ def buildModel(args, num_tasks, device, dataset):
                              dataset=dataset,
                              tau=args.tau,
                              ln_out=args.ln_out,
+                             nodistlin=args.nodistlin,
                              **kwargs).to(device)
     else:
         raise NotImplementedError(f"unknown model {args.model}")
     model = model.to(device)
+    print(model)
     return model
 
 
@@ -381,19 +402,19 @@ def main():
             if args.model == "ppo":
                 loss, policyloss, entropyloss = train_ppo(
                     criterion_dict[task], model, device, train_loader,
-                    optimizer, task, args.alpha, args.gamma, args.ppolb, args.ppoub)
+                    optimizer, task, args.alpha, args.gamma, args.ppolb, args.ppoub, args.trainT)
             else:
                 loss, policyloss, entropyloss = train(criterion_dict[task],
                                                       model, device,
                                                       train_loader, optimizer,
                                                       task, args.alpha,
-                                                      args.gamma)
+                                                      args.gamma, args.trainT)
             print(
                 f"Epoch {epoch} train time : {time.time()-t1:.1f} loss: {loss:.2e} {policyloss:.2e} {entropyloss:.2e}"
             )
 
             t1 = time.time()
-            train_perf = 0.0 #eval(model, device, train_eval_loader, evaluator, args.testT)
+            train_perf = 0.0 # eval(model, device, train_loader, evaluator, args.testT)
             valid_perf = eval(model, device, valid_loader, evaluator,
                               args.testT)
             test_perf = eval(model, device, test_loader, evaluator, args.testT)
@@ -406,7 +427,6 @@ def main():
             if valid_curve[-1] >= np.max(valid_curve):
                 if args.save is not None:
                     torch.save(model.state_dict(), f"mod/{args.save}.{rep}.pt")
-
         if 'cls' in task:
             best_val_epoch = np.argmax(np.array(valid_curve)+np.arange(len(valid_curve))*1e-15)
             best_train = min(train_curve)

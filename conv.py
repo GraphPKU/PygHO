@@ -3,6 +3,7 @@ from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import degree
 import torch.nn as nn
 from utils import MLP
+from torch_geometric.data import Batch, Data
 
 ### GCN convolution along the graph structure
 class GCNConv(MessagePassing):
@@ -62,6 +63,7 @@ class GNN_node(nn.Module):
                  norm="gcn",
                  use_elin=False,
                  mlplayer=1,
+                 multiconv=1,
                  **kwargs):
         '''
             emb_dim (int): node embedding dimensionality
@@ -75,12 +77,12 @@ class GNN_node(nn.Module):
         self.residual = residual
 
         ###List of GNNs
-        self.convs = torch.nn.ModuleList()
-        self.lins = torch.nn.ModuleList()
+        self.convs = nn.ModuleList()
+        self.lins = nn.ModuleList()
 
         for layer in range(num_layer):
             self.convs.append(GCNConv(emb_dim, use_elin, norm, **kwargs))
-            self.lins.append(MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"]))
+            self.lins.append(MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"], multiparams=multiconv))
 
     def pregnn(self, batched_data):
         x, edge_index, edge_attr, batch = batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch
@@ -100,12 +102,12 @@ class GNN_node(nn.Module):
             raise NotImplementedError
         return node_representation
 
-    def forward(self, batched_data):
+    def forward(self, batched_data, idx: int):
         h_list, edge_index, edge_attr, batch = self.pregnn(batched_data)
 
         for layer in range(self.num_layer):
             h = self.convs[layer](h_list[layer], edge_index, edge_attr)
-            h = self.lins[layer](h)
+            h = self.lins[layer](h, batch, idx=idx)
 
             if self.residual:
                 h = h + h_list[layer]

@@ -51,7 +51,7 @@ def debug(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
 
 
 def randanchor(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
-    num_anchor = trial.suggest_int("num_anchor", 0, 10)
+    num_anchor = trial.suggest_int("num_anchor", 0, 6)
     cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {num_anchor} --repeat 3 --rand_sample --dataset {dataset} --epochs 100 "
     dp = trial.suggest_float("dp", 0, 0.3, step=0.05)
     layer = trial.suggest_int("layer", 1, 6)
@@ -59,12 +59,14 @@ def randanchor(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     bs = trial.suggest_int("bs", 1500, 1500, step=16)
     jk = trial.suggest_categorical("jk", ["sum", "last"])
     lr = trial.suggest_float("lr", 1e-4, 1e-2, step=3e-4)
-    pool = "sum" #trial.suggest_categorical("pool", ["sum", "mean", "max"])
+    pool = trial.suggest_categorical("pool", ["sum", "mean", "max"])
     norm = trial.suggest_categorical("norm", ["sum", "mean", "max", "gcn"])
     mlplayer = trial.suggest_int("mlplayer", 1, 2)
     res = trial.suggest_categorical("res", [True, False])
     bn = trial.suggest_categorical("bn", [True, False])
     ln = trial.suggest_categorical("ln", [True, False])
+    embln = trial.suggest_categorical("embln", [True, False])
+    orthoinit = trial.suggest_categorical("orthoinit", [True, False])
     ln_out = False #trial.suggest_categorical("ln_out", [True, False])
     outlayer = trial.suggest_int("outlayer", 1, 3)
     cmd += f" --dp {dp} --num_layer {layer} --emb_dim {dim} --batch_size {bs} --jk {jk} "
@@ -77,6 +79,10 @@ def randanchor(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
         cmd += " --ln "
     if ln_out:
         cmd += " --ln_out "
+    if orthoinit:
+        cmd += " --orthoinit "
+    if embln:
+        cmd += " --embln "
     cmd += f"|grep runs:"
     ret = subprocess.check_output(cmd, shell=True)
     ret = str(ret, encoding="utf-8")
@@ -145,21 +151,48 @@ def obj(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
 
 
 def obj2(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
-    cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {args.num_anchor} --repeat 3 --dataset {dataset} --epochs 500  --dp 0.0 --num_layer 5 --emb_dim 32 --batch_size 16 --jk sum  --norm gcn --lr 0.0023 --pool max --mlplayer 1  --outlayer 1  --bn  --ln  --ln_out "
+    cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {args.num_anchor} --dataset {dataset} --epochs 500  --dp 0.0 --batch_size 15 --repeat 3 "
+    layer = trial.suggest_int("layer", 1, 5)
+    dim = trial.suggest_int("dim", 64, 64, step=16)
+    jk = trial.suggest_categorical("jk", ["sum", "last"])
+    pool = trial.suggest_categorical("pool", ["sum", "mean", "max"])
+    norm = trial.suggest_categorical("norm", ["sum", "mean", "max", "gcn"])
+    mlplayer = trial.suggest_int("mlplayer", 1, 1)
+    res = trial.suggest_categorical("res", [True, False])
+    nnnorm = trial.suggest_categorical("nnnorm", ["none", "ln", "bn", "gn", "in"])
+    orthoinit = trial.suggest_categorical("orthoinit", [True, False])
+    outlayer = trial.suggest_int("outlayer", 1, 2)
     set2set = trial.suggest_categorical("set2set", ["id", "mindist", "maxcos"])
     alpha = trial.suggest_float("alpha", 1e-3, 1e2, log=True)
     gamma = trial.suggest_float("gamma", 1e-5, 1e0, log=True)
-    lr = trial.suggest_float("lr", 2e-3, 5e-3, step=1e-4)
+    lr = trial.suggest_float("lr", 1e-4, 5e-3, step=1e-4)
     s2sfeat = trial.suggest_categorical("s2sfeat", [True, False])
     s2scat = trial.suggest_categorical("s2scat", [True, False])
-    T = trial.suggest_float("T", 1, 1e3, log=True)
-    cmd += f"  --set2set {set2set} --alpha {alpha} --gamma {gamma} "
-    cmd += f" --lr {lr}  --testT {T} "
+    testT = trial.suggest_float("testT", 1e-1, 1e3, log=True)
+    trainT = trial.suggest_float("trainT", 1e-1, 1e3, log=True)
+    ln_out = trial.suggest_categorical("ln_out", [True, False])
+    multi_anchor = trial.suggest_int("multi_anchor", 1, 500, step=50)
+    noallshare = trial.suggest_categorical("noallshare", [True, False])
+    nosharelin = trial.suggest_categorical("nosharelin", [True, False])
+    cmd += f"  --set2set {set2set} --alpha {alpha} --gamma {gamma} --multi_anchor {multi_anchor} "
+    cmd += f" --lr {lr}  --testT {testT} --trainT {trainT} --nnnorm {nnnorm} "
+    cmd += f" --num_layer {layer} --emb_dim {dim} --jk {jk} "
+    cmd += f" --norm {norm} --lr {lr} --pool {pool} --mlplayer {mlplayer}  --outlayer {outlayer} "
+    if noallshare:
+        cmd += " --noallshare "
+    if nosharelin:
+        cmd += " --nosharelin "
+    if ln_out:
+        cmd += " --ln_out "
     if s2scat:
         cmd += " --set2set_concat "
     if s2sfeat:
         cmd += " --set2set_feat "
-    cmd += f"--repeat 3 |grep runs:"
+    if orthoinit:
+        cmd += " --orthoinit "
+    if res:
+        cmd += " --res "
+    cmd += f" --repeat 10 |grep runs:"
     ret = subprocess.check_output(cmd, shell=True)
     ret = str(ret, encoding="utf-8")
     print(cmd, flush=True)
@@ -181,7 +214,7 @@ def objppo(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     lr = trial.suggest_float("lr", 2e-3, 5e-3, step=1e-4)
     cmd += f" --set2set id --alpha {alpha} --gamma {gamma} --batch_size 960  --norm mean --pool mean "
     cmd += f" --mlplayer 1 --bn --lr {lr}  --testT {T}  --set2set_concat  --set2set_feat "
-    cmd += f"  --model ppo --tau {tau} --ppolb {ppolb} --ppoub {ppoub} "
+    cmd += f" --model ppo --tau {tau} --ppolb {ppolb} --ppoub {ppoub} "
     
     cmd += f"--repeat 3 |grep runs:"
     ret = subprocess.check_output(cmd, shell=True)

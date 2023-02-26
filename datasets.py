@@ -171,10 +171,11 @@ from torch_geometric.data import Dataset
 def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
     if name == "sr":
         dataset = SRDataset(**kwargs)
+        # dataset = dataset[:2]
         dataset.data.x = dataset.data.x.long()
         dataset.data.y = torch.arange(len(dataset))
         dataset.num_tasks = torch.max(dataset.data.y).item() + 1
-        return (dataset, dataset, dataset), "fixed", Accuracy("multiclass", num_classes=15), "cls" # full training/valid/test??
+        return (dataset, dataset, dataset), "fixed", Accuracy("multiclass", num_classes=dataset.num_tasks), "cls" # full training/valid/test??
     elif name == "EXP":
         dataset = PlanarSATPairsDataset(pre_transform=EXP_node_feature_transform, **kwargs)
         if dataset.data.x.dim() == 1:
