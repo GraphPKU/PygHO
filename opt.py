@@ -103,18 +103,13 @@ def fullsample(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     norm = trial.suggest_categorical("norm", ["sum", "mean", "max", "gcn"])
     mlplayer = trial.suggest_int("mlplayer", 1, 2)
     res = trial.suggest_categorical("res", [True, False])
-    bn = trial.suggest_categorical("bn", [True, False])
-    ln = trial.suggest_categorical("ln", [True, False])
+    nnnorm = trial.suggest_categorical("nnnorm", ["none", "ln", "bn", "gn", "in"])
     ln_out = False #trial.suggest_categorical("ln_out", [True, False])
     outlayer = trial.suggest_int("outlayer", 1, 3)
-    cmd += f" --dp {dp} --num_layer {layer} --emb_dim {dim} --batch_size {bs} --jk {jk} "
+    cmd += f" --dp {dp} --num_layer {layer} --emb_dim {dim} --batch_size {bs} --jk {jk} --nnnorm {nnnorm} "
     cmd += f" --norm {norm} --lr {lr} --pool {pool} --mlplayer {mlplayer}  --outlayer {outlayer} "
     if res:
         cmd += " --res "
-    if bn:
-        cmd += " --bn "
-    if ln:
-        cmd += " --ln "
     if ln_out:
         cmd += " --ln_out "
     cmd += f"|grep runs:"
