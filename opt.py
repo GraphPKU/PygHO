@@ -7,6 +7,7 @@ parser.add_argument("dataset", type=str)
 parser.add_argument("num_anchor", type=int)
 parser.add_argument("dev", type=int)
 parser.add_argument("model", type=str, choices=["ppo", "policygrad", "debug", "randanchor", "fullsample"])
+parser.add_argument("delrec", type=int, default=0)
 args = parser.parse_args()
 
 isreg = args.dataset in ["QM9", "subgcount0", "subgcount1", "subgcount2", "subgcount3", "zinc"]
@@ -52,10 +53,10 @@ def debug(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
 def randanchor(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     num_anchor = trial.suggest_int("num_anchor", 0, 6)
     cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {num_anchor} --repeat 3 --rand_sample --dataset {dataset} --epochs 100 "
-    dp = trial.suggest_float("dp", 0, 0.0, step=0.05)
-    layer = trial.suggest_int("layer", 2, 5)
-    dim = trial.suggest_int("dim", 16, 128, step=16)
-    bs = trial.suggest_int("bs", 1024, 1024, step=1)
+    dp = trial.suggest_float("dp", 0, 0.3, step=0.05)
+    layer = trial.suggest_int("layer", 1, 6)
+    dim = trial.suggest_int("dim", 16, 64, step=16)
+    bs = trial.suggest_int("bs", 1500, 1500, step=16)
     jk = trial.suggest_categorical("jk", ["sum", "last"])
     lr = trial.suggest_float("lr", 1e-4, 1e-2, step=3e-4)
     pool = trial.suggest_categorical("pool", ["sum", "mean", "max"])
@@ -91,29 +92,24 @@ def randanchor(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     return out
 
 def fullsample(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
-    cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor 1 --repeat 2 --fullsample --multi_anchor 30 --dataset {dataset} --epochs 500 "
+    cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor 1 --repeat 2 --fullsample --multi_anchor 30 --dataset {dataset} --epochs 1000 "
     dp = trial.suggest_float("dp", 0, 0.3, step=0.05)
-    layer = trial.suggest_int("layer", 1, 6)
-    dim = trial.suggest_int("dim", 16, 128, step=16)
-    bs = trial.suggest_int("bs", 256, 1500, step=256)
+    layer = trial.suggest_int("layer", 1, 3)
+    dim = trial.suggest_int("dim", 16, 32, step=16)
+    bs = trial.suggest_int("bs", 1500, 1500, step=256)
     jk = trial.suggest_categorical("jk", ["sum", "last"])
     lr = trial.suggest_float("lr", 1e-4, 1e-2, step=3e-4)
     pool = trial.suggest_categorical("pool", ["sum", "mean", "max"])
     norm = trial.suggest_categorical("norm", ["sum", "mean", "max", "gcn"])
     mlplayer = trial.suggest_int("mlplayer", 1, 2)
     res = trial.suggest_categorical("res", [True, False])
-    bn = trial.suggest_categorical("bn", [True, False])
-    ln = trial.suggest_categorical("ln", [True, False])
+    nnnorm = trial.suggest_categorical("nnnorm", ["none", "ln", "bn", "gn", "in"])
     ln_out = False #trial.suggest_categorical("ln_out", [True, False])
     outlayer = trial.suggest_int("outlayer", 1, 3)
-    cmd += f" --dp {dp} --num_layer {layer} --emb_dim {dim} --batch_size {bs} --jk {jk} "
+    cmd += f" --dp {dp} --num_layer {layer} --emb_dim {dim} --batch_size {bs} --jk {jk} --nnnorm {nnnorm} "
     cmd += f" --norm {norm} --lr {lr} --pool {pool} --mlplayer {mlplayer}  --outlayer {outlayer} "
     if res:
         cmd += " --res "
-    if bn:
-        cmd += " --bn "
-    if ln:
-        cmd += " --ln "
     if ln_out:
         cmd += " --ln_out "
     cmd += f"|grep runs:"
@@ -224,6 +220,9 @@ def objppo(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     return out
 
 
+if args.delrec >0:
+    stu = optuna.delete_study(storage=f"sqlite:///{args.dataset}.db", study_name=f"{args.model}_{args.num_anchor}")
+    exit()
 if args.model == "debug":
     stu.optimize(debug, 100)
 elif args.model == "randanchor":
