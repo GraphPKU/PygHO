@@ -8,3 +8,11 @@
 
         
 CUDA_VISIBLE_DEVICES=0 python main.py --num_anchor 3 --repeat 3 --dataset sr --epochs 500 --dp 0.0 --num_layer 3 --emb_dim 64 --multi_anchor 100 --batch_size 15 --jk sum --norm sum --set2set mindist --lr 3e-4 --pool sum --mlplayer 1 --outlayer 2 --alpha 0.01 --gamma 0 --ln_out --orthoinit --trainT 100 --testT 100 --nnnorm in --nodistlin  > sr.debug.out &
+
+
+用--set2set mindist --nodist  --dp 0 --num_layer 10 (large enough)
+在gnn.py/anchor prob中加入 print(torch.mean((scatter_min(h_node, batch, dim=-2)[0]<1e-6).float()))， 看需要多少anchor使得距离变为0
+subgcount 2 for train/3 for test anchor即可
+zinc 5 for train/6 for test即可
+molhiv一直不变为0. 5左右平缓
+molpcba 一直不变为0. 5左右平缓
