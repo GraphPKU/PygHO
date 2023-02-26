@@ -137,7 +137,7 @@ def train_ppo(criterion,
 
 
 @torch.no_grad()
-def eval(model, device, loader: DataLoader, evaluator, T, use_eval: ):
+def eval(model, device, loader: DataLoader, evaluator, T):
     model.eval()
     ylen = len(loader.dataset)
     ty = loader.dataset.data.y
@@ -160,7 +160,7 @@ def eval(model, device, loader: DataLoader, evaluator, T, use_eval: ):
     assert step == y_true.shape[0]
     y_pred = y_pred.cpu()
     #print(y_pred, y_true)
-    
+    #print("eval", evaluator(tpred.cpu(), batch.y.cpu()))
     return evaluator(y_pred, y_true)
 
 
@@ -179,8 +179,7 @@ def parserarg():
     parser.add_argument('--lr', type=float, default=0.0026)
 
     parser.add_argument('--dp', type=float, default=0.0)
-    parser.add_argument("--bn", action="store_true")
-    parser.add_argument("--ln", action="store_true")
+    parser.add_argument("--nnnorm", type=str, default="none")
     parser.add_argument("--ln_out", action="store_true")
     parser.add_argument("--act", type=str, default="relu")
     parser.add_argument("--mlplayer", type=int, default=1)
@@ -253,8 +252,7 @@ def buildModel(args, num_tasks, device, dataset):
     kwargs = {
         "mlp": {
             "dp": args.dp,
-            "bn": args.bn,
-            "ln": args.ln,
+            "norm": args.nnnorm,
             "act": args.act,
             "sharelin": not args.nosharelin,
             "allshare": not args.noallshare

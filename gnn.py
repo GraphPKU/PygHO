@@ -100,6 +100,8 @@ class GNN(nn.Module):
         self.num_tasks = num_tasks
         self.graph_pooling = graph_pooling
 
+        #kwargs["mlp"]["bn"] = False
+        #kwargs["mlp"]["ln"] = True
 
         ### GNN to generate node embeddings
         if virtual_node:
@@ -200,7 +202,7 @@ class UniAnchorGNN(GNN):
             outdim = (emb_dim if feat else 1) + (emb_dim if concat else 0)
         else:
             raise NotImplementedError
-        self.distlin = (lambda x: -x) if nodistlin else MLP(outdim,1,anchor_outlayer,tailact=False,tailbias=False,**kwargs["mlp"])
+        self.distlin = (lambda x, y: -x) if nodistlin else MLP(outdim,1,anchor_outlayer, tailact=False, tailbias=False,**kwargs["mlp"])
         self.h_node = None
 
     def get_h_node(self, batched_data, idx: int):
@@ -225,7 +227,7 @@ class UniAnchorGNN(GNN):
         else:
             h_node = self.h_node
         h_node = self.set2set(h_node, batch)
-        pred =  -h_node.squeeze(-1) # self.distlin(h_node).squeeze(-1) #
+        pred =  self.distlin(h_node, batch).squeeze(-1) 
         if anchor is not None:
             pred[anchor > 0] -= 10  # avoid repeated sample
         prob = softmax(pred * T, batch, dim=-1)
@@ -308,8 +310,9 @@ class UniAnchorGNN(GNN):
         self.get_h_node(batched_data, self.num_anchor)
         preds.append(self.graph_forward(batched_data))
         finalpred = preds[-1].mean(dim=0)
+        self.fresh_h_node()
         # print(self.gnn_node.lins[2].lins[4][1].bn.running_mean) #, self.gnn_node.lins[2].lins[1][1].bn.running_mean
-        if self.training and (self.num_anchor > 0 and not self.fullsample):
+        if self.training and (self.num_anchor > 0 and not self.fullsample and not self.rand_anchor):
             return torch.stack(preds, dim=0), torch.stack( 
                 logprob, dim=0), torch.stack(negentropy, dim=0), finalpred
         else:

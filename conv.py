@@ -107,7 +107,7 @@ class GNN_node(nn.Module):
 
         for layer in range(self.num_layer):
             h = self.convs[layer](h_list[layer], edge_index, edge_attr)
-            h = self.lins[layer](h, idx=idx)
+            h = self.lins[layer](h, batch, idx=idx)
 
             if self.residual:
                 h = h + h_list[layer]
