@@ -72,6 +72,7 @@ class GraphNorm(nn.Module):
     def __init__(self, dim) -> None:
         super().__init__()
         self.norm = PygGN(dim)
+        self.num_features = dim
 
     def forward(self, x: Tensor, batch: Tensor):
         if x.dim() == 2:
