@@ -13,12 +13,17 @@ from gnn import modeldict, PPOAnchorGNN
 ### importing OGB
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 
-criterion_dict = {
-    "bincls": torch.nn.BCEWithLogitsLoss(reduction="none"),
-    "cls":  torch.nn.CrossEntropyLoss(reduction="none"),
-    "reg": torch.nn.MSELoss(reduction="none"),
-    "l1reg": torch.nn.L1Loss(reduction="none"),
-}
+def get_criterion(task, args):
+    if task == "smoothl1reg":
+        return torch.nn.SmoothL1Loss(reduction="none", beta=args.lossparam)
+    else:
+        criterion_dict = {
+            "bincls": torch.nn.BCEWithLogitsLoss(reduction="none"),
+            "cls":  torch.nn.CrossEntropyLoss(reduction="none"),
+            "reg": torch.nn.MSELoss(reduction="none"),
+            "l1reg": torch.nn.L1Loss(reduction="none"),
+        }
+        return criterion_dict[task]
 
 
 def set_seed(seed):
@@ -177,6 +182,8 @@ def parserarg():
     parser.add_argument('--batch_size', type=int, default=1024)
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--lr', type=float, default=0.0026)
+    parser.add_argument('--K', type=float, default=0.0)
+    parser.add_argument('--K2', type=float, default=0.0)
 
     parser.add_argument('--dp', type=float, default=0.0)
     parser.add_argument("--nnnorm", type=str, default="none")
@@ -186,6 +193,8 @@ def parserarg():
     parser.add_argument("--outlayer", type=int, default=1)
     parser.add_argument("--anchor_outlayer", type=int, default=1)
     parser.add_argument("--use_elin", action="store_true")
+    
+    parser.add_argument('--lossparam', type=float, default=0.05)
 
     parser.add_argument('--embdp', type=float, default=0.0)
     parser.add_argument("--embbn", action="store_true")
@@ -389,7 +398,7 @@ def main():
             model.load_state_dict(
                 torch.load(f"mod/{args.load}.{rep}.pt", map_location=device))
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
-
+        scheduler = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 1/(1+epoch*(args.K+args.K2*epoch)))
         valid_curve = []
         test_curve = []
         train_curve = []
@@ -398,10 +407,10 @@ def main():
             t1 = time.time()
             if args.model == "ppo":
                 loss, policyloss, entropyloss = train_ppo(
-                    criterion_dict[task], model, device, train_loader,
+                    get_criterion(task, args), model, device, train_loader,
                     optimizer, task, args.alpha, args.gamma, args.ppolb, args.ppoub, args.trainT)
             else:
-                loss, policyloss, entropyloss = train(criterion_dict[task],
+                loss, policyloss, entropyloss = train(get_criterion(task, args),
                                                       model, device,
                                                       train_loader, optimizer,
                                                       task, args.alpha,
@@ -411,7 +420,7 @@ def main():
             )
 
             t1 = time.time()
-            train_perf = 0.0 # eval(model, device, train_loader, evaluator, args.testT)
+            train_perf = 0.0 # eval(model, device, train_eval_loader, evaluator, args.testT)
             valid_perf = eval(model, device, valid_loader, evaluator,
                               args.testT)
             test_perf = eval(model, device, test_loader, evaluator, args.testT)
@@ -424,6 +433,7 @@ def main():
             if valid_curve[-1] >= np.max(valid_curve):
                 if args.save is not None:
                     torch.save(model.state_dict(), f"mod/{args.save}.{rep}.pt")
+            scheduler.step()
         if 'cls' in task:
             best_val_epoch = np.argmax(np.array(valid_curve)+np.arange(len(valid_curve))*1e-15)
             best_train = min(train_curve)

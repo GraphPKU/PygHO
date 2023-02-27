@@ -222,7 +222,7 @@ def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
         tst_d.num_tasks = 1
         tst_d.data.edge_attr = tst_d.data.edge_attr.reshape(-1, 1).to(torch.long)
         tst_d.data.y = tst_d.data.y.reshape(-1, 1)
-        return (trn_d, val_d, tst_d), "fixed", MeanAbsoluteError(), "reg"
+        return (trn_d, val_d, tst_d), "fixed", MeanAbsoluteError(), "smoothl1reg" #"reg"
     elif name == "QM9":
         raise NotImplementedError
         dataset = QM9("dataset/qm9", **kwargs)
