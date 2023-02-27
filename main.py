@@ -185,7 +185,6 @@ def parserarg():
     parser.add_argument("--mlplayer", type=int, default=1)
     parser.add_argument("--outlayer", type=int, default=1)
     parser.add_argument("--anchor_outlayer", type=int, default=1)
-    parser.add_argument("--node2nodelayer", type=int, default=1)
     parser.add_argument("--use_elin", action="store_true")
 
     parser.add_argument('--embdp', type=float, default=0.0)
@@ -285,7 +284,6 @@ def buildModel(args, num_tasks, device, dataset):
                              multi_anchor=args.multi_anchor,
                              anchor_outlayer=args.anchor_outlayer,
                              outlayer=args.outlayer,
-                             node2nodelayer=args.node2nodelayer,
                              policy_detach=args.policy_detach,
                              dataset=dataset,
                              randinit=args.randinit,
@@ -313,7 +311,6 @@ def buildModel(args, num_tasks, device, dataset):
                              multi_anchor=args.multi_anchor,
                              anchor_outlayer=args.anchor_outlayer,
                              outlayer=args.outlayer,
-                             node2nodelayer=args.node2nodelayer,
                              policy_detach=args.policy_detach,
                              dataset=dataset,
                              tau=args.tau,
@@ -419,7 +416,7 @@ def main():
                               args.testT)
             test_perf = eval(model, device, test_loader, evaluator, args.testT)
             print(
-                f" test time : {time.time()-t1:.1f} Train {train_perf} Validation {valid_perf} Test {test_perf}"
+                f" test time : {time.time()-t1:.1f} Train {train_perf} Validation {valid_perf} Test {test_perf}", flush=True
             )
             train_curve.append(loss)
             valid_curve.append(valid_perf)

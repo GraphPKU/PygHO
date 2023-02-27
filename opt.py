@@ -146,17 +146,18 @@ def obj(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
 
 
 def obj2(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
-    cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {args.num_anchor} --dataset {dataset} --epochs 500  --dp 0.0 --batch_size 15 --repeat 3 "
+    cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {args.num_anchor} --dataset {dataset} --epochs 100  --dp 0.0 --batch_size 1024 --repeat 3 "
     layer = trial.suggest_int("layer", 1, 5)
-    dim = trial.suggest_int("dim", 64, 64, step=16)
+    dim = trial.suggest_int("dim", 32, 128, step=16)
     jk = trial.suggest_categorical("jk", ["sum", "last"])
     pool = trial.suggest_categorical("pool", ["sum", "mean", "max"])
     norm = trial.suggest_categorical("norm", ["sum", "mean", "max", "gcn"])
-    mlplayer = trial.suggest_int("mlplayer", 1, 1)
+    mlplayer = trial.suggest_int("mlplayer", 1, 2)
     res = trial.suggest_categorical("res", [True, False])
     nnnorm = trial.suggest_categorical("nnnorm", ["none", "ln", "bn", "gn", "in"])
     orthoinit = trial.suggest_categorical("orthoinit", [True, False])
     outlayer = trial.suggest_int("outlayer", 1, 2)
+    anchor_outlayer = trial.suggest_int("anchor_outlayer", 1, 2)
     set2set = trial.suggest_categorical("set2set", ["id", "mindist", "maxcos"])
     alpha = trial.suggest_float("alpha", 1e-3, 1e2, log=True)
     gamma = trial.suggest_float("gamma", 1e-5, 1e0, log=True)
@@ -165,11 +166,11 @@ def obj2(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     s2scat = trial.suggest_categorical("s2scat", [True, False])
     testT = trial.suggest_float("testT", 1e-1, 1e3, log=True)
     trainT = trial.suggest_float("trainT", 1e-1, 1e3, log=True)
-    ln_out = trial.suggest_categorical("ln_out", [True, False])
-    multi_anchor = trial.suggest_int("multi_anchor", 1, 500, step=50)
+    ln_out = False #trial.suggest_categorical("ln_out", [True, False])
+    multi_anchor = trial.suggest_int("multi_anchor", 1, 10, step=3)
     noallshare = trial.suggest_categorical("noallshare", [True, False])
     nosharelin = trial.suggest_categorical("nosharelin", [True, False])
-    cmd += f"  --set2set {set2set} --alpha {alpha} --gamma {gamma} --multi_anchor {multi_anchor} "
+    cmd += f" --anchor_outlayer {anchor_outlayer} --set2set {set2set} --alpha {alpha} --gamma {gamma} --multi_anchor {multi_anchor} "
     cmd += f" --lr {lr}  --testT {testT} --trainT {trainT} --nnnorm {nnnorm} "
     cmd += f" --num_layer {layer} --emb_dim {dim} --jk {jk} "
     cmd += f" --norm {norm} --lr {lr} --pool {pool} --mlplayer {mlplayer}  --outlayer {outlayer} "
@@ -187,7 +188,7 @@ def obj2(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
         cmd += " --orthoinit "
     if res:
         cmd += " --res "
-    cmd += f" --repeat 10 |grep runs:"
+    cmd += f" |grep runs:"
     ret = subprocess.check_output(cmd, shell=True)
     ret = str(ret, encoding="utf-8")
     print(cmd, flush=True)

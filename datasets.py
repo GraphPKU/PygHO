@@ -214,8 +214,14 @@ def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
         val_d = ZINC("dataset/ZINC", subset=True, split="val")
         tst_d = ZINC("dataset/ZINC", subset=True, split="test")
         trn_d.num_tasks = 1
+        trn_d.data.edge_attr = trn_d.data.edge_attr.reshape(-1, 1).to(torch.long)
+        trn_d.data.y = trn_d.data.y.reshape(-1, 1)
         val_d.num_tasks = 1
+        val_d.data.edge_attr = val_d.data.edge_attr.reshape(-1, 1).to(torch.long)
+        val_d.data.y = val_d.data.y.reshape(-1, 1)
         tst_d.num_tasks = 1
+        tst_d.data.edge_attr = tst_d.data.edge_attr.reshape(-1, 1).to(torch.long)
+        tst_d.data.y = tst_d.data.y.reshape(-1, 1)
         return (trn_d, val_d, tst_d), "fixed", MeanAbsoluteError(), "reg"
     elif name == "QM9":
         raise NotImplementedError
@@ -257,7 +263,7 @@ def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
         raise NotImplementedError(name)
 
 if __name__ == "__main__":
-    datalist = ["sr", "EXP", "CSL", "subgcount", "zinc", "MUTAG", "DD", "PROTEINS", "ogbg-molhiv", "ogbg-molpcba"] # "QM9",  "IMDB-BINARY",
+    datalist = ["sr", "EXP", "CSL", "subgcount0", "zinc", "MUTAG", "DD", "PROTEINS", "ogbg-molhiv", "ogbg-molpcba"] # "QM9",  "IMDB-BINARY",
     for ds in datalist:
         datasets = loaddataset(ds)[0]
         dataset = datasets[0]
