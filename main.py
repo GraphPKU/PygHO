@@ -184,9 +184,11 @@ def parserarg():
     parser.add_argument('--lr', type=float, default=0.0026)
     parser.add_argument('--K', type=float, default=0.0)
     parser.add_argument('--K2', type=float, default=0.0)
+    parser.add_argument('--warmstart', type=int, default=0)
 
     parser.add_argument('--dp', type=float, default=0.0)
     parser.add_argument("--nnnorm", type=str, default="none")
+    parser.add_argument("--normparam", type=float, default=0.1)
     parser.add_argument("--ln_out", action="store_true")
     parser.add_argument("--act", type=str, default="relu")
     parser.add_argument("--mlplayer", type=int, default=1)
@@ -263,7 +265,8 @@ def buildModel(args, num_tasks, device, dataset):
             "norm": args.nnnorm,
             "act": args.act,
             "sharelin": not args.nosharelin,
-            "allshare": not args.noallshare
+            "allshare": not args.noallshare,
+            "normparam": args.normparam
         },
         "emb": {
             "dp": args.embdp,
@@ -398,7 +401,9 @@ def main():
             model.load_state_dict(
                 torch.load(f"mod/{args.load}.{rep}.pt", map_location=device))
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
-        scheduler = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 1/(1+epoch*(args.K+args.K2*epoch)))
+        schedulerwst = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.9**(args.warmstart-epoch))
+        schedulerdc = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 1/(1+epoch*(args.K+args.K2*epoch)))
+        scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[schedulerwst, schedulerdc], milestones=[args.warmstart], verbose=True)
         valid_curve = []
         test_curve = []
         train_curve = []

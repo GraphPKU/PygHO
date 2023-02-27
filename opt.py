@@ -31,9 +31,9 @@ def debug(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     ln = trial.suggest_categorical("ln", [True, False])
     ln_out = trial.suggest_categorical("ln_out", [True, False])
     outlayer = trial.suggest_int("outlayer", 1, 3)
-    K = trial.suggest_float("K", 1e-3, 1e1, log=True)
-    K2 = trial.suggest_float("K2", 1e-3, 1e1, log=True)
-    lossparam = trial.suggest_float("lossparam", 1e-3, 1e-1, log=True)
+    K = trial.suggest_float("K", 1e-5, 1e1, log=True)
+    K2 = trial.suggest_float("K2", 1e-5, 1e1, log=True)
+    lossparam = trial.suggest_float("lossparam", 1e-3, 5e-1, log=True)
     cmd += f" --dp {dp} --num_layer {layer} --emb_dim {dim} --batch_size {bs} --jk {jk} --lossparam {lossparam}"
     cmd += f" --norm {norm} --lr {lr} --pool {pool} --mlplayer {mlplayer}  --outlayer {outlayer} --K {K} --K2 {K2} "
     if res:
@@ -125,24 +125,26 @@ def fullsample(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
 
 def obj(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {args.num_anchor} --dataset {dataset} --epochs 400  --dp 0.0 --batch_size 1024 --repeat 2 "
-    layer = trial.suggest_int("layer", 1, 6)
-    dim = trial.suggest_int("dim", 32, 256, step=16)
-    jk = trial.suggest_categorical("jk", ["sum", "last"])
-    pool = trial.suggest_categorical("pool", ["sum", "mean", "max"])
-    norm = trial.suggest_categorical("norm", ["sum", "mean", "max", "gcn"])
-    mlplayer = trial.suggest_int("mlplayer", 1, 2)
-    res = trial.suggest_categorical("res", [True, False])
-    nnnorm = trial.suggest_categorical("nnnorm", ["none", "ln", "bn", "gn", "in"])
-    orthoinit = trial.suggest_categorical("orthoinit", [True, False])
-    outlayer = trial.suggest_int("outlayer", 1, 2)
-    lr = trial.suggest_float("lr", 1e-4, 2e-2, step=1e-4)
+    layer = trial.suggest_int("layer", 9, 12)
+    dim = 256#trial.suggest_int("dim", 256, 256, step=16)
+    jk = "sum" #trial.suggest_categorical("jk", ["sum", "last"])
+    pool = "sum" #trial.suggest_categorical("pool", ["sum", "mean", "max"])
+    norm = "sum" #trial.suggest_categorical("norm", ["sum", "mean", "max", "gcn"])
+    mlplayer = trial.suggest_int("mlplayer", 2, 3)
+    res = True #trial.suggest_categorical("res", [True, False])
+    nnnorm = "bn"#trial.suggest_categorical("nnnorm", ["none", "ln", "bn", "gn", "in"])
+    orthoinit = False #trial.suggest_categorical("orthoinit", [True, False])
+    outlayer = trial.suggest_int("outlayer", 2, 3)
+    lr = trial.suggest_float("lr", 1e-2, 6e-2, step=1e-3)
     ln_out = False #trial.suggest_categorical("ln_out", [True, False])
-    K = trial.suggest_float("K", 1e-3, 1e1, log=True)
-    K2 = trial.suggest_float("K2", 1e-3, 1e1, log=True)
-    lossparam = trial.suggest_float("lossparam", 1e-3, 1e-1, log=True)
+    K = trial.suggest_float("K", 1e-6, 5e-3, log=True)
+    K2 = trial.suggest_float("K2", 1e-6, 5e-3, log=True)
+    lossparam = trial.suggest_float("lossparam", 1e-2, 5e-1, log=True)
+    warmstart = trial.suggest_int("warmstart", 0, 20, step=5)
+    normparam = trial.suggest_float("normparam", 1e-2, 2e-1, log=True)
     cmd += f" --lr {lr}  --nnnorm {nnnorm}  --K {K} --K2 {K2} --lossparam {lossparam} "
-    cmd += f" --num_layer {layer} --emb_dim {dim} --jk {jk} "
-    cmd += f" --norm {norm} --pool {pool} --mlplayer {mlplayer}  --outlayer {outlayer} "
+    cmd += f" --num_layer {layer} --emb_dim {dim} --jk {jk} --warmstart {warmstart} "
+    cmd += f" --norm {norm} --pool {pool} --mlplayer {mlplayer}  --outlayer {outlayer} --normparam {normparam} "
     if ln_out:
         cmd += " --ln_out "
     if orthoinit:

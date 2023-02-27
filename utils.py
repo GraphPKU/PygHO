@@ -19,7 +19,7 @@ def expandbatch(x: Tensor, batch: Tensor):
 
 
 class NoneNorm(nn.Module):
-    def __init__(self, dim=0) -> None:
+    def __init__(self, dim=0, normparam=0) -> None:
         super().__init__()
         self.num_features = dim
     
@@ -27,10 +27,10 @@ class NoneNorm(nn.Module):
         return x
 
 class BatchNorm(nn.Module):
-    def __init__(self, dim) -> None:
+    def __init__(self, dim, normparam=0.1) -> None:
         super().__init__()
         self.num_features = dim
-        self.norm = nn.BatchNorm1d(dim, track_running_stats=False)
+        self.norm = nn.BatchNorm1d(dim, momentum=normparam)
     
     def forward(self, x: Tensor, batch: Tensor):
         if x.dim() == 2:
@@ -43,7 +43,7 @@ class BatchNorm(nn.Module):
             raise NotImplementedError
 
 class LayerNorm(nn.Module):
-    def __init__(self, dim) -> None:
+    def __init__(self, dim, normparam=0.1) -> None:
         super().__init__()
         self.num_features = dim
         self.norm = nn.LayerNorm(dim)
@@ -52,9 +52,9 @@ class LayerNorm(nn.Module):
         return self.norm(x)
 
 class InstanceNorm(nn.Module):
-    def __init__(self, dim) -> None:
+    def __init__(self, dim, normparam=0.1) -> None:
         super().__init__()
-        self.norm = PygIN(dim)
+        self.norm = PygIN(dim, momentum=normparam)
         self.num_features = dim
 
     def forward(self, x: Tensor, batch: Tensor):
@@ -69,7 +69,7 @@ class InstanceNorm(nn.Module):
             raise NotImplementedError
 
 class GraphNorm(nn.Module):
-    def __init__(self, dim) -> None:
+    def __init__(self, dim, normparam=0.1) -> None:
         super().__init__()
         self.norm = PygGN(dim)
         self.num_features = dim
@@ -88,7 +88,7 @@ class GraphNorm(nn.Module):
 normdict = {"bn": BatchNorm, "ln": LayerNorm, "in": InstanceNorm, "gn": GraphNorm, "none": NoneNorm}
 
 class MLP(nn.Module):
-    def __init__(self, hiddim: int, outdim: int, numlayer: int, tailact: bool, dp: float=0, norm: str="bn", act: str="relu", tailbias=True, multiparams: int=1, sharelin: bool=True, allshare: bool=True) -> None:
+    def __init__(self, hiddim: int, outdim: int, numlayer: int, tailact: bool, dp: float=0, norm: str="bn", act: str="relu", tailbias=True, multiparams: int=1, sharelin: bool=True, allshare: bool=True, normparam: float=0.1) -> None:
         super().__init__()
         assert numlayer >= 0
         if numlayer == 0:
@@ -98,7 +98,7 @@ class MLP(nn.Module):
             self.lins = nn.ModuleList()
             lin0 = nn.Sequential(nn.Linear(hiddim, outdim, bias=tailbias))
             if tailact:
-                lin0.append(normdict[norm](outdim))
+                lin0.append(normdict[norm](outdim, normparam))
                 if dp > 0:
                     lin0.append(nn.Dropout(dp, inplace=True))
                 lin0.append(act_dict[act])
@@ -106,7 +106,7 @@ class MLP(nn.Module):
                 lin0.insert(0, act_dict[act])
                 if dp > 0:
                     lin0.insert(0, nn.Dropout(dp, inplace=True))
-                lin0.insert(0, normdict[norm](hiddim))
+                lin0.insert(0, normdict[norm](hiddim, normparam))
                 lin0.insert(0, nn.Linear(hiddim, hiddim))
             for _ in range(multiparams):
                 lin = []
@@ -115,7 +115,7 @@ class MLP(nn.Module):
                         if allshare:
                             lin.append((mod, "x, batch -> x"))
                         else:
-                            lin.append((normdict[norm](mod.num_features), "x, batch -> x"))
+                            lin.append((normdict[norm](mod.num_features, normparam), "x, batch -> x"))
                     else:
                         if allshare or sharelin:
                             lin.append((mod, "x -> x"))
