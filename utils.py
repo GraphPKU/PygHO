@@ -45,9 +45,3 @@ class MLP(nn.Module):
                 self.lins.append(PygSeq("x, batch", lin))
     def forward(self, x: Tensor, batch: Tensor=None, idx: int=0):
         return self.lins[idx](x, batch)
-                
-
-def freezeGNN(model: nn.Module):
-    model.eval()
-    for param in model.parameters():
-        param.requires_grad_(False)

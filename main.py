@@ -8,9 +8,7 @@ import argparse
 import time
 import numpy as np
 from datasets import loaddataset
-from gnn import modeldict, PPOAnchorGNN
 from norm import NormMomentumScheduler, basenormdict
-from utils import freezeGNN
 from typing import Callable
 
 ### importing OGB
@@ -40,16 +38,8 @@ def train(criterion: Callable,
           device: torch.device,
           loader: DataLoader,
           optimizer: optim.Optimizer,
-          task_type: str,
-          alpha=1e1,
-          gamma=1e-4,
-          T: float=1,
-          freeze: bool=False):
+          task_type: str):
     model.train()
-    if freeze:
-        freezeGNN(model.gnn_node)
-        freezeGNN(model.data_encoder)
-        freezeGNN(model.pred_lin)
     losss = []
     policy_losss = []
     entropy_losss = []
@@ -57,101 +47,27 @@ def train(criterion: Callable,
         batch = batch.to(device, non_blocking=True)
         if True:
             optimizer.zero_grad()
-            preds, logprob, negentropy, finalpred = model(batch, T)
+            finalpred = model(batch)[-1]
             y = batch.y
             if task_type != "cls":
                 y = y.to(torch.float)
             value_loss = torch.mean(criterion(finalpred, y))
-            if task_type != "cls":
-                y = y.unsqueeze(0).unsqueeze(0).expand(preds.shape[0],
-                                                    preds.shape[1], -1, -1)
-            if preds is None:
-                policy_loss = torch.tensor(0.0)
-            else:
-                with torch.no_grad():
-                    if task_type == "cls":
-                        ty = y.reshape(-1, 1, 1).expand(-1, preds.shape[0], preds.shape[1])
-                        tpred = preds.detach().permute(2, 3, 0, 1)
-                        loss = criterion(tpred, ty)
-                        loss = loss.permute(1, 2, 0)
-                    else:
-                        loss = criterion(preds.detach(), y)
-                        loss = loss.sum(dim=-1)
-                    loss = loss[[-1]] - loss[:-1]
-                print(torch.mean(loss), torch.mean(torch.clamp_max(loss, 0)), torch.std(loss))
-                policy_loss = torch.tensor(0.0) if logprob is None else (
-                    loss.detach() * logprob)
-                policy_loss = torch.mean(policy_loss)
-            entropy_loss = torch.tensor(
-                0.0) if negentropy is None else torch.mean(negentropy)
-            totalloss = value_loss + alpha * policy_loss + gamma * entropy_loss
+            totalloss = value_loss 
             totalloss.backward()
             optimizer.step()
             losss.append(value_loss)
-            policy_losss.append(policy_loss)
-            entropy_losss.append(entropy_loss)
-    #from torchmetrics import Accuracy, MeanAbsoluteError
-    #print(finalpred, y)
-    #print(Accuracy("multiclass", num_classes=15)(finalpred.cpu(), y.cpu()))
+            policy_losss.append(torch.tensor(0.0))
+            entropy_losss.append(torch.tensor(0.0))
     loss = np.average([_.item() for _ in losss])
     policy_loss = np.average([_.item() for _ in policy_losss])
     entropy_loss = np.average([_.item() for _ in entropy_losss])
     return loss, policy_loss, entropy_loss 
 
 
-def train_ppo(criterion,
-              model,
-              device,
-              loader,
-              optimizer,
-              task_type: str,
-              alpha: float = 1e1,
-              gamma: float = 1e-4,
-              ppolb: float = -0.5,
-              ppoub: float = 0.5,
-              T: float = 1):
-    model.train()
-    losss = []
-    policy_losss = []
-    entropy_losss = []
-    for batch in loader:
-        batch = batch.to(device, non_blocking=True)
-
-        if True:
-            optimizer.zero_grad()
-            preds, logprob, oldlogprob, negentropy, finalpred = model(batch, T)
-            y = batch.y
-            value_loss = torch.mean(criterion(finalpred, y))
-            if task_type != "cls":
-                y = y.unsqueeze(0).unsqueeze(0).expand(preds.shape[0],
-                                                    preds.shape[1], -1, -1)
-            with torch.no_grad():
-                if task_type == "cls":
-                    loss = criterion(preds.detach().permute(2, 3, 0, 1), y)
-                else:
-                    loss = criterion(preds.detach(), y)
-                loss = loss.sum(dim=-1)
-                loss = loss[[-1]] - loss[:-1]
-            policy_loss = torch.tensor(0.0) if logprob is None else (
-                loss.detach() *
-                torch.exp(torch.clip(logprob - oldlogprob, ppolb, ppoub)))
-            policy_loss = torch.mean(policy_loss)
-            entropy_loss = torch.tensor(
-                0.0) if negentropy is None else torch.mean(negentropy)
-            totalloss = value_loss + alpha * policy_loss + gamma * entropy_loss
-            totalloss.backward()
-            optimizer.step()
-            model.updateP()
-            losss.append(value_loss)
-            policy_losss.append(policy_loss)
-            entropy_losss.append(entropy_loss)
-    return np.average([_.item() for _ in losss]), np.average([
-        _.item() for _ in policy_losss
-    ]), np.average([_.item() for _ in entropy_losss])
 
 
 @torch.no_grad()
-def eval(model, device, loader: DataLoader, evaluator, T):
+def eval(model, device, loader: DataLoader, evaluator):
     model.eval()
     ylen = len(loader.dataset)
     ty = loader.dataset.data.y
@@ -168,7 +84,7 @@ def eval(model, device, loader: DataLoader, evaluator, T):
         steplen = batch.y.shape[0]
         y_true[step:step + steplen] = batch.y
         batch = batch.to(device, non_blocking=True)
-        tpred = model(batch, T)[-1]
+        tpred = model(batch)[-1]
         y_pred[step:step + steplen] = tpred
         step += steplen
     assert step == y_true.shape[0]
@@ -182,7 +98,6 @@ def parserarg():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model',
                         type=str,
-                        choices=modeldict.keys(),
                         default="policygrad")
     parser.add_argument('--dataset', type=str, default="ogbg-molhiv")
     parser.add_argument('--repeat', type=int, default=10)
@@ -191,7 +106,6 @@ def parserarg():
     parser.add_argument('--batch_size', type=int, default=1024)
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--lr', type=float, default=0.0026)
-    parser.add_argument('--freezeGNN', action="store_true")
     parser.add_argument('--K', type=float, default=0.0)
     parser.add_argument('--K2', type=float, default=0.0)
     parser.add_argument('--normK', type=float, default=0.0)
@@ -234,13 +148,6 @@ def parserarg():
 
     parser.add_argument('--nosharelin', action="store_true")
     parser.add_argument("--noallshare", action="store_true")
-
-    parser.add_argument('--set2set',
-                        type=str,
-                        choices=["id", "mindist", "maxcos"],
-                        default="id")
-    parser.add_argument('--set2set_feat', action="store_true")
-    parser.add_argument('--set2set_concat', action="store_true")
     parser.add_argument('--multi_anchor', type=int, default=1)
     parser.add_argument('--rand_sample', action="store_true")
     parser.add_argument('--fullsample', action="store_true")
@@ -249,11 +156,7 @@ def parserarg():
 
     parser.add_argument("--nodistlin", action="store_true")
 
-    parser.add_argument('--gamma', type=float, default=1e-4)
-    parser.add_argument('--alpha', type=float, default=1e1)
 
-    parser.add_argument('--trainT', type=float, default=1)
-    parser.add_argument('--testT', type=float, default=1)
 
     parser.add_argument('--save', type=str, default=None)
     parser.add_argument('--load', type=str, default=None)
@@ -299,12 +202,8 @@ def buildModel(args, num_tasks, device, dataset):
                              residual=args.res,
                              JK=args.jk,
                              graph_pooling=args.pool,
-                             set2set=args.set2set +
-                             ("-feat-" if args.set2set_feat else "-") +
-                             ("concat" if args.set2set_concat else "-"),
                              use_elin=args.use_elin,
                              mlplayer=args.mlplayer,
-                             rand_anchor=args.rand_sample,
                              multi_anchor=args.multi_anchor,
                              anchor_outlayer=args.anchor_outlayer,
                              outlayer=args.outlayer,
@@ -313,32 +212,6 @@ def buildModel(args, num_tasks, device, dataset):
                              randinit=args.randinit,
                              ln_out=args.ln_out,
                              fullsample=args.fullsample,
-                             nodistlin=args.nodistlin,
-                             **kwargs).to(device)
-    elif args.model == "ppo":
-        raise NotImplementedError
-        model = PPOAnchorGNN(num_tasks,
-                             args.num_anchor,
-                             args.num_layer,
-                             args.emb_dim,
-                             args.norm,
-                             virtual_node=False,
-                             residual=args.res,
-                             JK=args.jk,
-                             graph_pooling=args.pool,
-                             set2set=args.set2set +
-                             ("-feat-" if args.set2set_feat else "-") +
-                             ("concat" if args.set2set_concat else "-"),
-                             use_elin=args.use_elin,
-                             mlplayer=args.mlplayer,
-                             rand_anchor=args.rand_sample,
-                             multi_anchor=args.multi_anchor,
-                             anchor_outlayer=args.anchor_outlayer,
-                             outlayer=args.outlayer,
-                             policy_detach=args.policy_detach,
-                             dataset=dataset,
-                             tau=args.tau,
-                             ln_out=args.ln_out,
                              nodistlin=args.nodistlin,
                              **kwargs).to(device)
     else:
@@ -429,26 +302,19 @@ def main():
 
         for epoch in range(1, args.epochs + 1):
             t1 = time.time()
-            if args.model == "ppo":
-                loss, policyloss, entropyloss = train_ppo(
-                    get_criterion(task, args), model, device, train_loader,
-                    optimizer, task, args.alpha, args.gamma, args.ppolb, args.ppoub, args.trainT)
-            else:
-                loss, policyloss, entropyloss = train(get_criterion(task, args),
+            loss, policyloss, entropyloss = train(get_criterion(task, args),
                                                       model, device,
                                                       train_loader, optimizer,
-                                                      task, args.alpha,
-                                                      args.gamma, args.trainT, args.freezeGNN)
+                                                      task)
 
             print(
                 f"Epoch {epoch} train time : {time.time()-t1:.1f} loss: {loss:.2e} {policyloss:.2e} {entropyloss:.2e}"
             )
 
             t1 = time.time()
-            train_perf = 0.0 # eval(model, device, train_eval_loader, evaluator, args.testT)
-            valid_perf = eval(model, device, valid_loader, evaluator,
-                              args.testT)
-            test_perf = eval(model, device, test_loader, evaluator, args.testT)
+            train_perf = 0.0 # eval(model, device, train_eval_loader, evaluator)
+            valid_perf = eval(model, device, valid_loader, evaluator)
+            test_perf = eval(model, device, test_loader, evaluator)
             print(
                 f" test time : {time.time()-t1:.1f} Train {train_perf} Validation {valid_perf} Test {test_perf}", flush=True
             )
