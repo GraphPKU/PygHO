@@ -141,6 +141,13 @@ class GNN(nn.Module):
         return self.pred_lin(h_graph)
 
 
+class NodeSample(nn.Module):
+    def __init__(self, set2set="id", rand_anchor: bool = False, multi_anchor: int = 1, nodistlin: bool = False) -> None:
+        super().__init__()
+
+    def forward(self)
+
+
 class UniAnchorGNN(GNN):
 
     def __init__(self,

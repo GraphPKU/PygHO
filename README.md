@@ -18,4 +18,10 @@ molhiv一直不变为0. 5左右平缓
 molpcba 一直不变为0. 5左右平缓
 
 
-CUDA_VISIBLE_DEVICES=1 python main.py --num_anchor 0 --dataset zinc --epochs 400  --dp 0.0 --batch_size 1024 --repeat 2  --lr 0.0368  --nnnorm bn  --K 0.0003929 --K2 0.0004531 --lossparam 0.09724  --num_layer 9 --emb_dim 256 --jk sum  --norm sum --pool sum --mlplayer 2  --outlayer 2  --res --normparam 0.01 > zinc.debug.bnmomentum=0.01.out &
+CUDA_VISIBLE_DEVICES=1 python main.py --num_anchor 0 --dataset zinc --epochs 400  --dp 0.0 --batch_size 1024 --repeat 2  --lr 0.0368  --nnnorm bn  --K 0.0003929 --K2 0.0004531 --lossparam 0.09724  --num_layer 9 --emb_dim 256 --jk sum  --norm sum --pool sum --mlplayer 2  --outlayer 2  --res > zinc.debug.out &
+
+
+CUDA_VISIBLE_DEVICES=2 python main.py --num_anchor 0 --dataset zinc --epochs 1000  --dp 0.0 --batch_size 1024 --repeat 10  --lr 0.03  --nnnorm bn  --K 0.000472 --K2 7.04e-06 --lossparam 0.01922 --normK 0.008064 --normK2 0  --num_layer 14 --emb_dim 256 --jk sum --warmstart 30  --norm sum --pool sum --mlplayer 2  --outlayer 4 --normparam 0.0425  --res --save zinc.anchor0 > zinc.save.out &
+
+
+CUDA_VISIBLE_DEVICES=2 python main.py --num_anchor 0 --dataset zinc --epochs 1000  --dp 0.0 --batch_size 1024 --repeat 10  --lr 0.03  --nnnorm bn  --K 0.000472 --K2 7.04e-06 --lossparam 0.01922 --normK 0.008064 --normK2 0  --num_layer 14 --emb_dim 256 --jk sum --warmstart 30  --norm sum --pool sum --mlplayer 2  --outlayer 4 --normparam 0.0425  --res --load zinc.anchor0 

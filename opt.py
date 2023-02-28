@@ -124,25 +124,27 @@ def fullsample(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
     return out
 
 def obj(trial: optuna.Trial, dev: int =args.dev, dataset=args.dataset):
-    cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {args.num_anchor} --dataset {dataset} --epochs 400  --dp 0.0 --batch_size 1024 --repeat 2 "
-    layer = trial.suggest_int("layer", 9, 12)
+    cmd = f"CUDA_VISIBLE_DEVICES={dev} python main.py --num_anchor {args.num_anchor} --dataset {dataset} --epochs 600  --dp 0.0 --batch_size 1024 --repeat 2 "
+    layer = trial.suggest_int("layer", 9, 15)
     dim = 256#trial.suggest_int("dim", 256, 256, step=16)
     jk = "sum" #trial.suggest_categorical("jk", ["sum", "last"])
     pool = "sum" #trial.suggest_categorical("pool", ["sum", "mean", "max"])
     norm = "sum" #trial.suggest_categorical("norm", ["sum", "mean", "max", "gcn"])
-    mlplayer = trial.suggest_int("mlplayer", 2, 3)
+    mlplayer = 2 #trial.suggest_int("mlplayer", 2, 3)
     res = True #trial.suggest_categorical("res", [True, False])
     nnnorm = "bn"#trial.suggest_categorical("nnnorm", ["none", "ln", "bn", "gn", "in"])
     orthoinit = False #trial.suggest_categorical("orthoinit", [True, False])
-    outlayer = trial.suggest_int("outlayer", 2, 3)
+    outlayer = trial.suggest_int("outlayer", 2, 4)
     lr = trial.suggest_float("lr", 1e-2, 6e-2, step=1e-3)
     ln_out = False #trial.suggest_categorical("ln_out", [True, False])
     K = trial.suggest_float("K", 1e-6, 5e-3, log=True)
     K2 = trial.suggest_float("K2", 1e-6, 5e-3, log=True)
+    normK = trial.suggest_float("normK", 1e-7, 1, log=True)
+    normK2 = trial.suggest_float("normK2", 1e-7, 1, log=True)
     lossparam = trial.suggest_float("lossparam", 1e-2, 5e-1, log=True)
-    warmstart = trial.suggest_int("warmstart", 0, 20, step=5)
+    warmstart = trial.suggest_int("warmstart", 0, 30, step=5)
     normparam = trial.suggest_float("normparam", 1e-2, 2e-1, log=True)
-    cmd += f" --lr {lr}  --nnnorm {nnnorm}  --K {K} --K2 {K2} --lossparam {lossparam} "
+    cmd += f" --lr {lr}  --nnnorm {nnnorm}  --K {K} --K2 {K2} --lossparam {lossparam} --normK {normK} --normK2 {normK2} "
     cmd += f" --num_layer {layer} --emb_dim {dim} --jk {jk} --warmstart {warmstart} "
     cmd += f" --norm {norm} --pool {pool} --mlplayer {mlplayer}  --outlayer {outlayer} --normparam {normparam} "
     if ln_out:

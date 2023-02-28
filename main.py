@@ -9,6 +9,9 @@ import time
 import numpy as np
 from datasets import loaddataset
 from gnn import modeldict, PPOAnchorGNN
+from norm import NormMomentumScheduler, basenormdict
+from utils import freezeGNN
+from typing import Callable
 
 ### importing OGB
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
@@ -32,16 +35,21 @@ def set_seed(seed):
     np.random.seed(seed)
 
 
-def train(criterion,
-          model,
-          device,
-          loader,
-          optimizer,
-          task_type,
+def train(criterion: Callable,
+          model: UniAnchorGNN,
+          device: torch.device,
+          loader: DataLoader,
+          optimizer: optim.Optimizer,
+          task_type: str,
           alpha=1e1,
           gamma=1e-4,
-          T: float=1):
+          T: float=1,
+          freeze: bool=False):
     model.train()
+    if freeze:
+        freezeGNN(model.gnn_node)
+        freezeGNN(model.data_encoder)
+        freezeGNN(model.pred_lin)
     losss = []
     policy_losss = []
     entropy_losss = []
@@ -70,6 +78,7 @@ def train(criterion,
                         loss = criterion(preds.detach(), y)
                         loss = loss.sum(dim=-1)
                     loss = loss[[-1]] - loss[:-1]
+                print(torch.mean(loss), torch.mean(torch.clamp_max(loss, 0)), torch.std(loss))
                 policy_loss = torch.tensor(0.0) if logprob is None else (
                     loss.detach() * logprob)
                 policy_loss = torch.mean(policy_loss)
@@ -182,8 +191,11 @@ def parserarg():
     parser.add_argument('--batch_size', type=int, default=1024)
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--lr', type=float, default=0.0026)
+    parser.add_argument('--freezeGNN', action="store_true")
     parser.add_argument('--K', type=float, default=0.0)
     parser.add_argument('--K2', type=float, default=0.0)
+    parser.add_argument('--normK', type=float, default=0.0)
+    parser.add_argument('--normK2', type=float, default=0.0)
     parser.add_argument('--warmstart', type=int, default=0)
 
     parser.add_argument('--dp', type=float, default=0.0)
@@ -398,12 +410,19 @@ def main():
         print(f"split {len(trn_d)} {len(val_d)} {len(tst_d)}")
         model = buildModel(args, trn_d.num_tasks, device, trn_d)
         if args.load is not None:
-            model.load_state_dict(
-                torch.load(f"mod/{args.load}.{rep}.pt", map_location=device))
+            loadparams = torch.load(f"mod/{args.load}.{rep}.pt", map_location="cpu")
+            keys2del = ["anchor_encoder.emb.weight"]
+            for key in loadparams.keys():
+                if key.startswith("distlin"):
+                    keys2del.append(key)
+            for key in keys2del:
+                del loadparams[key]
+            print(model.load_state_dict(loadparams, strict=False))
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
         schedulerwst = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.9**(args.warmstart-epoch))
         schedulerdc = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 1/(1+epoch*(args.K+args.K2*epoch)))
         scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[schedulerwst, schedulerdc], milestones=[args.warmstart], verbose=True)
+        normscd = NormMomentumScheduler(lambda x:1/(1+x*(args.normK+x*args.normK2)), args.normparam, basenormdict[args.nnnorm])
         valid_curve = []
         test_curve = []
         train_curve = []
@@ -419,7 +438,8 @@ def main():
                                                       model, device,
                                                       train_loader, optimizer,
                                                       task, args.alpha,
-                                                      args.gamma, args.trainT)
+                                                      args.gamma, args.trainT, args.freezeGNN)
+
             print(
                 f"Epoch {epoch} train time : {time.time()-t1:.1f} loss: {loss:.2e} {policyloss:.2e} {entropyloss:.2e}"
             )
@@ -435,10 +455,15 @@ def main():
             train_curve.append(loss)
             valid_curve.append(valid_perf)
             test_curve.append(test_perf)
-            if valid_curve[-1] >= np.max(valid_curve):
-                if args.save is not None:
-                    torch.save(model.state_dict(), f"mod/{args.save}.{rep}.pt")
+            if args.save is not None:
+                if "cls" in task:
+                    if valid_curve[-1] >= np.max(valid_curve):
+                        torch.save(model.state_dict(), f"mod/{args.save}.{rep}.pt")
+                else:
+                    if valid_curve[-1] <= np.min(valid_curve):
+                        torch.save(model.state_dict(), f"mod/{args.save}.{rep}.pt")
             scheduler.step()
+            normscd.step(model)
         if 'cls' in task:
             best_val_epoch = np.argmax(np.array(valid_curve)+np.arange(len(valid_curve))*1e-15)
             best_train = min(train_curve)
