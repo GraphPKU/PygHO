@@ -54,7 +54,6 @@ class GNN_node(nn.Module):
     Output:
         node representations
     """
-
     def __init__(self,
                  num_layer,
                  emb_dim,
@@ -63,7 +62,6 @@ class GNN_node(nn.Module):
                  norm="gcn",
                  use_elin=False,
                  mlplayer=1,
-                 multiconv=1,
                  **kwargs):
         '''
             emb_dim (int): node embedding dimensionality
@@ -82,13 +80,19 @@ class GNN_node(nn.Module):
 
         for layer in range(num_layer):
             self.convs.append(GCNConv(emb_dim, use_elin, norm, **kwargs))
-            self.lins.append(MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"], multiparams=multiconv))
+            self.lins.append(MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"]))
 
-    def pregnn(self, batched_data):
-        x, edge_index, edge_attr, batch = batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch
-        h_list = [x]
-        edge_attr = edge_attr
-        return h_list, edge_index, edge_attr, batch
+    def pregnn(self, batched_data, issubgraph=False):
+        if issubgraph:
+            x, edge_index, edge_attr, batch = batched_data.x[batched_data.subg_nodeidx] + batched_data.subg_nodelabel, batched_data.subg_edge_index, batched_data.subg_edge_attr, batched_data.subg_nodebatch
+            h_list = [x]
+            edge_attr = edge_attr
+            return h_list, edge_index, edge_attr, batch
+        else:
+            x, edge_index, edge_attr, batch = batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch
+            h_list = [x]
+            edge_attr = edge_attr
+            return h_list, edge_index, edge_attr, batch
 
     def postgnn(self, h_list):
         ### Different implementations of Jk-concat
@@ -102,12 +106,12 @@ class GNN_node(nn.Module):
             raise NotImplementedError
         return node_representation
 
-    def forward(self, batched_data, idx: int):
-        h_list, edge_index, edge_attr, batch = self.pregnn(batched_data)
-
+    def forward(self, batched_data, issubgraph=False):
+        h_list, edge_index, edge_attr, batch = self.pregnn(batched_data, issubgraph)
+        
         for layer in range(self.num_layer):
             h = self.convs[layer](h_list[layer], edge_index, edge_attr)
-            h = self.lins[layer](h, batch, idx=idx)
+            h = self.lins[layer](h)
 
             if self.residual:
                 h = h + h_list[layer]

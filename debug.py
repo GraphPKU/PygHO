@@ -3,12 +3,12 @@ import torch
 from torch_geometric.loader import DataLoader
 import torch.optim as optim
 import torch.nn.functional as F
-from gnn import NestedGNN
+from gnn import UniAnchorGNN
 import argparse
 import time
 import numpy as np
 from datasets import loaddataset
-from norm import NormMomentumScheduler, normdict
+from norm import NormMomentumScheduler, basenormdict
 from typing import Callable
 
 ### importing OGB
@@ -34,16 +34,21 @@ def set_seed(seed):
 
 
 def train(criterion: Callable,
-          model: NestedGNN,
+          model: UniAnchorGNN,
           device: torch.device,
           loader: DataLoader,
           optimizer: optim.Optimizer,
           task_type: str):
     model.train()
     losss = []
+    policy_losss = []
+    entropy_losss = []
     for batch in loader:
+        print(batch.x)
+        print(batch.x_batch, batch.subg_edge_index, batch.subg_edge_attr)
+        print(batch.subg_nodeidx, batch.subg_nodelabel, batch.subg_nodebatch, batch.subg_rootnode_batch)
+        exit()
         batch = batch.to(device, non_blocking=True)
-        # print(batch.x.type(), batch.edge_index.type(), batch.subg_edge_index.type(), batch.subg_nodeidx.type(), batch.subg_nodelabel.type())
         if True:
             optimizer.zero_grad()
             finalpred = model(batch)[-1]
@@ -55,8 +60,12 @@ def train(criterion: Callable,
             totalloss.backward()
             optimizer.step()
             losss.append(value_loss)
+            policy_losss.append(torch.tensor(0.0))
+            entropy_losss.append(torch.tensor(0.0))
     loss = np.average([_.item() for _ in losss])
-    return loss
+    policy_loss = np.average([_.item() for _ in policy_losss])
+    entropy_loss = np.average([_.item() for _ in entropy_losss])
+    return loss, policy_loss, entropy_loss 
 
 
 
@@ -74,6 +83,7 @@ def eval(model, device, loader: DataLoader, evaluator):
         raise NotImplementedError
     y_pred = torch.zeros((ylen, model.num_tasks), device=device)
     step = 0
+    # print(y_true.shape, y_pred.shape)
     for batch in loader:
         steplen = batch.y.shape[0]
         y_true[step:step + steplen] = batch.y
@@ -83,6 +93,8 @@ def eval(model, device, loader: DataLoader, evaluator):
         step += steplen
     assert step == y_true.shape[0]
     y_pred = y_pred.cpu()
+    #print(y_pred, y_true)
+    #print("eval", evaluator(tpred.cpu(), batch.y.cpu()))
     return evaluator(y_pred, y_true)
 
 
@@ -111,6 +123,7 @@ def parserarg():
     parser.add_argument("--act", type=str, default="relu")
     parser.add_argument("--mlplayer", type=int, default=1)
     parser.add_argument("--outlayer", type=int, default=1)
+    parser.add_argument("--anchor_outlayer", type=int, default=1)
     parser.add_argument("--use_elin", action="store_true")
     
     parser.add_argument('--lossparam', type=float, default=0.05)
@@ -121,33 +134,43 @@ def parserarg():
     parser.add_argument("--orthoinit", action="store_true")
     parser.add_argument("--max_norm", type=float, default=None)
 
-    parser.add_argument('--gnorm',
+    parser.add_argument('--norm',
                         type=str,
                         default='gcn',
                         choices=["sum", "mean", "max", "gcn"])
-    parser.add_argument('--lnorm',
-                        type=str,
-                        default='gcn',
-                        choices=["sum", "mean", "max", "gcn"])
-    parser.add_argument('--num_layer', type=int, default=1)
-    parser.add_argument('--gnum_layer', type=int, default=4)
-    parser.add_argument('--lnum_layer', type=int, default=4)
+    parser.add_argument('--num_layer', type=int, default=4)
     parser.add_argument('--emb_dim', type=int, default=64)
     parser.add_argument('--jk',
                         type=str,
                         choices=["sum", "last"],
                         default="last")
     parser.add_argument('--res', action="store_true")
-    parser.add_argument('--gpool',
+    parser.add_argument('--pool',
                         type=str,
                         choices=["sum", "mean", "max"],
                         default="sum")
-    parser.add_argument('--lpool',
-                        type=str,
-                        choices=["sum", "mean", "max"],
-                        default="sum")
+
+    parser.add_argument('--nosharelin', action="store_true")
+    parser.add_argument("--noallshare", action="store_true")
+    parser.add_argument('--multi_anchor', type=int, default=1)
+    parser.add_argument('--rand_sample', action="store_true")
+    parser.add_argument('--fullsample', action="store_true")
+    parser.add_argument("--num_anchor", type=int, default=0)
+    parser.add_argument('--policy_detach', action="store_true")
+
+    parser.add_argument("--nodistlin", action="store_true")
+
+
+
     parser.add_argument('--save', type=str, default=None)
     parser.add_argument('--load', type=str, default=None)
+
+    # ppo
+    parser.add_argument("--ppolb", type=float, default=-0.5)
+    parser.add_argument("--ppoub", type=float, default=0.5)
+    parser.add_argument("--tau", type=float, default=0.99)
+
+    parser.add_argument('--randinit', action="store_true")
 
     args = parser.parse_args()
     print(args)
@@ -160,6 +183,8 @@ def buildModel(args, num_tasks, device, dataset):
             "dp": args.dp,
             "norm": args.nnnorm,
             "act": args.act,
+            "sharelin": not args.nosharelin,
+            "allshare": not args.noallshare,
             "normparam": args.normparam
         },
         "emb": {
@@ -168,45 +193,36 @@ def buildModel(args, num_tasks, device, dataset):
             "ln": args.embln,
             "orthoinit": args.orthoinit,
             "max_norm": args.max_norm
-        },
-        "ggnn": {
-            "num_layer": args.gnum_layer,
-            "residual": args.res,
-            "norm": args.gnorm,
-            "mlplayer": args.mlplayer,
-            "mlp": {
-                "dp": args.dp,
-                "norm": args.nnnorm,
-                "act": args.act,
-                "normparam": args.normparam
-            },
-        },
-        "lgnn": {
-            "num_layer": args.lnum_layer,
-            "residual": args.res,
-            "norm": args.lnorm,
-            "mlplayer": args.mlplayer,
-            "mlp": {
-                "dp": args.dp,
-                "norm": args.nnnorm,
-                "act": args.act,
-                "normparam": args.normparam
-            },
-        },
+        }
     }
     print("num_task", num_tasks)
-    model = NestedGNN(dataset,
-                      num_tasks,
-                      args.num_layer,
-                      args.emb_dim,
-                      args.gpool,
-                      args.lpool,
-                      args.outlayer,
-                      args.ln_out,
-                      **kwargs).to(device)
+    if args.model == "policygrad":
+        model = UniAnchorGNN(num_tasks,
+                             args.num_anchor,
+                             args.num_layer,
+                             args.emb_dim,
+                             args.norm,
+                             virtual_node=False,
+                             residual=args.res,
+                             JK=args.jk,
+                             graph_pooling=args.pool,
+                             use_elin=args.use_elin,
+                             mlplayer=args.mlplayer,
+                             multi_anchor=args.multi_anchor,
+                             anchor_outlayer=args.anchor_outlayer,
+                             outlayer=args.outlayer,
+                             policy_detach=args.policy_detach,
+                             dataset=dataset,
+                             randinit=args.randinit,
+                             ln_out=args.ln_out,
+                             fullsample=args.fullsample,
+                             nodistlin=args.nodistlin,
+                             **kwargs).to(device)
+    else:
+        raise NotImplementedError(f"unknown model {args.model}")
     model = model.to(device)
     print(model)
-    return model #torch.compile(model)
+    return model
 
 
 def main():
@@ -286,20 +302,20 @@ def main():
         schedulerwst = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.9**(args.warmstart-epoch))
         schedulerdc = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 1/(1+epoch*(args.K+args.K2*epoch)))
         scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[schedulerwst, schedulerdc], milestones=[args.warmstart], verbose=True)
-        normscd = NormMomentumScheduler(lambda x:1/(1+x*(args.normK+x*args.normK2)), args.normparam, normdict[args.nnnorm])
+        normscd = NormMomentumScheduler(lambda x:1/(1+x*(args.normK+x*args.normK2)), args.normparam, basenormdict[args.nnnorm])
         valid_curve = []
         test_curve = []
         train_curve = []
 
         for epoch in range(1, args.epochs + 1):
             t1 = time.time()
-            loss = train(get_criterion(task, args),
+            loss, policyloss, entropyloss = train(get_criterion(task, args),
                                                       model, device,
                                                       train_loader, optimizer,
                                                       task)
 
             print(
-                f"Epoch {epoch} train time : {time.time()-t1:.1f} loss: {loss:.2e} "
+                f"Epoch {epoch} train time : {time.time()-t1:.1f} loss: {loss:.2e} {policyloss:.2e} {entropyloss:.2e}"
             )
 
             t1 = time.time()

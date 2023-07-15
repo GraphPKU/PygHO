@@ -13,7 +13,8 @@ from torch_geometric.data import InMemoryDataset, Data
 from torch_geometric.utils import to_undirected
 from torch_geometric.datasets import TUDataset, ZINC, GNNBenchmarkDataset, QM9
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
-
+from data2subgdata import Subgdataset, data2subg
+import torch_geometric.transforms as T
 
 class PlanarSATPairsDataset(InMemoryDataset):
 
@@ -44,7 +45,7 @@ class PlanarSATPairsDataset(InMemoryDataset):
         data_list = [Data.from_dict(_) for _ in data_list]
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]
-
+        data_list = list(map(EXP_node_feature_transform, data_list))
         if self.pre_transform is not None:
             data_list = [self.pre_transform(data) for data in data_list]
 
@@ -169,6 +170,7 @@ from typing import Iterable, Callable, Optional, Tuple
 from torch_geometric.data import Dataset
 
 def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
+    kwargs["pre_transform"] = data2subg
     if name == "sr":
         dataset = SRDataset(**kwargs)
         # dataset = dataset[:2]
@@ -177,7 +179,7 @@ def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
         dataset.num_tasks = torch.max(dataset.data.y).item() + 1
         return (dataset, dataset, dataset), "fixed", Accuracy("multiclass", num_classes=dataset.num_tasks), "cls" # full training/valid/test??
     elif name == "EXP":
-        dataset = PlanarSATPairsDataset(pre_transform=EXP_node_feature_transform, **kwargs)
+        dataset = PlanarSATPairsDataset(**kwargs)
         if dataset.data.x.dim() == 1:
             dataset.data.x = dataset.data.x.unsqueeze(-1)
         dataset.num_tasks = 1
@@ -188,7 +190,8 @@ def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
             if "x" not in data:
                 data.x = torch.ones([data.num_nodes, 1], dtype=torch.float)
             return data
-        dataset = GNNBenchmarkDataset("dataset", "CSL", pre_transform=CSL_node_feature_transform,**kwargs)
+        kwargs["pre_transform"] = T.Compose([CSL_node_feature_transform, kwargs["pre_transform"]])
+        dataset = GNNBenchmarkDataset("dataset", "CSL", **kwargs)
         dataset.num_tasks = torch.max(dataset.data.y).item() + 1
         return (dataset,), "fold-8-1-1", Accuracy("multiclass", num_classes=10), "cls"
     elif name.startswith("subgcount"):
@@ -210,21 +213,19 @@ def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
         dataset.data.y = dataset.data.y.to(torch.float)
         return (dataset,), "fold-9-0-1", Accuracy("binary"), "bincls"
     elif name == "zinc":
+        def ZINC_pretransform(data):
+            data.edge_attr = data.edge_attr.reshape(-1, 1).to(torch.long)
+            data.y = data.y.reshape(-1, 1)
+            return data
+        kwargs["pre_transform"] = T.Compose([ZINC_pretransform, kwargs["pre_transform"]])
         trn_d = ZINC("dataset/ZINC", subset=True, split="train", **kwargs)
-        val_d = ZINC("dataset/ZINC", subset=True, split="val")
-        tst_d = ZINC("dataset/ZINC", subset=True, split="test")
+        val_d = ZINC("dataset/ZINC", subset=True, split="val", **kwargs)
+        tst_d = ZINC("dataset/ZINC", subset=True, split="test", **kwargs)
         trn_d.num_tasks = 1
-        trn_d.data.edge_attr = trn_d.data.edge_attr.reshape(-1, 1).to(torch.long)
-        trn_d.data.y = trn_d.data.y.reshape(-1, 1)
         val_d.num_tasks = 1
-        val_d.data.edge_attr = val_d.data.edge_attr.reshape(-1, 1).to(torch.long)
-        val_d.data.y = val_d.data.y.reshape(-1, 1)
         tst_d.num_tasks = 1
-        tst_d.data.edge_attr = tst_d.data.edge_attr.reshape(-1, 1).to(torch.long)
-        tst_d.data.y = tst_d.data.y.reshape(-1, 1)
         return (trn_d, val_d, tst_d), "fixed", MeanAbsoluteError(), "smoothl1reg" #"reg"
     elif name == "QM9":
-        raise NotImplementedError
         dataset = QM9("dataset/qm9", **kwargs)
         dataset.data.y = dataset.data.y[:, y_slice]
         dataset.num_tasks = 1
@@ -249,7 +250,7 @@ def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
         train_dataset = dataset[2 * tenpercent:]
         return (train_dataset, val_dataset, test_dataset), "8-1-1", MeanAbsoluteError(), "reg"
     elif name.startswith("ogbg"):
-        dataset = PygGraphPropPredDataset(name=name)
+        dataset = PygGraphPropPredDataset(name=name, **kwargs)
         split_idx = dataset.get_idx_split()
         if "molhiv" in name:
             task = "bincls"
