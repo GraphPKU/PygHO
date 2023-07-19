@@ -2,7 +2,7 @@ import torch
 from torch_geometric.nn.aggr import Set2Set, SumAggregation, MeanAggregation, MaxAggregation
 from torch_geometric.utils import softmax
 from torch_geometric.data import Data
-from conv import GNN_node
+from Spconv import GNN_node
 import torch.nn as nn
 from torch_scatter import scatter_max, scatter_add, scatter_min
 from utils import MLP
@@ -61,12 +61,15 @@ class InputEncoder(nn.Module):
                 self.ea_encoder = MultiEmbedding(emb_dim, dims=dims, **kwargs["emb"])
             else:
                 raise NotImplementedError
+        self.tuple__encoder = MultiEmbedding(
+                    emb_dim,
+                    dims=dims + exdims,
+                    lastzeropad=len(exdims) if not zeropad else 0, **kwargs["emb"])
 
-    def forward(self, batched_data: Data):
-        batched_data.x = self.x_encoder(batched_data.x)
-        batched_data.edge_attr = self.ea_encoder(batched_data.edge_attr)
-        batched_data.subg_edge_attr = self.ea_encoder(batched_data.subg_edge_attr)
-        return batched_data
+    def forward(self, datadict: Data):
+        datadict["x"] = self.x_encoder(datadict["x"])
+        datadict["edge_attr"] = self.ea_encoder(datadict["edge_attr"])
+        return datadict
 
 
 pool_dict = {"sum": SumAggregation, "mean": MeanAggregation, "max": MaxAggregation}
@@ -112,21 +115,11 @@ class NestedGNN(nn.Module):
                             outlayer,
                             tailact=False,
                             **kwargs["mlp"]), nn.LayerNorm(num_tasks, elementwise_affine=False) if ln_out else nn.Identity())
-        
-    def subgforward(self, batched_data, layer):
-        h_node = self.lgnn_nodes[layer](batched_data, issubgraph=True)
-        subg_nodeidx = batched_data.subg_nodeidx
-        batched_data.x = batched_data.x + self.lpool(h_node, subg_nodeidx, dim_size=batched_data.num_nodes, dim=-2)
-        return batched_data
-    
-    def graphforward(self, batched_data, layer):
-        h_node = self.ggnn_nodes[layer](batched_data)
-        batched_data.x = batched_data.x + h_node
-        return batched_data
 
-    def forward(self, batched_data):
-        batched_data = self.data_encoder(batched_data)
-        batched_data.subg_nodelabel = self.label_encoder(batched_data.subg_nodelabel.to(torch.long))
+    def forward(self, datadict):
+        datadict = self.data_encoder(datadict)
+        A = torch.sparse_coo_tensor(datadict["edge_index"], datadict["edge_attr"], size=[datadict["num_nodes"], datadict["num_nodes"]]+list(datadict["edge_attr"].shape[1:]))
+        X = torch.sparse_coo_tensor(datadict["tupleid"], datadict["edge_attr"], size=[datadict["num_nodes"], datadict["num_nodes"]]+list(datadict["edge_attr"].shape[1:]))
         for layer in range(self.num_layer):
             self.subgforward(batched_data, layer)
             self.graphforward(batched_data, layer)

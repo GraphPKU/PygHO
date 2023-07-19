@@ -1,7 +1,6 @@
 '''
 Copied from https://github.com/JiaruiFeng/KP-GNN/tree/a127847ed8aa2955f758476225bc27c6697e7733
 '''
-from sklearn.metrics import accuracy_score
 import torch
 import pickle
 import numpy as np
@@ -13,8 +12,10 @@ from torch_geometric.data import InMemoryDataset, Data
 from torch_geometric.utils import to_undirected
 from torch_geometric.datasets import TUDataset, ZINC, GNNBenchmarkDataset, QM9
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
-from data2subgdata import Subgdataset, data2subg
+from backend.SpData import datapreprocess, KhopSampler
 import torch_geometric.transforms as T
+from torchmetrics import Accuracy, MeanAbsoluteError
+from functools import partial
 
 class PlanarSATPairsDataset(InMemoryDataset):
 
@@ -105,7 +106,7 @@ class GraphCountDataset(InMemoryDataset):
             expy = torch.tensor([[tri, tailed, star, cyc4, cus]])
 
             E = np.where(A[i] > 0)
-            edge_index = torch.Tensor(np.vstack((E[0], E[1]))).type(torch.int64)
+            edge_index = torch.tensor(np.vstack((E[0], E[1])), dtype=torch.long)
             x = torch.ones(A[i].shape[0], 1).long()  # change to category
             # y=torch.tensor(Y[i:i+1,:])
             data_list.append(Data(edge_index=edge_index, x=x, y=expy))
@@ -165,12 +166,9 @@ class myEvaluator(Evaluator):
         assert len(ret) == 1
         return list(ret.values())[0]
 
-from torchmetrics import Accuracy, MeanAbsoluteError
-from typing import Iterable, Callable, Optional, Tuple
-from torch_geometric.data import Dataset
 
 def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
-    kwargs["pre_transform"] = data2subg
+    kwargs["pre_transform"] = partial(datapreprocess, subgsampler=partial(KhopSampler, hop=2), keys=["XA"])
     if name == "sr":
         dataset = SRDataset(**kwargs)
         # dataset = dataset[:2]
