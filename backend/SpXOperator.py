@@ -1,12 +1,16 @@
-from torch_geometric.data import Data as PygData, Batch as PygBatch
 import torch
-from torch import Tensor, LongTensor
+from torch import Tensor
 from .Spspmm import spspmm
 from .Spmm import spmm
 from torch_scatter import scatter
 
 def messagepassing_tuple(A: Tensor, X: Tensor, key: str="AX", datadict: dict={}):
-    return spspmm(A, X, akl=datadict.get(f"{key}_akl", None), bkl=datadict.get(f"{key}_akl", None), tar_ij=datadict.get(f"{key}_tar", None))
+    if key=="AX":
+        return spspmm(A, X, akl=datadict.get(f"{key}_akl", None), bkl=datadict.get(f"{key}_bkl", None), tar_ij=datadict.get(f"{key}_tar", None))
+    elif key=="XA":
+        return spspmm(X, A, akl=datadict.get(f"{key}_akl", None), bkl=datadict.get(f"{key}_bkl", None), tar_ij=datadict.get(f"{key}_tar", None))
+    else:
+        return spspmm(A, X, akl=datadict.get(f"{key}_akl", None), bkl=datadict.get(f"{key}_bkl", None), tar_ij=datadict.get(f"{key}_tar", None))
 
 def pooling_tuple(X: Tensor, dim=1, pool: str="sum"):
     assert dim in [0, 1]
