@@ -111,7 +111,6 @@ def parserarg():
     parser.add_argument("--act", type=str, default="relu")
     parser.add_argument("--mlplayer", type=int, default=1)
     parser.add_argument("--outlayer", type=int, default=1)
-    parser.add_argument("--use_elin", action="store_true")
     
     parser.add_argument('--lossparam', type=float, default=0.05)
 
@@ -121,22 +120,12 @@ def parserarg():
     parser.add_argument("--orthoinit", action="store_true")
     parser.add_argument("--max_norm", type=float, default=None)
 
-    parser.add_argument('--gnorm',
+    parser.add_argument('--aggr',
                         type=str,
-                        default='gcn',
-                        choices=["sum", "mean", "max", "gcn"])
-    parser.add_argument('--lnorm',
-                        type=str,
-                        default='gcn',
-                        choices=["sum", "mean", "max", "gcn"])
+                        default='sum',
+                        choices=["sum", "mean", "max"])
     parser.add_argument('--num_layer', type=int, default=1)
-    parser.add_argument('--gnum_layer', type=int, default=4)
-    parser.add_argument('--lnum_layer', type=int, default=4)
     parser.add_argument('--emb_dim', type=int, default=64)
-    parser.add_argument('--jk',
-                        type=str,
-                        choices=["sum", "last"],
-                        default="last")
     parser.add_argument('--res', action="store_true")
     parser.add_argument('--gpool',
                         type=str,
@@ -169,22 +158,8 @@ def buildModel(args, num_tasks, device, dataset):
             "orthoinit": args.orthoinit,
             "max_norm": args.max_norm
         },
-        "ggnn": {
-            "num_layer": args.gnum_layer,
-            "residual": args.res,
-            "norm": args.gnorm,
-            "mlplayer": args.mlplayer,
-            "mlp": {
-                "dp": args.dp,
-                "norm": args.nnnorm,
-                "act": args.act,
-                "normparam": args.normparam
-            },
-        },
-        "lgnn": {
-            "num_layer": args.lnum_layer,
-            "residual": args.res,
-            "norm": args.lnorm,
+        "conv": {
+            "aggr": args.aggr,
             "mlplayer": args.mlplayer,
             "mlp": {
                 "dp": args.dp,

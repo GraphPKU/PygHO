@@ -9,7 +9,7 @@ from torch_geometric.utils.num_nodes import maybe_num_nodes
 import os.path as osp
 from .Spspmm import spspmm_ind, filterij
 from typing import Tuple
-
+from torch_geometric.utils import coalesce
 
 class SubgData(PygData):
 
@@ -158,11 +158,14 @@ def KhopSampler(data: PygData, hop: int = 2) -> Tuple[LongTensor, LongTensor]:
                     num_nodes=subset.shape[0],
                 ))
     subgbatch = PygBatch.from_data_list(subgraphs)
-    return subgbatch.subg_nodeidx.t(), subgbatch.x
+    tupleid, tuplefeat = subgbatch.subg_nodeidx.t(), subgbatch.x
+    tupleid, tuplefeat = coalesce(tupleid, tuplefeat, num_nodes=data.num_nodes, reduce="min")
+    return 
 
 
 def datapreprocess(data: PygData, subgsampler: Callable,
                    keys: List[str]) -> SubgData:
+    data.edge_index, data.edge_attr = coalesce(data.edge_index, data.edge_attr, num_nodes=data.num_nodes)
     tupleid, tuplefeat = subgsampler(data)
     datadict = {
         "num_nodes": data.num_nodes,
