@@ -52,6 +52,8 @@ def train(criterion: Callable,
             y = datadict["y"]
             if task_type != "cls":
                 y = y.to(torch.float)
+                if y.ndim == 1:
+                    y = y.unsqueeze(-1)
             value_loss = torch.mean(criterion(finalpred, y))
             totalloss = value_loss 
             totalloss.backward()
@@ -65,6 +67,8 @@ def train(criterion: Callable,
 
 @torch.no_grad()
 def eval(model, device, loader: DataLoader, evaluator):
+    if len(loader) == 0:
+        return 0
     model.eval()
     ylen = len(loader.dataset)
     ty = loader.dataset.data.y

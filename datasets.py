@@ -168,7 +168,7 @@ class myEvaluator(Evaluator):
 
 
 def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
-    kwargs["pre_transform"] = partial(datapreprocess, subgsampler=partial(KhopSampler, hop=2), keys=["XA_akl"])
+    kwargs["pre_transform"] = partial(datapreprocess, subgsampler=partial(KhopSampler, hop=3), keys=["XA_akl"])
     if name == "sr":
         dataset = SRDataset(**kwargs)
         # dataset = dataset[:2]
@@ -206,9 +206,12 @@ def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
         dataset.data.y = dataset.data.y.to(torch.float)
         return (dataset[dataset.train_idx], dataset[dataset.val_idx], dataset[dataset.test_idx]), "fixed", MeanAbsoluteError(), "l1reg" # 
     elif name in ["MUTAG", "DD", "PROTEINS", "PTC-MR", "IMDB-BINARY"]:
+        def TU_pretransform(data):
+            data.y = data.y.reshape(-1, 1).to(torch.float)
+            return data
+        kwargs["pre_transform"] = T.Compose([TU_pretransform, kwargs["pre_transform"]])
         dataset = TUDataset("dataset", name=name, **kwargs)
         dataset.num_tasks = 1
-        dataset.data.y = dataset.data.y.to(torch.float)
         return (dataset,), "fold-9-0-1", Accuracy("binary"), "bincls"
     elif name == "zinc":
         def ZINC_pretransform(data):
