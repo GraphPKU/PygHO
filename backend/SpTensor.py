@@ -31,6 +31,9 @@ def coalesce(
     edge_attr: Optional[Tensor]=None,
     num_nodes: Optional[int]=None,
     reduce: str = 'add') -> Tuple[Tensor, Optional[Tensor]]:
+    '''
+    ??TODO unittest
+    '''
     """Row-wise sorts :obj:`edge_index` and removes its duplicated entries.
     Duplicate entries in :obj:`edge_attr` are merged by scattering them
     together according to the given :obj:`reduce` option.
