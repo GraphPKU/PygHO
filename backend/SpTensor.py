@@ -92,4 +92,4 @@ if __name__ == "__main__":
     A2cf = SparseTensor.from_torch_sparse_coo(A1c)
     print("debug from_torch_sparse_coo ", torch.max(
         (A2.indices - A2cf.indices)), torch.max((A2.values - A2cf.values)))
-    print(A1, A1c, A2, A2f, A2cf, sep="\n")
+    print("should of same shape and nnz ", A1, A1c, A2, A2f, A2cf, sep="\n")
