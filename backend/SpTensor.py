@@ -1,8 +1,100 @@
 import torch
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from torch import LongTensor, Tensor
-from torch_geometric.utils import coalesce
+from torch_scatter import scatter
 # ?? TODO add coalesce for sparse_dim >=2
+
+def indicehash(indice: LongTensor, n: Optional[int]=None)->LongTensor:
+    assert indice.ndim == 2
+    sparse_dim = indice.shape[0]
+    interval = (63//sparse_dim)
+    n = n if not (n is None) else torch.max(indice).item()+1
+    assert n < (1<<interval)
+
+    eihash = indice[sparse_dim-1].clone()
+    for i in range(1, sparse_dim):
+        eihash.bitwise_or_(indice[sparse_dim-1-i].bitwise_left_shift(interval*(i))) 
+    return eihash
+
+def decodehash(indhash: LongTensor, sparse_dim: int) -> LongTensor:
+    '''
+    transfer hash into pairs
+    '''
+    interval = (63//sparse_dim)
+    mask = eval("0b"+"1"*interval)
+    offset = torch.range(sparse_dim, device=indhash.device).unsqueeze(-1) * interval
+    ret = torch.bitwise_right_shift(indhash.unsqueeze(0), offset).bitwise_and_(mask)
+    return ret
+
+def coalesce(
+    edge_index: LongTensor,
+    edge_attr: Optional[Tensor]=None,
+    num_nodes: Optional[int]=None,
+    reduce: str = 'add') -> Tuple[Tensor, Optional[Tensor]]:
+    """Row-wise sorts :obj:`edge_index` and removes its duplicated entries.
+    Duplicate entries in :obj:`edge_attr` are merged by scattering them
+    together according to the given :obj:`reduce` option.
+
+    Args:
+        edge_index (LongTensor): The edge indices.
+        edge_attr (Tensor or List[Tensor], optional): Edge weights or multi-
+            dimensional edge features.
+            If given as a list, will re-shuffle and remove duplicates for all
+            its entries. (default: :obj:`None`)
+        num_nodes (int, optional): The number of nodes, *i.e.*
+            :obj:`max_val + 1` of :attr:`edge_index`. (default: :obj:`None`)
+        reduce (str, optional): The reduce operation to use for merging edge
+            features (:obj:`"add"`, :obj:`"mean"`, :obj:`"min"`, :obj:`"max"`,
+            :obj:`"mul"`, :obj:`"any"`). (default: :obj:`"add"`)
+        is_sorted (bool, optional): If set to :obj:`True`, will expect
+            :obj:`edge_index` to be already sorted row-wise.
+        sort_by_row (bool, optional): If set to :obj:`False`, will sort
+            :obj:`edge_index` column-wise.
+
+    :rtype: :class:`LongTensor` if :attr:`edge_attr` is not passed, else
+        (:class:`LongTensor`, :obj:`Optional[Tensor]` or :obj:`List[Tensor]]`)
+
+    .. warning::
+
+        From :pyg:`PyG >= 2.3.0` onwards, this function will always return a
+        tuple whenever :obj:`edge_attr` is passed as an argument (even in case
+        it is set to :obj:`None`).
+
+    Example:
+
+        >>> edge_index = torch.tensor([[1, 1, 2, 3],
+        ...                            [3, 3, 1, 2]])
+        >>> edge_attr = torch.tensor([1., 1., 1., 1.])
+        >>> coalesce(edge_index)
+        tensor([[1, 2, 3],
+                [3, 1, 2]])
+
+        >>> # Sort `edge_index` column-wise
+        >>> coalesce(edge_index, sort_by_row=False)
+        tensor([[2, 3, 1],
+                [1, 2, 3]])
+
+        >>> coalesce(edge_index, edge_attr)
+        (tensor([[1, 2, 3],
+                [3, 1, 2]]),
+        tensor([2., 1., 1.]))
+
+        >>> # Use 'mean' operation to merge edge features
+        >>> coalesce(edge_index, edge_attr, reduce='mean')
+        (tensor([[1, 2, 3],
+                [3, 1, 2]]),
+        tensor([1., 1., 1.]))
+    """
+    eihash = indicehash(edge_index, num_nodes)
+    eihash, idx = torch.unique(eihash, return_inverse=True)
+    edge_index = decodehash(eihash)
+    if edge_attr is None:
+        return edge_index, None
+    else:
+        edge_attr = scatter(edge_attr, idx, dim=0, dim_size=eihash.shape[0], reduce=reduce)
+        return edge_index, edge_attr
+
+
 
 class SparseTensor:
 
