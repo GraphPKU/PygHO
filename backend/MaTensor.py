@@ -11,23 +11,27 @@ class MaskedTensor:
                  data: Tensor,
                  mask: BoolTensor,
                  padvalue: float = 0.0,
-                 is_masked: bool = False):
+                 is_filled: bool = False):
         '''
         mask: True for valid value, False for invalid value
         '''
         assert data.ndim >= mask.ndim, "data's #dim should be larger than mask "
         assert data.shape[:mask.
                           ndim] == mask.shape, "data and mask's first dimensions should match"
-        self.__padvalue = padvalue
         self.__data = data
         while mask.ndim < data.ndim:
             mask = mask.unsqueeze(-1)
         mask = mask.expand_as(data)
         self.__mask = mask
-        if not is_masked:
+        if not is_filled:
+            self.__padvalue = torch.inf if padvalue != torch.inf else - torch.inf
             self.fill_masked_(padvalue)
+        else:
+            self.__padvalue = padvalue
 
     def fill_masked_(self, val: float = 0):
+        if self.padvalue == val:
+            return
         self.__padvalue = val
         self.__data = self.__data.masked_fill(torch.logical_not(self.__mask),
                                               val)  # can be inplace?
@@ -103,8 +107,10 @@ if __name__ == "__main__":
     mask = torch.zeros((B, N), dtype=torch.bool)
     mask[0, :2] = True
     mask[1, :1] = True
-    mt = MaskedTensor(data, mask)
+    mt = MaskedTensor(data, mask, padvalue=torch.inf)
     print(mt.data)
+    print(mt.mask)
     print(mt.shape)
     print(mt.max(0), mt.min(0), mt.sum(0), mt.mean(0))
     print(mt.max(), mt.min(), mt.sum(), mt.mean())
+    print(mt.fill_masked(1))
