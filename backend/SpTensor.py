@@ -13,8 +13,8 @@ class SparseTensor:
             self.shape = shape
         else:
             self.shape = torch.max(indices, dim=1).tolist() + list(values.shape[1:])
-        self.__sparse_dim = self.indices.shape[0]
-        self.__maxsparsesize = max(self.size[:self.sparsedim])
+        self.__sparse_dim = indices.shape[0]
+        self.__maxsparsesize = max(self.shape[:self.sparse_dim])
         if is_coalesced:
             self.__indices, self.__values = indices, values
         else:

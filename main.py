@@ -10,6 +10,7 @@ import numpy as np
 from datasets import loaddataset
 from norm import NormMomentumScheduler, normdict
 from typing import Callable
+import torch_geometric
 
 ### importing OGB
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
@@ -43,6 +44,8 @@ def train(criterion: Callable,
     losss = []
     for batch in loader:
         batch = batch.to(device, non_blocking=True)
+        
+        datadict = batch.to_dict()
         # print(batch.x.type(), batch.edge_index.type(), batch.subg_edge_index.type(), batch.subg_nodeidx.type(), batch.subg_nodelabel.type())
         if True:
             optimizer.zero_grad()
@@ -176,6 +179,7 @@ def buildModel(args, num_tasks, device, dataset):
                       args.emb_dim,
                       args.gpool,
                       args.lpool,
+                      args.res,
                       args.outlayer,
                       args.ln_out,
                       **kwargs).to(device)

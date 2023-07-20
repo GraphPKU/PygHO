@@ -63,11 +63,9 @@ class InputEncoder(nn.Module):
                                          tailact=True,
                                          **kwargs["mlp"])
             elif tuplefeat.dtype == torch.long:
-                dims = x2dims(tuplefeat)
-                self.tuple_encoder = MultiEmbedding(
+                self.tuple_encoder = SingleEmbedding(
                     emb_dim,
-                    dims=dims + tuple_exdims,
-                    lastzeropad=len(tuple_exdims) if not tuple_zeropad else 0,
+                    torch.max(tuplefeat).item() + 1,
                     **kwargs["emb"])
             else:
                 raise NotImplementedError
@@ -128,7 +126,7 @@ class NestedGNN(nn.Module):
 
         ### GNN to generate node embeddings
         self.subggnns = Convs(
-            [SubgConv(**kwargs["conv"]) for i in range(num_layer)],
+            [SubgConv(emb_dim, **kwargs["conv"]) for i in range(num_layer)],
             residual=residual)
         ### Pooling function to generate whole-graph embeddings
         self.gpool = pool_dict[gpool]()
@@ -155,13 +153,13 @@ class NestedGNN(nn.Module):
         datadict = self.data_encoder(datadict)
         A = SparseTensor(datadict["edge_index"],
                          datadict["edge_attr"],
-                         size=[datadict["num_nodes"], datadict["num_nodes"]] +
+                         shape=[datadict["num_nodes"], datadict["num_nodes"]] +
                          list(datadict["edge_attr"].shape[1:]),
                          is_coalesced=True)
         X = SparseTensor(datadict["tupleid"],
                          self.tupleinit(datadict["tupleid"],
                                         datadict["tuplefeat"], datadict["x"]),
-                         size=[datadict["num_nodes"], datadict["num_nodes"]] +
+                         shape=[datadict["num_nodes"], datadict["num_nodes"]] +
                          list(datadict["edge_attr"].shape[1:]),
                          is_coalesced=True)
         X = self.subggnns.forward(A, X, datadict)

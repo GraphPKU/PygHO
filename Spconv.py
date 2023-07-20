@@ -9,7 +9,7 @@ from utils import MLP
 from typing import List
 
 ### GCN convolution along the graph structure
-class SubgConv:
+class SubgConv(nn.Module):
 
     def __init__(self, emb_dim: int, mlplayer: int, aggr: str="sum", **kwargs):
         super().__init__()
@@ -22,7 +22,7 @@ class SubgConv:
     
 
 ### GCN convolution along the graph structure
-class CrossSubgConv:
+class CrossSubgConv(nn.Module):
 
     def __init__(self, emb_dim: int, mlplayer: int, aggr: str="sum", **kwargs):
         super().__init__()

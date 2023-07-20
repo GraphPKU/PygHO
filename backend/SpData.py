@@ -160,7 +160,7 @@ def KhopSampler(data: PygData, hop: int = 2) -> Tuple[LongTensor, LongTensor]:
     subgbatch = PygBatch.from_data_list(subgraphs)
     tupleid, tuplefeat = subgbatch.subg_nodeidx.t(), subgbatch.x
     tupleid, tuplefeat = coalesce(tupleid, tuplefeat, num_nodes=data.num_nodes, reduce="min")
-    return 
+    return tupleid, tuplefeat
 
 
 def datapreprocess(data: PygData, subgsampler: Callable,
