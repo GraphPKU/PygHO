@@ -176,7 +176,7 @@ def datapreprocess(data: PygData, subgsampler: Callable,
         "edge_attr": data.edge_attr,
         "tupleid": tupleid,
         "tuplefeat": tuplefeat,
-        "num_tuples": tupleid.shape[0]
+        "num_tuples": tupleid.shape[1]
     })
     for key in keys:
         if key == "AX_akl":

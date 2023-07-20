@@ -18,8 +18,9 @@ class SubgConv(nn.Module):
 
     def forward(self, X: SparseTensor, A: SparseTensor, datadict: dict)->SparseTensor:
         tX = SparseTensor(X.indices, self.lin(X.values), shape=X.shape, is_coalesced=True)
-        return messagepassing_tuple(A, tX, "XA", datadict, self.aggr)
-    
+        # print(tX.nnz, A.nnz, datadict["XA_tar"].shape, datadict["XA_akl"].max(dim=-1)[0])
+        ret = messagepassing_tuple(A, tX, "XA", datadict, self.aggr)
+        return ret 
 
 ### GCN convolution along the graph structure
 class CrossSubgConv(nn.Module):
@@ -57,9 +58,9 @@ class Convs(nn.Module):
         ###List of GNNs
         self.convs = nn.ModuleList(convlist)
 
-    def forward(self, A: SparseTensor, X: SparseTensor, datadict)->SparseTensor:
+    def forward(self, X: SparseTensor, A: SparseTensor, datadict)->SparseTensor:
         for conv in self.convs:
-            tX = conv(A, X, datadict)
+            tX = conv(X, A, datadict)
             if self.residual:
                 X = SparseTensor(X.indices, tX.values+X.values, X.shape, is_coalesced=True)
             else:

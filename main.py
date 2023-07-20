@@ -46,9 +46,6 @@ def train(criterion: Callable,
         batch = batch.to(device, non_blocking=True)
         
         datadict = batch.to_dict()
-        datadict["XA_tar"] = datadict["tupleid"]
-        # print(datadict["num_tuples"], datadict["XA_akl"].max())
-        # print(batch.x.type(), batch.edge_index.type(), batch.subg_edge_index.type(), batch.subg_nodeidx.type(), batch.subg_nodelabel.type())
         if True:
             optimizer.zero_grad()
             finalpred = model(datadict)
@@ -84,7 +81,6 @@ def eval(model, device, loader: DataLoader, evaluator):
         y_true[step:step + steplen] = batch.y
         batch = batch.to(device, non_blocking=True)
         datadict = batch.to_dict()
-        datadict["XA_tar"] = datadict["tupleid"]
         tpred = model(datadict)
         y_pred[step:step + steplen] = tpred
         step += steplen
@@ -235,20 +231,17 @@ def main():
                                   batch_size=args.batch_size,
                                   shuffle=True,
                                   drop_last=True,
-                                  num_workers=args.num_workers,
-                                  follow_batch=['x', 'subg_rootnode'])
+                                  num_workers=args.num_workers)
         train_eval_loader = DataLoader(trn_d,
                                   batch_size=args.batch_size,
                                   shuffle=False,
                                   drop_last=False,
-                                  num_workers=args.num_workers,
-                                  follow_batch=['x', 'subg_rootnode'])
+                                  num_workers=args.num_workers)
         valid_loader = DataLoader(val_d,
                                   batch_size=args.batch_size,
                                   shuffle=False,
                                   drop_last=False,
-                                  num_workers=args.num_workers,
-                                  follow_batch=['x', 'subg_rootnode'])
+                                  num_workers=args.num_workers)
         test_loader = DataLoader(tst_d,
                                  batch_size=args.batch_size,
                                  shuffle=False,

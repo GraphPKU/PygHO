@@ -151,6 +151,8 @@ class NestedGNN(nn.Module):
         TODO: !warning input must be coalesced
         '''
         datadict = self.data_encoder(datadict)
+        datadict["XA_tar"] = datadict["tupleid"]
+        #datadict["XA_akl"] = None
         A = SparseTensor(datadict["edge_index"],
                          datadict["edge_attr"],
                          shape=[datadict["num_nodes"], datadict["num_nodes"]] +
@@ -162,7 +164,7 @@ class NestedGNN(nn.Module):
                          shape=[datadict["num_nodes"], datadict["num_nodes"]] +
                          list(datadict["edge_attr"].shape[1:]),
                          is_coalesced=True)
-        X = self.subggnns.forward(A, X, datadict)
+        X = self.subggnns.forward(X, A, datadict)
         x = pooling_tuple(X, dim=1, pool=self.lpool)
         h_graph = self.gpool(x, datadict["batch"], dim=0)
         return self.pred_lin(h_graph)

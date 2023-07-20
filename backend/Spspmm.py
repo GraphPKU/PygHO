@@ -154,7 +154,7 @@ def spspmm(A: SparseTensor,
             ij, bkl = spspmm_ind(A.indices, B.indices)
         if tar_ij is not None:
             akl = filterij(tar_ij, ij, bkl)
-            return spspmm(A, B, akl=akl)
+            return spspmm(A, B, akl=akl, tar_ij=tar_ij)
         else:
             warnings.warn("tar_ij is not found")
             return spspmm(A, B, akl=bkl, tar_ij=ij)
