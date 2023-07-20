@@ -2,7 +2,7 @@ import torch
 from torch import LongTensor
 from typing import Optional, Tuple
 from torch_scatter import scatter
-from SpTensor import SparseTensor
+from .SpTensor import SparseTensor
 import warnings
 
 
@@ -123,6 +123,7 @@ def spsphadamard(A: SparseTensor,
     '''
     SparseTensor \odot SparseTensor.
     b2a is the auxiliary indice produced by spsphadamard_ind.
+    Dense shapes of A, B must be broadcastable. 
     return is of A's indices, may have zero value.
     '''
     assert A.sparse_dim == 2
@@ -160,6 +161,7 @@ def spspmm(A: SparseTensor,
     '''
     SparseTensor SparseTensor matrix multiplication at sparse dim.
     tar_ij mean tuples need output.
+    Dense shapes of A, B must be broadcastable. 
     '''
     assert A.sparse_dim == 2
     assert B.sparse_dim == 2
