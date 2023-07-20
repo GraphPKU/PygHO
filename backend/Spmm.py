@@ -1,5 +1,5 @@
 from torch_scatter import scatter
-from SpTensor import SparseTensor
+from .SpTensor import SparseTensor
 from torch import Tensor
 
 def spmm(A: SparseTensor, X: Tensor, aggr: str = "sum") -> Tensor:
