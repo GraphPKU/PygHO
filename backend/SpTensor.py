@@ -66,13 +66,18 @@ class SparseTensor:
         assert A.is_sparse, "from_torch_sparse_coo converts a torch.sparse_coo_tensor to SparseTensor"
         ret = cls(A._indices(), A._values(), A.shape, A.is_coalesced())
         return ret
+    
+    def to_torch_sparse_coo(self):
+        ret = torch.sparse_coo_tensor(self.indices, self.values, size=self.shape)
+        ret = ret._coalesced_(self.is_coalesced())
+        return ret
 
     def __repr__(self):
         return f'SparseTensor(shape={self.shape}, sparse_dim={self.sparse_dim}, nnz={self.nnz})'
 
 
 if __name__ == "__main__":
-    n, m, nnz, d = 100, 200, 50, 5
+    n, m, nnz, d = 10, 20, 50, 5
     indices = torch.stack(
         (torch.randint(0, n, (nnz, )), torch.randint(0, m, (nnz, ))))
     values = torch.randn((nnz, d))
@@ -92,4 +97,8 @@ if __name__ == "__main__":
     A2cf = SparseTensor.from_torch_sparse_coo(A1c)
     print("debug from_torch_sparse_coo ", torch.max(
         (A2.indices - A2cf.indices)), torch.max((A2.values - A2cf.values)))
-    print("should of same shape and nnz ", A1, A1c, A2, A2f, A2cf, sep="\n")
+    
+    A1t = A2.to_torch_sparse_coo()
+    print("debug from_torch_sparse_coo ", (A1t-A1).coalesce())
+
+    print("should of same shape and nnz ", A1c, A1t, A2, A2f, A2cf, sep="\n")

@@ -15,22 +15,22 @@ def messagepassing_tuple(A: SparseTensor,
         return spspmm(A,
                       X,
                       aggr,
-                      akl=datadict.get(f"{key}_akl", None),
-                      bkl=datadict.get(f"{key}_bkl", None),
+                      acd=datadict.get(f"{key}_acd", None),
+                      bcd=datadict.get(f"{key}_bcd", None),
                       tar_ij=datadict.get(f"{key}_tar", None))
     elif key == "XA":
         return spspmm(X,
                       A,
                       aggr,
-                      akl=datadict.get(f"{key}_akl", None),
-                      bkl=datadict.get(f"{key}_bkl", None),
+                      acd=datadict.get(f"{key}_acd", None),
+                      bcd=datadict.get(f"{key}_bcd", None),
                       tar_ij=datadict.get(f"{key}_tar", None))
     else:
         return spspmm(A,
                       X,
                       aggr,
-                      akl=datadict.get(f"{key}_akl", None),
-                      bkl=datadict.get(f"{key}_bkl", None),
+                      acd=datadict.get(f"{key}_acd", None),
+                      bcd=datadict.get(f"{key}_bcd", None),
                       tar_ij=datadict.get(f"{key}_tar", None))
 
 

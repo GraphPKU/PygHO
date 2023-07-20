@@ -16,15 +16,15 @@ class SubgData(PygData):
     def __inc__(self, key: str, value: Any, *args, **kwargs):
         if key == 'tupleid':
             return self.num_nodes
-        if key == 'AX_akl':
+        if key == 'AX_acd':
             return torch.tensor(
                 [[self.num_tuples], [self.num_edges], [self.num_tuples]],
                 dtype=torch.long)
-        if key == 'XA_akl':
+        if key == 'XA_acd':
             return torch.tensor(
                 [[self.num_tuples], [self.num_tuples], [self.num_edges]],
                 dtype=torch.long)
-        if key == 'XX_akl':
+        if key == 'XX_acd':
             return torch.tensor(
                 [[self.num_tuples], [self.num_tuples], [self.num_tuples]],
                 dtype=torch.long)
@@ -33,11 +33,11 @@ class SubgData(PygData):
     def __cat_dim__(self, key: str, value: Any, *args, **kwargs) -> Any:
         if key == 'tupleid':
             return 1
-        if key == 'AX_akl':
+        if key == 'AX_acd':
             return 1
-        if key == 'XA_akl':
+        if key == 'XA_acd':
             return 1
-        if key == 'XX_akl':
+        if key == 'XX_acd':
             return 1
         return super().__cat_dim__(key, value, *args, **kwargs)
 
@@ -179,14 +179,14 @@ def datapreprocess(data: PygData, subgsampler: Callable,
         "num_tuples": tupleid.shape[1]
     })
     for key in keys:
-        if key == "AX_akl":
-            datadict["AX_akl"] = filterij(
+        if key == "AX_acd":
+            datadict["AX_acd"] = filterij(
                 tupleid, *spspmm_ind(data.edge_index, tupleid))
-        elif key == "XA_akl":
-            datadict["XA_akl"] = filterij(
+        elif key == "XA_acd":
+            datadict["XA_acd"] = filterij(
                 tupleid, *spspmm_ind(tupleid, data.edge_index))
-        elif key == "XX_akl":
-            datadict["XX_akl"] = filterij(tupleid,
+        elif key == "XX_acd":
+            datadict["XX_acd"] = filterij(tupleid,
                                           *spspmm_ind(tupleid, tupleid))
         else:
             raise NotImplementedError
