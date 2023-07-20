@@ -5,6 +5,9 @@ from typing import Optional, List
 # Maybe we can let inherit torch.Tensor, but seems very complex https://pytorch.org/docs/stable/notes/extending.html#subclassing-torch-tensor
 
 
+def filterinf(X: Tensor, filled_value: float=0):
+    return torch.where(torch.logical_or(X==torch.inf, X==-torch.inf), filled_value, X)
+
 class MaskedTensor:
 
     def __init__(self,
@@ -86,20 +89,24 @@ class MaskedTensor:
         tmp = self.fill_masked(-torch.inf)
         keepdim = keepdim and dim is not None
         if dim == None:
-            return torch.max(tmp)
+            ret = torch.max(tmp)
         else:
-            return torch.max(tmp, dim=dim, keepdim=keepdim)[0]
+            ret = torch.max(tmp, dim=dim, keepdim=keepdim)[0]
+        return filterinf(ret)
 
     def min(self, dim: Optional[int] = None, keepdim: bool = False) -> Tensor:
         tmp = self.fill_masked(torch.inf)
         keepdim = keepdim and dim is not None
         if dim == None:
-            return torch.min(tmp)
+            ret = torch.min(tmp)
         else:
-            return torch.min(tmp, dim=dim, keepdim=keepdim)[0]
+            ret = torch.min(tmp, dim=dim, keepdim=keepdim)[0]
+        return filterinf(ret)
 
 
 if __name__ == "__main__":
+    A = torch.tensor([-torch.inf, 0, torch.inf, 1, 2, -torch.inf, 3])
+    print(filterinf(A))
     B = 2
     N = 3
     M = 2

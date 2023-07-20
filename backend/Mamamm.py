@@ -1,4 +1,4 @@
-from MaTensor import MaskedTensor
+from .MaTensor import MaskedTensor
 import torch
 from torch import BoolTensor, Tensor
 from typing import Optional
