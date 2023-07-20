@@ -1,8 +1,7 @@
-import torch
 from torch import Tensor
 from backend.SpTensor import SparseTensor
 import torch.nn as nn
-from backend.SpXOperator import messagepassing_tuple, pooling_tuple
+from subgnn.SpXOperator import messagepassing_tuple, pooling_tuple
 from torch_geometric.utils import degree
 import torch.nn as nn
 from utils import MLP
@@ -18,7 +17,7 @@ class SubgConv(nn.Module):
 
     def forward(self, X: SparseTensor, A: SparseTensor, datadict: dict)->SparseTensor:
         tX = SparseTensor(X.indices, self.lin(X.values), shape=X.shape, is_coalesced=True)
-        # print(tX.nnz, A.nnz, datadict["XA_tar"].shape, datadict["XA_akl"].max(dim=-1)[0])
+        # print(tX.nnz, A.nnz, datadict["XA_tar"].shape, datadict["XA_acd"].max(dim=-1)[0])
         ret = messagepassing_tuple(A, tX, "XA", datadict, self.aggr)
         return ret 
 

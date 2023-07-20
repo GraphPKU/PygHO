@@ -1,8 +1,8 @@
 import torch
 from torch_geometric.nn.aggr import SumAggregation, MeanAggregation, MaxAggregation
 from torch_geometric.data import Data
-from Spconv import Convs, SubgConv
-from backend.SpXOperator import pooling_tuple
+from subgnn.Spconv import Convs, SubgConv
+from subgnn.SpXOperator import pooling_tuple
 import torch.nn as nn
 from backend.SpTensor import SparseTensor
 from utils import MLP
@@ -152,7 +152,7 @@ class NestedGNN(nn.Module):
         '''
         datadict = self.data_encoder(datadict)
         datadict["XA_tar"] = datadict["tupleid"]
-        #datadict["XA_akl"] = None
+        #datadict["XA_acd"] = None
         A = SparseTensor(datadict["edge_index"],
                          datadict["edge_attr"],
                          shape=[datadict["num_nodes"], datadict["num_nodes"]] +
