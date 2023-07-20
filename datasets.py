@@ -168,7 +168,7 @@ class myEvaluator(Evaluator):
 
 
 def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
-    kwargs["pre_transform"] = partial(datapreprocess, subgsampler=partial(KhopSampler, hop=2), keys=["XA"])
+    kwargs["pre_transform"] = partial(datapreprocess, subgsampler=partial(KhopSampler, hop=2), keys=["XA_akl"])
     if name == "sr":
         dataset = SRDataset(**kwargs)
         # dataset = dataset[:2]

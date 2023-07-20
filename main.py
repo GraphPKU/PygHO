@@ -46,11 +46,13 @@ def train(criterion: Callable,
         batch = batch.to(device, non_blocking=True)
         
         datadict = batch.to_dict()
+        datadict["XA_tar"] = datadict["tupleid"]
+        # print(datadict["num_tuples"], datadict["XA_akl"].max())
         # print(batch.x.type(), batch.edge_index.type(), batch.subg_edge_index.type(), batch.subg_nodeidx.type(), batch.subg_nodelabel.type())
         if True:
             optimizer.zero_grad()
-            finalpred = model(batch)[-1]
-            y = batch.y
+            finalpred = model(datadict)
+            y = datadict["y"]
             if task_type != "cls":
                 y = y.to(torch.float)
             value_loss = torch.mean(criterion(finalpred, y))
@@ -81,7 +83,9 @@ def eval(model, device, loader: DataLoader, evaluator):
         steplen = batch.y.shape[0]
         y_true[step:step + steplen] = batch.y
         batch = batch.to(device, non_blocking=True)
-        tpred = model(batch)[-1]
+        datadict = batch.to_dict()
+        datadict["XA_tar"] = datadict["tupleid"]
+        tpred = model(datadict)
         y_pred[step:step + steplen] = tpred
         step += steplen
     assert step == y_true.shape[0]
@@ -276,7 +280,6 @@ def main():
                                                       model, device,
                                                       train_loader, optimizer,
                                                       task)
-
             print(
                 f"Epoch {epoch} train time : {time.time()-t1:.1f} loss: {loss:.2e} "
             )

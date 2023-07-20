@@ -3,7 +3,7 @@ from torch import LongTensor
 from typing import Optional, Tuple
 from torch_scatter import scatter
 from .SpTensor import SparseTensor
-
+import warnings
 
 def combineind(a: LongTensor, b: LongTensor) -> LongTensor:
     '''
@@ -149,12 +149,14 @@ def spspmm(A: SparseTensor,
                             list(retval.shape)[1:],
                             is_coalesced=True)
     else:
+        warnings.warn("akl is not found")
         if bkl is None:
             ij, bkl = spspmm_ind(A.indices, B.indices)
         if tar_ij is not None:
             akl = filterij(tar_ij, ij, bkl)
             return spspmm(A, B, akl=akl)
         else:
+            warnings.warn("tar_ij is not found")
             return spspmm(A, B, akl=bkl, tar_ij=ij)
 
 

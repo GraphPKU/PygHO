@@ -167,7 +167,8 @@ def datapreprocess(data: PygData, subgsampler: Callable,
                    keys: List[str]) -> SubgData:
     data.edge_index, data.edge_attr = coalesce(data.edge_index, data.edge_attr, num_nodes=data.num_nodes)
     tupleid, tuplefeat = subgsampler(data)
-    datadict = {
+    datadict = data.to_dict()
+    datadict.update({
         "num_nodes": data.num_nodes,
         "num_edges": data.edge_index.shape[1],
         "x": data.x,
@@ -176,7 +177,7 @@ def datapreprocess(data: PygData, subgsampler: Callable,
         "tupleid": tupleid,
         "tuplefeat": tuplefeat,
         "num_tuples": tupleid.shape[0]
-    }
+    })
     for key in keys:
         if key == "AX_akl":
             datadict["AX_akl"] = filterij(
@@ -187,4 +188,6 @@ def datapreprocess(data: PygData, subgsampler: Callable,
         elif key == "XX_akl":
             datadict["XX_akl"] = filterij(tupleid,
                                           *spspmm_ind(tupleid, tupleid))
+        else:
+            raise NotImplementedError
     return SubgData(**datadict)
