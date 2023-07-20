@@ -2,7 +2,7 @@ import torch
 from typing import List, Optional
 from torch import LongTensor, Tensor
 from torch_geometric.utils import coalesce
-
+# ?? TODO add coalesce for sparse_dim >=2
 
 class SparseTensor:
 
