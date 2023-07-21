@@ -1,11 +1,12 @@
 from torch import Tensor
+from backend.MaTensor import MaskedTensor
 from backend.SpTensor import SparseTensor
 import torch.nn as nn
-from .SpXOperator import messagepassing_tuple, pooling_tuple
+from .MaXOperator import messagepassing_tuple, pooling_tuple
 from torch_geometric.utils import degree
 import torch.nn as nn
 from utils import MLP
-from typing import List
+from typing import List, Union
 
 class SubgConv(nn.Module):
     '''
@@ -16,10 +17,10 @@ class SubgConv(nn.Module):
         self.aggr = aggr
         self.lin = MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"])
 
-    def forward(self, X: SparseTensor, A: SparseTensor, datadict: dict)->SparseTensor:
-        tX = SparseTensor(X.indices, self.lin(X.values), shape=X.shape, is_coalesced=True)
+    def forward(self, X: MaskedTensor, A: Union[MaskedTensor, SparseTensor])->MaskedTensor:
+        tX = MaskedTensor(self.lin(X.data), X.mask)
         # print(tX.nnz, A.nnz, datadict["XA_tar"].shape, datadict["XA_acd"].max(dim=-1)[0])
-        ret = messagepassing_tuple(A, tX, "XA", datadict, self.aggr)
+        ret = messagepassing_tuple(A, tX, "XA", self.aggr)
         return ret 
 
 class CrossSubgConv(nn.Module):
@@ -31,9 +32,9 @@ class CrossSubgConv(nn.Module):
         self.aggr = aggr
         self.lin = MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"])
 
-    def forward(self, X: SparseTensor, A: SparseTensor, datadict: dict)->SparseTensor:
-        tX = SparseTensor(X.indices, self.lin(X.values), shape=X.shape, is_coalesced=True)
-        return messagepassing_tuple(A, tX, "AX", datadict, self.aggr)
+    def forward(self, X: MaskedTensor, A: Union[MaskedTensor, SparseTensor])->SparseTensor:
+        tX = MaskedTensor(self.lin(X.data), X.mask)
+        return messagepassing_tuple(A, tX, "AX", self.aggr)
 
 
 class Convs(nn.Module):
@@ -58,11 +59,11 @@ class Convs(nn.Module):
         ###List of GNNs
         self.convs = nn.ModuleList(convlist)
 
-    def forward(self, X: SparseTensor, A: SparseTensor, datadict: dict)->SparseTensor:
+    def forward(self, X: MaskedTensor, A: Union[SparseTensor, MaskedTensor])->MaskedTensor:
         for conv in self.convs:
-            tX = conv(X, A, datadict)
+            tX = conv(X, A)
             if self.residual:
-                X = SparseTensor(X.indices, tX.values+X.values, X.shape, is_coalesced=True)
+                X = MaskedTensor(X.data + tX.data, mask=tX.mask, is_filled=(X.padvalue==tX.padvalue))
             else:
                 X = tX
         return X
