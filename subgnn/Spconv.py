@@ -7,9 +7,10 @@ import torch.nn as nn
 from utils import MLP
 from typing import List
 
-### GCN convolution along the graph structure
 class SubgConv(nn.Module):
-
+    '''
+    message passing within each subgraph
+    '''
     def __init__(self, emb_dim: int, mlplayer: int, aggr: str="sum", **kwargs):
         super().__init__()
         self.aggr = aggr
@@ -21,9 +22,10 @@ class SubgConv(nn.Module):
         ret = messagepassing_tuple(A, tX, "XA", datadict, self.aggr)
         return ret 
 
-### GCN convolution along the graph structure
 class CrossSubgConv(nn.Module):
-
+    '''
+    message passing across subgraph
+    '''
     def __init__(self, emb_dim: int, mlplayer: int, aggr: str="sum", **kwargs):
         super().__init__()
         self.aggr = aggr
@@ -34,7 +36,6 @@ class CrossSubgConv(nn.Module):
         return messagepassing_tuple(A, tX, "AX", datadict, self.aggr)
 
 
-### GNN to generate node embedding
 class Convs(nn.Module):
     """
     Output:
@@ -57,7 +58,7 @@ class Convs(nn.Module):
         ###List of GNNs
         self.convs = nn.ModuleList(convlist)
 
-    def forward(self, X: SparseTensor, A: SparseTensor, datadict)->SparseTensor:
+    def forward(self, X: SparseTensor, A: SparseTensor, datadict: dict)->SparseTensor:
         for conv in self.convs:
             tX = conv(X, A, datadict)
             if self.residual:
