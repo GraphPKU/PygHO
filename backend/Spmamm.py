@@ -1,9 +1,9 @@
-from MaTensor import MaskedTensor, filterinf
+from .MaTensor import MaskedTensor, filterinf
 import torch
 from torch import BoolTensor
 from typing import Optional
 from torch_scatter import scatter
-from SpTensor import SparseTensor
+from .SpTensor import SparseTensor
 
 filled_value_dict = {"sum": 0, "mean": 0, "max": -torch.inf, "min": torch.inf}
 filter_inf_ops = ["max", "min"]
@@ -66,12 +66,12 @@ if __name__ == "__main__":
     Amask = torch.rand_like(A[:, :, :, 0]) > 0.9
     MA = MaskedTensor(A, Amask)
     ind = Amask.to_sparse_coo().indices()
-    SA = SparseTensor(ind, A[ind[0], ind[1], ind[2]], shape=MA.shape, is_coalesced=True)
+    SA = SparseTensor(ind, A[ind[0], ind[1], ind[2]], shape=MA.shape)
     B = torch.rand((b, m, l, d), device=device)
     Bmask = torch.rand_like(B[:, :, :, 0]) > 0.9
     MB = MaskedTensor(B, Bmask)
     ind = Bmask.to_sparse_coo().indices()
-    SB = SparseTensor(ind, B[ind[0], ind[1], ind[2]], shape=MB.shape, is_coalesced=True)
+    SB = SparseTensor(ind, B[ind[0], ind[1], ind[2]], shape=MB.shape)
     mask = torch.ones((b, n, l), dtype=torch.bool, device=device)
     print(torch.max((spmamm(SA, MB, mask).data-torch.einsum("bnmd,bmld->bnld", MA.data, MB.data)).abs()))
     print(torch.max((maspmm(MA, SB, mask).data-torch.einsum("bnmd,bmld->bnld", MA.data, MB.data)).abs()))
