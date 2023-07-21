@@ -12,7 +12,8 @@ from torch_geometric.data import InMemoryDataset, Data
 from torch_geometric.utils import to_undirected
 from torch_geometric.datasets import TUDataset, ZINC, GNNBenchmarkDataset, QM9
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
-from subgdata.SpData import datapreprocess, KhopSampler
+from subgdata.SpData import sp_datapreprocess
+from subgdata.SpSubgSampler import KhopSampler
 import torch_geometric.transforms as T
 from torchmetrics import Accuracy, MeanAbsoluteError
 from functools import partial
@@ -168,7 +169,7 @@ class myEvaluator(Evaluator):
 
 
 def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
-    kwargs["pre_transform"] = partial(datapreprocess, subgsampler=partial(KhopSampler, hop=3), keys=["XA_acd"])
+    kwargs["pre_transform"] = partial(sp_datapreprocess, subgsampler=partial(KhopSampler, hop=3), keys=["XA_acd"])
     if name == "sr":
         dataset = SRDataset(**kwargs)
         # dataset = dataset[:2]
