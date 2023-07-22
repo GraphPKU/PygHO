@@ -50,7 +50,7 @@ $$
 for induced subgraphs
 
 $$
-Y_{ij}\leftarrow \sum_{k\in N(j, A)\cap subg2(i)} X_{ik}\Rightarrow Y\leftarrow(X\odot B)A^T
+Y_{ij}\leftarrow \sum_{k\in N(j, A)\cap subg(i)} X_{ik}\Rightarrow Y\leftarrow(X\odot B)A^T
 $$
 
 *worse case: change edge*
