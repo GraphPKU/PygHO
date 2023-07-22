@@ -17,31 +17,31 @@ torchmetrics==0.11.4
 ```
 ## Preliminary
 
-Subgraph GNNs all use tuple representations $X\in \R^{n\times n\times d}$, where $X_{ij}$ is feature of node $j$ in subgraph $i$. $X$ can be sparse or dense. For simplicity, we neglect the $d$ dimension. We can build a subgraph identity matrix $B\in \{0,1\}^{n\times n}$, $B_{ik}=1$ means $k\in subg(j)$.
+Subgraph GNNs all use tuple representations $X\in \mathbb{R}^{n\times n\times d}$, where $X_{ij}$ is feature of node $j$ in subgraph $i$. $X$ can be sparse or dense. For simplicity, we neglect the $d$ dimension. We can build a subgraph identity matrix $B\in \{0,1\}^{n\times n}$, $B_{ik}=1$ means $k\in subg(j)$.
 
 https://arxiv.org/pdf/2302.07090.pdf categorized subgraph GNNs' operators.
 
-**Single Point Operation:** $Y_{ij}\leftarrow X_{ij}, X_{ii}, X_{jj}, X_{ji} \Rightarrow Y\leftarrow X, diag(X)11^T, 11^Tdiag(X), X^T$
+**Single Point Operation:** $Y_{ij}\leftarrow X_{ij}, X_{ii}, X_{jj}, X_{ji} \mathbb{R}ightarrow Y\leftarrow X, diag(X)11^T, 11^Tdiag(X), X^T$
 
 **Global-Global Operation:** pooling on the whole graph
 $$
-Y_{ij}\leftarrow \sum_k X_{ik},\sum_k X_{kj}\Rightarrow Y\leftarrow X11^T, 11^TX
+Y_{ij}\leftarrow \sum_k X_{ik},\sum_k X_{kj}\mathbb{R}ightarrow Y\leftarrow X11^T, 11^TX
 $$
 
 **Global-Local Operation**: message passing on the whole graph
 $$
-Y_{ij}\leftarrow \sum_{k\in N(j, A)} X_{ik},\sum_{k\in N(i, A)} X_{kj} \Rightarrow
+Y_{ij}\leftarrow \sum_{k\in N(j, A)} X_{ik},\sum_{k\in N(i, A)} X_{kj} \mathbb{R}ightarrow
 Y\leftarrow AX, XA
 $$
 
 **Local-Global Operation**: pooling within subgraph. 
 $$
-Y_{ij}\leftarrow \sum_{k\in subg(i)} X_{ik}\Rightarrow Y\leftarrow (X\odot B)11^T
+Y_{ij}\leftarrow \sum_{k\in subg(i)} X_{ik}\mathbb{R}ightarrow Y\leftarrow (X\odot B)11^T
 $$
 **Local-Local Operation**: message passing in each subgraph
 for induced subgraphs
 $$
-Y_{ij}\leftarrow \sum_{k\in N(j, A)\cap subg2(i)} X_{ik}\Rightarrow Y\leftarrow(X\odot B)A^T
+Y_{ij}\leftarrow \sum_{k\in N(j, A)\cap subg2(i)} X_{ik}\mathbb{R}ightarrow Y\leftarrow(X\odot B)A^T
 $$
 *worse case: change edge*
 $$
@@ -69,7 +69,7 @@ A1 = torch.sparse_coo_tensor(indices, values, size=(n, m, d))
 ```
 
 
-* Masked tensor (backend.MaskedTensor). value $\in \R^{n\times n \times d}$. mask $\{0,1\}^{n\times n}$. mask[i, j] = True means the tuple (i, j)  is not masked.
+* Masked tensor (backend.MaskedTensor). value $\in \mathbb{R}^{n\times n \times d}$. mask $\{0,1\}^{n\times n}$. mask[i, j] = True means the tuple (i, j)  is not masked.
 
 You can create a masked tensor MaskedTensor(data, mask) as follows.
 ```
@@ -88,7 +88,7 @@ print(mt.shape)
 
 For a batch of size $b$. X is
 * Sparse tensor. indice $\in \N^{2\times nnz}$, value $\in \N ^{nnz\times d}$. With another batch tensor in $\N^{nnz}$
-* Masked tensor. value $\in \R^{b\times n\times n \times d}$. mask $\R^{b\times n\times n}$.
+* Masked tensor. value $\in \mathbb{R}^{b\times n\times n \times d}$. mask $\mathbb{R}^{b\times n\times n}$.
 
 For a batch. A is
 
@@ -103,7 +103,7 @@ example/nestedGNN and example/SSWL are examples of sparse and dense subgraph GNN
 ### Sparse Representation
 
 #### Tuple message passing
-Tuple representation $X\in \R^{n\times n\times d1}$, adjacency matrix $A\in \R^{n\times n\times d2}$. d1, d2 can be the same number or any broadcastable shape.
+Tuple representation $X\in \mathbb{R}^{n\times n\times d1}$, adjacency matrix $A\in \mathbb{R}^{n\times n\times d2}$. d1, d2 can be the same number or any broadcastable shape.
 
 * Message passing within subgraph, equivalent to $XA$. You can use 
 ```
@@ -125,7 +125,7 @@ We also directly provide some out-of-box convolution layers in  subgnn.Spconv.
 
 #### Tuple-wise operation
 
-Tuple representation $X\in \R^{n\times n\times d1}$. You have an MLP $f$. To get $f(X)$. You can use
+Tuple representation $X\in \mathbb{R}^{n\times n\times d1}$. You have an MLP $f$. To get $f(X)$. You can use
 '''
 X.tuplewiseapply(f)
 '''
@@ -143,7 +143,7 @@ subgnn.SpXOperator.unpooling_node(nodeX: Tensor, tarX: SparseTensor, dim=1)
 ### Dense Representation
 
 #### Tuple message passing
-Tuple representation $X\in \R^{B\times n\times n\times d1}$, adjacency matrix $A\in \R^{B\times n\times n\times d2}$ (sparse tensor with sparse dim=3). d1, d2 can be the same number or any broadcastable shape.
+Tuple representation $X\in \mathbb{R}^{B\times n\times n\times d1}$, adjacency matrix $A\in \mathbb{R}^{B\times n\times n\times d2}$ (sparse tensor with sparse dim=3). d1, d2 can be the same number or any broadcastable shape.
 
 * Message passing within subgraph, equivalent to $XA$. You can use 
 ```
@@ -165,7 +165,7 @@ We also directly provide some out-of-box convolution layers in  subgnn.Spconv.
 
 #### Tuple-wise operation
 
-Tuple representation $X\in \R^{n\times n\times d1}$. You have an MLP $f$. To get $f(X)$. You can use
+Tuple representation $X\in \mathbb{R}^{n\times n\times d1}$. You have an MLP $f$. To get $f(X)$. You can use
 '''
 X.tuplewiseapply(f)
 '''
