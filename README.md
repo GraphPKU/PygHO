@@ -34,7 +34,7 @@ Y_{ij}\leftarrow \sum_{k\in N(j, A)} X_{ik},\sum_{k\in N(i, A)} X_{kj} \Rightarr
 Y\leftarrow AX, XA
 $$
 
-**Local-Global Operation**: pooling with in subgraph. 
+**Local-Global Operation**: pooling within subgraph. 
 $$
 Y_{ij}\leftarrow \sum_{k\in subg(i)} X_{ik}\Rightarrow Y\leftarrow (X\odot B)11^T
 $$
@@ -55,7 +55,7 @@ Need a three order tensor $A_{jk}^{(i)}$. Not considered now.
 
 ## Data structure: SparseTensor and DenseTensor
 
-For each graph 2-Tuple Representation $X$ can have two data format. For each graph, the 2-Tuple representation is $n\times n\times d$ tensor. We have two ways to express them.
+For each graph, 2-Tuple Representation $X$ can have two data formats. For each graph, the 2-Tuple representation is $n\times n\times d$ tensor. We have two ways to express them.
 * Sparse tensor (backend.SparseTensor). indice $\in \N^{2\times nnz}$, value $\in \N ^{nnz\times d}$. 
 
 You can create a SparseTensor ( Spare(indices, values, shape) ) as follows.
@@ -71,7 +71,7 @@ A1 = torch.sparse_coo_tensor(indices, values, size=(n, m, d))
 
 * Masked tensor (backend.MaskedTensor). value $\in \R^{n\times n \times d}$. mask $\{0,1\}^{n\times n}$. mask[i, j] = True means the tuple (i, j)  is not masked.
 
-You can create a masked tensor MaskedTensor(data, mask, ) as follows.
+You can create a masked tensor MaskedTensor(data, mask) as follows.
 ```
 B = 2
 N = 3
@@ -86,19 +86,19 @@ print(mt.mask)
 print(mt.shape)
 ```
 
-For a batch of batchsize $b$. X is
+For a batch of size $b$. X is
 * Sparse tensor. indice $\in \N^{2\times nnz}$, value $\in \N ^{nnz\times d}$. With another batch tensor in $\N^{nnz}$
 * Masked tensor. value $\in \R^{b\times n\times n \times d}$. mask $\R^{b\times n\times n}$.
 
 For a batch. A is
 
-* Sparse tensor of two sparse dimension when X is sparse tensor. 
+* Sparse tensor of two sparse dimensions when X is a sparse tensor. 
 
-* Sparse tensor of three sparse dimension when X is masked tensor.
+* Sparse tensor of three sparse dimensions when X is a masked tensor.
 
 ## Basic Message passing operation.
 
-example/nestedGNN and example/SSWL are examples for sparse and dense subgraph GNNs, respectively. 
+example/nestedGNN and example/SSWL are examples of sparse and dense subgraph GNNs, respectively. 
 
 ### Sparse Representation
 
@@ -125,7 +125,7 @@ We also directly provide some out-of-box convolution layers in  subgnn.Spconv.
 
 #### Tuple-wise operation
 
-Tuple representation $X\in \R^{n\times n\times d1}$. You have a MLP $f$. To get $f(X)$. You can use
+Tuple representation $X\in \R^{n\times n\times d1}$. You have an MLP $f$. To get $f(X)$. You can use
 '''
 X.tuplewiseapply(f)
 '''
@@ -135,7 +135,7 @@ Pooling: tuple representation to dense node representation.
 ```
 subgnn.SpXOperator.pooling_tuple(X: SparseTensor, dim=1, pool: str = "sum")
 ```
-Unpooling: dense node representation to tuple representation as SparseTensor. output use the same indice as tarX.
+Unpooling: dense node representation to tuple representation as SparseTensor. Output uses the same indices as tarX.
 ```
 subgnn.SpXOperator.unpooling_node(nodeX: Tensor, tarX: SparseTensor, dim=1)
 ```
@@ -165,7 +165,7 @@ We also directly provide some out-of-box convolution layers in  subgnn.Spconv.
 
 #### Tuple-wise operation
 
-Tuple representation $X\in \R^{n\times n\times d1}$. You have a MLP $f$. To get $f(X)$. You can use
+Tuple representation $X\in \R^{n\times n\times d1}$. You have an MLP $f$. To get $f(X)$. You can use
 '''
 X.tuplewiseapply(f)
 '''
@@ -175,7 +175,7 @@ Pooling: tuple representation to dense node representation.
 ```
 subgnn.MaXOperator.pooling_tuple(X: Masked, dim=1, pool: str = "sum")
 ```
-Unpooling: dense node representation to tuple representation as SparseTensor. output use the same indice as tarX.
+Unpooling: dense node representation to tuple representation as MaskedTensor. Output uses the same mask as tarX.
 ```
 subgnn.MaXOperator.unpooling_node(nodeX: Tensor, tarX: Masked, dim=1)
 ```
@@ -195,11 +195,11 @@ kwargs={}
 kwargs["transform"] = partial(sp_datapreprocess, subgsampler=partial(KhopSampler, hop=3), keys=["XA_acd", "XX_acd", "AX_acd"])
 trn_d = ZINC("dataset/ZINC", **kwargs)
 ```
-The subgraph sampler produces tuples and their structure label like shortest path distance. You can also use your own subgraph sampler policy. * Changing the `transform=...` to `pretransform=...` can save the subgraph data and thus avoids repeated data processing, however, you need to delete the preprocessed data with a different subgraph sampler.
+The subgraph sampler produces tuples, and their structural label like shortest path distance. You can also use your own subgraph sampler policy. * Changing the `transform=...` to `pretransform=...` can save the subgraph data and thus avoids repeated data processing. However, you need to delete the preprocessed data with a different subgraph sampler.
 
-keys means some precomputed quantities used in sparse-sparse tensor multiplication. For example, if you model use XA operation, you can add "XA_acd" to key. They will accelerate computation but take more data processing time and space. 
+keys mean some precomputed quantities used in sparse-sparse tensor multiplication. For example, if your model uses XA operation, you can add "XA_acd" to the keys. It will accelerate computation but take more data processing time and space. 
 
-The transformed data have two extra properties `tupleid` of shape (2, num_tuple), `tuplefeat` of shape (2, *).
+The transformed data have two extra properties, `tupleid` of shape (2, num_tuple), `tuplefeat` of shape (2, *).
 
 To load it, you can directly use pyg's dataloader. You can build A and X tensor as follows.
 
@@ -233,7 +233,7 @@ kwargs["transform"] = partial(ma_datapreprocess, subgsampler=partial(spdsampler,
 trn_d = ZINC("dataset/ZINC", **kwargs)
 ```
 
-To load it, you can still use pyg's dataloader with follow batch.
+To load it, you can still use pyg's dataloader with follow_batch.
 
 ```
 train_loader = DataLoader(trn_d,
