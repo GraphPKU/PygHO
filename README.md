@@ -56,7 +56,7 @@ Need a three order tensor $A_{jk}^{(i)}$. Not considered now.
 ## Data structure: SparseTensor and DenseTensor
 
 For each graph, 2-Tuple Representation $X$ can have two data formats. For each graph, the 2-Tuple representation is $n\times n\times d$ tensor. We have two ways to express them.
-* Sparse tensor (backend.SparseTensor). indice $\in \N^{2\times nnz}$, value $\in \N ^{nnz\times d}$. 
+* Sparse tensor (backend.SparseTensor). indice $\in \mathbb{N}^{2\times nnz}$, value $\in \mathbb{N} ^{nnz\times d}$. 
 
 You can create a SparseTensor ( Spare(indices, values, shape) ) as follows.
 
@@ -87,7 +87,7 @@ print(mt.shape)
 ```
 
 For a batch of size $b$. X is
-* Sparse tensor. indice $\in \N^{2\times nnz}$, value $\in \N ^{nnz\times d}$. With another batch tensor in $\N^{nnz}$
+* Sparse tensor. indice $\in \mathbb{N}^{2\times nnz}$, value $\in \mathbb{N} ^{nnz\times d}$. With another batch tensor in $\mathbb{N}^{nnz}$
 * Masked tensor. value $\in \mathbb{R}^{b\times n\times n \times d}$. mask $\mathbb{R}^{b\times n\times n}$.
 
 For a batch. A is
