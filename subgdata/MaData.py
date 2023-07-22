@@ -1,3 +1,6 @@
+'''
+transform for dense data
+'''
 from torch_geometric.data import Data as PygData
 import torch
 from torch import Tensor, LongTensor, BoolTensor

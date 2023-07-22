@@ -1,3 +1,6 @@
+'''
+transform for sparse data
+'''
 from torch_geometric.data import Data as PygData
 import torch
 from typing import Any, List, Callable

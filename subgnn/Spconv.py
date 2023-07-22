@@ -1,3 +1,6 @@
+'''
+convolution layers for sparse tuple representation
+'''
 from backend.SpTensor import SparseTensor
 import torch.nn as nn
 from .SpXOperator import messagepassing_tuple, pooling_tuple

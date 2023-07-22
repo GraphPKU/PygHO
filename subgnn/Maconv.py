@@ -1,4 +1,6 @@
-from torch import Tensor
+'''
+convolution layers for dense tuple representation
+'''
 from backend.MaTensor import MaskedTensor
 from backend.SpTensor import SparseTensor
 import torch.nn as nn

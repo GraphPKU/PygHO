@@ -1,0 +1,9 @@
+networkx==2.8.4
+numpy==1.24.3
+ogb==1.3.6
+scikit_learn==1.2.2
+scipy==1.10.1
+torch==2.0.1
+torch_geometric==2.3.0
+torch_scatter==2.1.1+pt20cu118
+torchmetrics==0.11.4

@@ -9,7 +9,7 @@ from functools import partial
 from datasets import SRDataset, PlanarSATPairsDataset, GraphCountDataset, myEvaluator
 
 def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
-    kwargs["pre_transform"] = partial(ma_datapreprocess, subgsampler=partial(spdsampler, hop=4))
+    kwargs["transform"] = partial(ma_datapreprocess, subgsampler=partial(spdsampler, hop=4))
     if name == "sr":
         dataset = SRDataset(**kwargs)
         # dataset = dataset[:2]
@@ -50,7 +50,7 @@ def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
         def TU_pretransform(data):
             data.y = data.y.reshape(-1, 1).to(torch.float)
             return data
-        kwargs["pre_transform"] = T.Compose([TU_pretransform, kwargs["pre_transform"]])
+        kwargs["pre_transform"] = TU_pretransform
         dataset = TUDataset("dataset", name=name, **kwargs)
         dataset.num_tasks = 1
         return (dataset,), "fold-9-0-1", Accuracy("binary"), "bincls"
@@ -59,7 +59,7 @@ def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
             data.edge_attr = data.edge_attr.reshape(-1, 1).to(torch.long)
             data.y = data.y.reshape(-1, 1)
             return data
-        kwargs["pre_transform"] = T.Compose([ZINC_pretransform, kwargs["pre_transform"]])
+        kwargs["pre_transform"] = ZINC_pretransform, kwargs["pre_transform"]
         trn_d = ZINC("dataset/ZINC", subset=True, split="train", **kwargs)
         val_d = ZINC("dataset/ZINC", subset=True, split="val", **kwargs)
         tst_d = ZINC("dataset/ZINC", subset=True, split="test", **kwargs)
