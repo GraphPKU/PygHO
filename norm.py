@@ -40,9 +40,9 @@ class BatchNorm(nn.Module):
     def forward(self, x: Tensor):
         if x.dim() == 2:
             return self.norm(x)
-        elif x.dim() == 3:
+        elif x.dim() >= 3:
             shape = x.shape
-            x = self.norm(x.flatten(0, 1)).reshape(shape)
+            x = self.norm(x.flatten(0, -2)).reshape(shape)
             return x
         else:
             raise NotImplementedError

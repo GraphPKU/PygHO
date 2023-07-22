@@ -63,7 +63,7 @@ class Convs(nn.Module):
         for conv in self.convs:
             tX = conv(X, A)
             if self.residual:
-                X = MaskedTensor(X.data + tX.data, mask=tX.mask, is_filled=(X.padvalue==tX.padvalue))
+                X = MaskedTensor(X.data + tX.data, mask=tX.mask, is_filled=(X.padvalue==tX.padvalue) and (X.padvalue==0))
             else:
                 X = tX
         return X

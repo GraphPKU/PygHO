@@ -3,11 +3,11 @@ import torch
 from torch_geometric.loader import DataLoader
 import torch.optim as optim
 import torch.nn.functional as F
-from gnn import NestedGNN
+from NestedGnn import NestedGNN
 import argparse
 import time
 import numpy as np
-from datasets import loaddataset
+from sparsedata import loaddataset
 from norm import NormMomentumScheduler, normdict
 from typing import Callable
 import torch_geometric

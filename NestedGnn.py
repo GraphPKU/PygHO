@@ -1,15 +1,12 @@
 import torch
 from torch_geometric.nn.aggr import SumAggregation, MeanAggregation, MaxAggregation
-from torch_geometric.data import Data
 from subgnn.Spconv import Convs, SubgConv
 from subgnn.SpXOperator import pooling_tuple
 import torch.nn as nn
 from backend.SpTensor import SparseTensor
 from utils import MLP
 from Emb import x2dims, MultiEmbedding, SingleEmbedding
-from typing import List, Optional
-from torch import Tensor
-from torch_geometric.utils import degree
+from typing import List
 
 
 class InputEncoder(nn.Module):
