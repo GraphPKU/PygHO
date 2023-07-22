@@ -4,7 +4,7 @@ from subgnn.Spconv import Convs, SubgConv
 from subgnn.SpXOperator import pooling_tuple
 import torch.nn as nn
 from backend.SpTensor import SparseTensor
-from utils import MLP
+from subgnn.utils import MLP
 from Emb import x2dims, MultiEmbedding, SingleEmbedding
 from typing import List
 

@@ -2,30 +2,8 @@ import torch
 from torch import LongTensor
 from typing import Optional, Tuple
 from torch_scatter import scatter
-from .SpTensor import SparseTensor
+from .SpTensor import SparseTensor, indicehash, decodehash
 import warnings
-
-
-def combineind(a: LongTensor, b: LongTensor) -> LongTensor:
-    '''
-    a ( M)
-    b ( M)
-    hash (a, b) into a tensor of shape (M).
-    hash keeps the lexicographical order between two tuples
-    '''
-    assert a.dtype == torch.long and b.dtype == torch.long, "can only hash long tensor"
-    assert torch.all(a < (1 << 30)) and torch.all(
-        b < (1 << 30)), "this hash is not injective and may cause bug "
-    return torch.bitwise_or(torch.bitwise_left_shift(a, 32), b)
-
-
-def decomposeind(combined_ind: LongTensor) -> Tuple[LongTensor, LongTensor]:
-    '''
-    transfer hash into pairs
-    '''
-    b = torch.bitwise_and(combined_ind, 0xFFFFFFFF)
-    a = torch.bitwise_right_shift(combined_ind, 32)
-    return a, b
 
 
 def ptr2batch(ptr: LongTensor, dim_size: int) -> LongTensor:
@@ -72,11 +50,11 @@ def spspmm_ind(ind1: LongTensor, ind2: LongTensor) -> LongTensor:
     ret[2] -= offset
 
     # compute the ij pair index
-    combinedij = combineind(ind1[0][ret[1]], ind2[1][ret[2]])
+    combinedij = indicehash(torch.stack((ind1[0][ret[1]], ind2[1][ret[2]])))
     combinedij, taridx = torch.unique(combinedij,
                                       sorted=True,
                                       return_inverse=True)
-    ij = torch.stack(decomposeind(combinedij))
+    ij = decodehash(combinedij, 2)
     ret[0] = taridx
 
     sorted_idx = torch.argsort(ret[0])  # sort is optional
@@ -91,10 +69,10 @@ def spsphadamard_ind(tar_ij: LongTensor, ij: LongTensor) -> LongTensor:
       b2a of shape ij.shape[1]. ij[:, i] matches tar_ij[:, b2a[i]]. 
         if b2a<0, ij[:, i] is not matched 
     '''
-    combine_tar_ij = combineind(tar_ij[0], tar_ij[1])
+    combine_tar_ij = indicehash(tar_ij)
     assert torch.all(
         torch.diff(combine_tar_ij) > 0), "tar_ij should be sorted and coalesce"
-    combine_ij = combineind(ij[0], ij[1])
+    combine_ij = indicehash(ij)
 
     b2a = torch.clamp_min_(
         torch.searchsorted(combine_tar_ij, combine_ij, right=True) - 1, 0)
@@ -217,12 +195,10 @@ if __name__ == "__main__":
     ind2 = B.indices()
     val2 = B.values()
 
-    assert torch.all(
-        ind1 == torch.stack(decomposeind(combineind(
-            ind1[0], ind1[1])))), "combineind or decomposeind have bug"
-    assert torch.all(
-        ind2 == torch.stack(decomposeind(combineind(
-            ind2[0], ind2[1])))), "combineind or decomposeind have bug"
+    assert torch.all(ind1 == decodehash(indicehash(
+        ind1))), "combineind or decomposeind have bug"
+    assert torch.all(ind2 == decodehash(indicehash(
+        ind2))), "combineind or decomposeind have bug"
 
     C = A @ B
     C = C.coalesce()
@@ -239,9 +215,7 @@ if __name__ == "__main__":
     tar_ij = torch.stack(
         (torch.randint_like(ind1[0], n), torch.randint_like(ind1[0], l)))
 
-    tar_ij = torch.stack(
-        decomposeind(
-            torch.unique(combineind(tar_ij[0], tar_ij[1]), sorted=True)))
+    tar_ij = decodehash(torch.unique(indicehash(tar_ij, tar_ij), sorted=True))
     acd = filterij(tar_ij, ij, bcd)
     mult = val1[acd[1]] * val2[acd[2]]
     outval = scatter_add(mult, acd[0], dim_size=tar_ij.shape[1])
@@ -264,5 +238,6 @@ if __name__ == "__main__":
                                    SparseTensor.from_torch_sparse_coo(Bp))
     print(
         "debug spsp_hadamard ",
-        torch.max((torch.multiply(Ap, Bp) -
-                   spsphadamardout.to_torch_sparse_coo()).coalesce().values().abs()))
+        torch.max(
+            (torch.multiply(Ap, Bp) -
+             spsphadamardout.to_torch_sparse_coo()).coalesce().values().abs()))

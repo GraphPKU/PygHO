@@ -1,10 +1,9 @@
-from torch import Tensor
 from backend.SpTensor import SparseTensor
 import torch.nn as nn
 from .SpXOperator import messagepassing_tuple, pooling_tuple
 from torch_geometric.utils import degree
 import torch.nn as nn
-from utils import MLP
+from .utils import MLP
 from typing import List
 
 class SubgConv(nn.Module):
@@ -35,6 +34,21 @@ class CrossSubgConv(nn.Module):
         tX = SparseTensor(X.indices, self.lin(X.values), shape=X.shape, is_coalesced=True)
         return messagepassing_tuple(A, tX, "AX", datadict, self.aggr)
 
+
+class TwoFWLConv(nn.Module):
+    '''
+    output = X1X2
+    '''
+    def __init__(self, emb_dim: int, mlplayer: int, aggr: str="sum", **kwargs):
+        super().__init__()
+        self.aggr = aggr
+        self.lin1 = MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"])
+        self.lin2 = MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"])
+
+    def forward(self, X: SparseTensor, datadict: dict)->SparseTensor:
+        X1 = SparseTensor(X.indices, self.lin1(X.values), shape=X.shape, is_coalesced=True)
+        X2 = SparseTensor(X.indices, self.lin2(X.values), shape=X.shape, is_coalesced=True)
+        return messagepassing_tuple(X1, X2, "XX", datadict, self.aggr)
 
 class Convs(nn.Module):
     """

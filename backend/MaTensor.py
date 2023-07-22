@@ -1,12 +1,14 @@
 import torch
 from torch import Tensor, BoolTensor
-from typing import Optional, List
+from typing import Optional
 # merge torch.nested or torch.masked API in the long run.
 # Maybe we can let inherit torch.Tensor, but seems very complex https://pytorch.org/docs/stable/notes/extending.html#subclassing-torch-tensor
 
 
-def filterinf(X: Tensor, filled_value: float=0):
-    return torch.where(torch.logical_or(X==torch.inf, X==-torch.inf), filled_value, X)
+def filterinf(X: Tensor, filled_value: float = 0):
+    return torch.where(torch.logical_or(X == torch.inf, X == -torch.inf),
+                       filled_value, X)
+
 
 class MaskedTensor:
 
@@ -27,7 +29,7 @@ class MaskedTensor:
         mask = mask.expand_as(data)
         self.__mask = mask
         if not is_filled:
-            self.__padvalue = torch.inf if padvalue != torch.inf else - torch.inf
+            self.__padvalue = torch.inf if padvalue != torch.inf else -torch.inf
             self.fill_masked_(padvalue)
         else:
             self.__padvalue = padvalue
@@ -83,7 +85,8 @@ class MaskedTensor:
                 torch.sum(self.mask, dim=dim, keepdim=keepdim), 1)
             return self.sum(dim, keepdim) / gsize
         else:
-            return self.sum(dim, keepdim) / torch.clamp_min_(torch.sum(self.mask), 1)
+            return self.sum(dim, keepdim) / torch.clamp_min_(
+                torch.sum(self.mask), 1)
 
     def max(self, dim: Optional[int] = None, keepdim: bool = False) -> Tensor:
         tmp = self.fill_masked(-torch.inf)

@@ -1,7 +1,7 @@
 from torch_geometric.data import Data as PygData
 import torch
 from torch import Tensor, LongTensor, BoolTensor
-from typing import Any, List, Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 from backend.SpTensor import SparseTensor
 from torch_geometric.utils import coalesce
 import torch
@@ -86,13 +86,14 @@ def to_dense_x(nodeX: Tensor,
 
     idx = torch.arange(max_num_nodes, device=nodeX.device).unsqueeze(0)
     idx = idx + Xptr[:-1].reshape(-1, 1)
-    idx.clamp_max_(Xptr[-1]-1)
+    idx.clamp_max_(Xptr[-1] - 1)
 
     ret = nodeX[idx]
     mask = torch.ones((batch_size, max_num_nodes + 1),
                       dtype=torch.bool,
                       device=nodeX.device)
-    mask[torch.arange(batch_size, device=nodeX.device), torch.diff(Xptr)] = False
+    mask[torch.arange(batch_size, device=nodeX.device),
+         torch.diff(Xptr)] = False
     mask = mask.cummin(dim=-1)[0]
     return ret, mask[:, :-1]
 
@@ -111,8 +112,9 @@ def to_dense_tuplefeat(tuplefeat: Tensor,
     num_nodes = torch.diff(Xptr)
 
     singleidx = torch.arange((max_num_nodes), device=tuplefeat.device)
-    fullidx = tuplefeatptr[:-1].reshape(-1, 1, 1) + singleidx.reshape(1, -1, 1) * num_nodes.reshape(-1, 1, 1) + singleidx.reshape(1, 1, -1)
-    fullidx.clamp_max_(tuplefeat.shape[0]-1)
+    fullidx = tuplefeatptr[:-1].reshape(-1, 1, 1) + singleidx.reshape(
+        1, -1, 1) * num_nodes.reshape(-1, 1, 1) + singleidx.reshape(1, 1, -1)
+    fullidx.clamp_max_(tuplefeat.shape[0] - 1)
     ret = tuplefeat[fullidx]
     return ret
 
@@ -126,13 +128,21 @@ def batch2dense(datadict: dict,
     datadict["x"], datadict["nodemask"] = x, nodemask
     batch_size, max_num_nodes = x.shape[0], x.shape[1]
     if denseadj:
-        datadict["A"] = to_dense_adj(datadict["edge_index"], datadict["edge_index_batch"],
-                         datadict["edge_attr"], max_num_nodes, batch_size)
+        datadict["A"] = to_dense_adj(datadict["edge_index"],
+                                     datadict["edge_index_batch"],
+                                     datadict["edge_attr"], max_num_nodes,
+                                     batch_size)
     else:
-        datadict["A"] = to_sparse_adj(datadict["edge_index"], datadict["edge_index_batch"],
-                          datadict["edge_attr"], max_num_nodes, batch_size)
-    datadict["tuplefeat"] = to_dense_tuplefeat(datadict["tuplefeat"], datadict["ptr"], datadict["tuplefeat_ptr"], max_num_nodes, batch_size)
-    datadict["tuplemask"] = torch.logical_and(nodemask.unsqueeze(1), nodemask.unsqueeze(2)) 
+        datadict["A"] = to_sparse_adj(datadict["edge_index"],
+                                      datadict["edge_index_batch"],
+                                      datadict["edge_attr"], max_num_nodes,
+                                      batch_size)
+    datadict["tuplefeat"] = to_dense_tuplefeat(datadict["tuplefeat"],
+                                               datadict["ptr"],
+                                               datadict["tuplefeat_ptr"],
+                                               max_num_nodes, batch_size)
+    datadict["tuplemask"] = torch.logical_and(nodemask.unsqueeze(1),
+                                              nodemask.unsqueeze(2))
     return datadict
 
 
@@ -159,18 +169,28 @@ if __name__ == "__main__":
     edge_index1 = torch.randint(num_nodes1, size=(2, num_edges1))
     edge_attr1 = torch.arange(num_edges1)
     x1 = torch.arange(num_nodes1)
-    tuplefeat1 =  torch.ones((num_nodes1, num_nodes1)).flatten()
-    data1 = MaSubgData(x=x1, tuplefeat=tuplefeat1, edge_index=edge_index1, edge_attr=edge_attr1, num_nodes=num_nodes1)
+    tuplefeat1 = torch.ones((num_nodes1, num_nodes1)).flatten()
+    data1 = MaSubgData(x=x1,
+                       tuplefeat=tuplefeat1,
+                       edge_index=edge_index1,
+                       edge_attr=edge_attr1,
+                       num_nodes=num_nodes1)
     num_nodes2 = 5
     num_edges2 = 7
     edge_index2 = torch.randint(num_nodes2, size=(2, num_edges2))
     edge_attr2 = torch.arange(num_edges2)
     x2 = torch.arange(num_nodes2)
-    tuplefeat2 =  2*torch.ones((num_nodes2, num_nodes2)).flatten()
-    data2 = MaSubgData(x=x2, tuplefeat=tuplefeat2, edge_index=edge_index2, edge_attr=edge_attr2, num_nodes=num_nodes2)
+    tuplefeat2 = 2 * torch.ones((num_nodes2, num_nodes2)).flatten()
+    data2 = MaSubgData(x=x2,
+                       tuplefeat=tuplefeat2,
+                       edge_index=edge_index2,
+                       edge_attr=edge_attr2,
+                       num_nodes=num_nodes2)
     from torch_geometric.data import Batch as PygBatch
-    batch = PygBatch.from_data_list([data1, data2], follow_batch=["edge_index", "tuplefeat"])
+    batch = PygBatch.from_data_list([data1, data2],
+                                    follow_batch=["edge_index", "tuplefeat"])
     datadict = batch.to_dict()
     datadict = batch2dense(datadict)
     print(data1, data2)
-    print(datadict["tuplefeat"], datadict["x"], datadict["A"], datadict["nodemask"], datadict["tuplemask"])
+    print(datadict["tuplefeat"], datadict["x"], datadict["A"],
+          datadict["nodemask"], datadict["tuplemask"])

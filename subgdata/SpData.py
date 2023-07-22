@@ -4,6 +4,7 @@ from typing import Any, List, Callable
 from backend.Spspmm import spspmm_ind, filterij
 from torch_geometric.utils import coalesce
 
+
 class SpSubgData(PygData):
 
     def __inc__(self, key: str, value: Any, *args, **kwargs):
@@ -36,8 +37,10 @@ class SpSubgData(PygData):
 
 
 def sp_datapreprocess(data: PygData, subgsampler: Callable,
-                   keys: List[str]) -> SpSubgData:
-    data.edge_index, data.edge_attr = coalesce(data.edge_index, data.edge_attr, num_nodes=data.num_nodes)
+                      keys: List[str]) -> SpSubgData:
+    data.edge_index, data.edge_attr = coalesce(data.edge_index,
+                                               data.edge_attr,
+                                               num_nodes=data.num_nodes)
     tupleid, tuplefeat = subgsampler(data)
     datadict = data.to_dict()
     datadict.update({

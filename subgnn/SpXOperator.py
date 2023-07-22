@@ -1,4 +1,3 @@
-import torch
 from torch import Tensor
 from backend.Spspmm import spspmm
 from backend.Spmm import spmm

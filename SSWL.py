@@ -6,7 +6,7 @@ from subgnn.MaXOperator import pooling_tuple
 from backend.MaTensor import MaskedTensor
 from backend.SpTensor import SparseTensor
 import torch.nn as nn
-from utils import MLP
+from subgnn.utils import MLP
 from Emb import SingleEmbedding, MultiEmbedding, x2dims
 from typing import List
 

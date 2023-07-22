@@ -2,35 +2,39 @@ import torch
 from typing import List, Optional, Tuple
 from torch import LongTensor, Tensor
 from torch_scatter import scatter
-# ?? TODO add coalesce for sparse_dim >=2
 
-def indicehash(indice: LongTensor, n: Optional[int]=None)->LongTensor:
+
+def indicehash(indice: LongTensor) -> LongTensor:
     assert indice.ndim == 2
     sparse_dim = indice.shape[0]
-    interval = (64//sparse_dim)
-    n = n if not (n is None) else torch.max(indice).item()+1
-    assert n < (1<<interval)
+    interval = (63 // sparse_dim)
+    assert torch.max(indice).item() < (
+        1 << interval), "too large indice, hash is not injective"
 
-    eihash = indice[sparse_dim-1].clone()
+    eihash = indice[sparse_dim - 1].clone()
     for i in range(1, sparse_dim):
-        eihash.bitwise_or_(indice[sparse_dim-1-i].bitwise_left_shift(interval*i)) 
+        eihash.bitwise_or_(indice[sparse_dim - 1 - i].bitwise_left_shift(
+            interval * i))
     return eihash
+
 
 def decodehash(indhash: LongTensor, sparse_dim: int) -> LongTensor:
     '''
     transfer hash into pairs
     '''
-    interval = (64//sparse_dim)
-    mask = eval("0b"+"1"*interval)
-    offset = (sparse_dim-1-torch.arange(sparse_dim, device=indhash.device)).unsqueeze(-1) * interval
-    ret = torch.bitwise_right_shift(indhash.unsqueeze(0), offset).bitwise_and_(mask)
+    interval = (63 // sparse_dim)
+    mask = eval("0b" + "1" * interval)
+    offset = (sparse_dim - 1 - torch.arange(
+        sparse_dim, device=indhash.device)).unsqueeze(-1) * interval
+    ret = torch.bitwise_right_shift(indhash.unsqueeze(0),
+                                    offset).bitwise_and_(mask)
     return ret
 
-def coalesce(
-    edge_index: LongTensor,
-    edge_attr: Optional[Tensor]=None,
-    num_nodes: Optional[int]=None,
-    reduce: str = 'add') -> Tuple[Tensor, Optional[Tensor]]:
+
+def coalesce(edge_index: LongTensor,
+             edge_attr: Optional[Tensor] = None,
+             num_nodes: Optional[int] = None,
+             reduce: str = 'add') -> Tuple[Tensor, Optional[Tensor]]:
     """Row-wise sorts :obj:`edge_index` and removes its duplicated entries.
     Duplicate entries in :obj:`edge_attr` are merged by scattering them
     together according to the given :obj:`reduce` option.
@@ -86,15 +90,18 @@ def coalesce(
         tensor([1., 1., 1.]))
     """
     sparsedim = edge_index.shape[0]
-    eihash = indicehash(edge_index, num_nodes)
+    eihash = indicehash(edge_index)
     eihash, idx = torch.unique(eihash, return_inverse=True)
     edge_index = decodehash(eihash, sparsedim)
     if edge_attr is None:
         return edge_index, None
     else:
-        edge_attr = scatter(edge_attr, idx, dim=0, dim_size=eihash.shape[0], reduce=reduce)
+        edge_attr = scatter(edge_attr,
+                            idx,
+                            dim=0,
+                            dim_size=eihash.shape[0],
+                            reduce=reduce)
         return edge_index, edge_attr
-
 
 
 class SparseTensor:
@@ -159,9 +166,11 @@ class SparseTensor:
         assert A.is_sparse, "from_torch_sparse_coo converts a torch.sparse_coo_tensor to SparseTensor"
         ret = cls(A._indices(), A._values(), A.shape, A.is_coalesced())
         return ret
-    
+
     def to_torch_sparse_coo(self):
-        ret = torch.sparse_coo_tensor(self.indices, self.values, size=self.shape)
+        ret = torch.sparse_coo_tensor(self.indices,
+                                      self.values,
+                                      size=self.shape)
         ret = ret._coalesced_(self.is_coalesced())
         return ret
 
@@ -191,16 +200,17 @@ if __name__ == "__main__":
     A2cf = SparseTensor.from_torch_sparse_coo(A1c)
     print("debug from_torch_sparse_coo ", torch.max(
         (A2.indices - A2cf.indices)), torch.max((A2.values - A2cf.values)))
-    
+
     A1t = A2.to_torch_sparse_coo()
-    print("debug from_torch_sparse_coo ", (A1t-A1).coalesce())
+    print("debug from_torch_sparse_coo ", (A1t - A1).coalesce())
 
     print("should of same shape and nnz ", A1c, A1t, A2, A2f, A2cf, sep="\n")
 
     # 3D SparseTensor
     n, m, l, nnz, d = 2, 3, 5, 73, 7
     indices = torch.stack(
-        (torch.randint(0, n, (nnz, )), torch.randint(0, m, (nnz, )), torch.randint(0, l, (nnz, ))))
+        (torch.randint(0, n, (nnz, )), torch.randint(0, m, (nnz, )),
+         torch.randint(0, l, (nnz, ))))
     values = torch.randn((nnz, d))
 
     A1 = torch.sparse_coo_tensor(indices, values, size=(n, m, l, d))
@@ -218,8 +228,9 @@ if __name__ == "__main__":
     A2cf = SparseTensor.from_torch_sparse_coo(A1c)
     print("debug from_torch_sparse_coo ", torch.max(
         (A2.indices - A2cf.indices)), torch.max((A2.values - A2cf.values)))
-    
+
     A1t = A2.to_torch_sparse_coo()
-    print("debug from_torch_sparse_coo ", (A1t-A1).coalesce().values().abs().max())
+    print("debug from_torch_sparse_coo ",
+          (A1t - A1).coalesce().values().abs().max())
 
     print("should of same shape and nnz ", A1c, A1t, A2, A2f, A2cf, sep="\n")

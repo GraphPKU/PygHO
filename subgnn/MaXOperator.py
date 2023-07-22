@@ -3,7 +3,6 @@ from torch import Tensor
 from backend.SpTensor import SparseTensor
 from backend.Spmamm import spmamm, maspmm
 from backend.Mamamm import mamamm, mamm, mmamm
-from backend.Spmm import spmm
 from typing import Union
 from backend.MaTensor import MaskedTensor
 

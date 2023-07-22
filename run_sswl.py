@@ -7,7 +7,7 @@ import argparse
 import time
 import numpy as np
 from densedata import loaddataset
-from norm import NormMomentumScheduler, normdict
+from subgnn.utils import NormMomentumScheduler, normdict
 from typing import Callable
 from subgdata.MaData import batch2dense
 

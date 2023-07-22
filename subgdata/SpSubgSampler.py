@@ -8,6 +8,7 @@ from torch_geometric.utils.num_nodes import maybe_num_nodes
 from typing import Tuple
 from torch_geometric.utils import coalesce
 
+
 def k_hop_subgraph(
     node_idx: Union[int, List[int], LongTensor],
     num_hops: int,
@@ -125,5 +126,8 @@ def KhopSampler(data: PygData, hop: int = 2) -> Tuple[LongTensor, LongTensor]:
                 ))
     subgbatch = PygBatch.from_data_list(subgraphs)
     tupleid, tuplefeat = subgbatch.subg_nodeidx.t(), subgbatch.x
-    tupleid, tuplefeat = coalesce(tupleid, tuplefeat, num_nodes=data.num_nodes, reduce="min")
+    tupleid, tuplefeat = coalesce(tupleid,
+                                  tuplefeat,
+                                  num_nodes=data.num_nodes,
+                                  reduce="min")
     return tupleid, tuplefeat

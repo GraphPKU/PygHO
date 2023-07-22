@@ -8,6 +8,7 @@ from .SpTensor import SparseTensor
 filled_value_dict = {"sum": 0, "mean": 0, "max": -torch.inf, "min": torch.inf}
 filter_inf_ops = ["max", "min"]
 
+
 def spmamm(A: SparseTensor,
            B: MaskedTensor,
            mask: Optional[BoolTensor] = None,
@@ -20,7 +21,8 @@ def spmamm(A: SparseTensor,
     b, n = A.shape[0], A.shape[1]
     bij = A.indices
     Aval = A.values
-    mult = torch.einsum("z...,zm...->zm...", Aval, B.fill_masked(filled_value_dict[aggr])[bij[0], bij[2]])
+    mult = torch.einsum("z...,zm...->zm...", Aval,
+                        B.fill_masked(filled_value_dict[aggr])[bij[0], bij[2]])
     val = scatter(mult,
                   bij[0] * n + bij[1],
                   dim=0,
@@ -44,7 +46,9 @@ def maspmm(B: MaskedTensor,
     b, n = A.shape[0], A.shape[2]
     bij = A.indices
     Aval = A.values
-    mult = torch.einsum("z...,zm...->zm...", Aval, B.fill_masked(filled_value_dict[aggr]).transpose(1, 2)[bij[0], bij[1]])
+    mult = torch.einsum(
+        "z...,zm...->zm...", Aval,
+        B.fill_masked(filled_value_dict[aggr]).transpose(1, 2)[bij[0], bij[1]])
     val = scatter(mult,
                   bij[0] * n + bij[2],
                   dim=0,
@@ -73,5 +77,9 @@ if __name__ == "__main__":
     ind = Bmask.to_sparse_coo().indices()
     SB = SparseTensor(ind, B[ind[0], ind[1], ind[2]], shape=MB.shape)
     mask = torch.ones((b, n, l), dtype=torch.bool, device=device)
-    print(torch.max((spmamm(SA, MB, mask).data-torch.einsum("bnmd,bmld->bnld", MA.data, MB.data)).abs()))
-    print(torch.max((maspmm(MA, SB, mask).data-torch.einsum("bnmd,bmld->bnld", MA.data, MB.data)).abs()))
+    print(
+        torch.max((spmamm(SA, MB, mask).data -
+                   torch.einsum("bnmd,bmld->bnld", MA.data, MB.data)).abs()))
+    print(
+        torch.max((maspmm(MA, SB, mask).data -
+                   torch.einsum("bnmd,bmld->bnld", MA.data, MB.data)).abs()))
