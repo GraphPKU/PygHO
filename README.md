@@ -21,33 +21,45 @@ Subgraph GNNs all use tuple representations $X\in \mathbb{R}^{n\times n\times d}
 
 https://arxiv.org/pdf/2302.07090.pdf categorized subgraph GNNs' operators.
 
-**Single Point Operation:** $Y_{ij}\leftarrow X_{ij}, X_{ii}, X_{jj}, X_{ji} \mathbb{R}ightarrow Y\leftarrow X, diag(X)11^T, 11^Tdiag(X), X^T$
+**Single Point Operation:** 
+
+$$
+Y_{ij}\leftarrow X_{ij}, X_{ii}, X_{jj}, X_{ji} \Rightarrow Y\leftarrow X, diag(X)11^T, 11^Tdiag(X), X^T
+$$
 
 **Global-Global Operation:** pooling on the whole graph
+
 $$
-Y_{ij}\leftarrow \sum_k X_{ik},\sum_k X_{kj}\mathbb{R}ightarrow Y\leftarrow X11^T, 11^TX
+Y_{ij}\leftarrow \sum_k X_{ik},\sum_k X_{kj}\Rightarrow Y\leftarrow X11^T, 11^TX
 $$
 
 **Global-Local Operation**: message passing on the whole graph
+
 $$
-Y_{ij}\leftarrow \sum_{k\in N(j, A)} X_{ik},\sum_{k\in N(i, A)} X_{kj} \mathbb{R}ightarrow
+Y_{ij}\leftarrow \sum_{k\in N(j, A)} X_{ik},\sum_{k\in N(i, A)} X_{kj} \Rightarrow
 Y\leftarrow AX, XA
 $$
 
 **Local-Global Operation**: pooling within subgraph. 
+
 $$
-Y_{ij}\leftarrow \sum_{k\in subg(i)} X_{ik}\mathbb{R}ightarrow Y\leftarrow (X\odot B)11^T
+Y_{ij}\leftarrow \sum_{k\in subg(i)} X_{ik}\Rightarrow Y\leftarrow (X\odot B)11^T
 $$
+
 **Local-Local Operation**: message passing in each subgraph
 for induced subgraphs
+
 $$
-Y_{ij}\leftarrow \sum_{k\in N(j, A)\cap subg2(i)} X_{ik}\mathbb{R}ightarrow Y\leftarrow(X\odot B)A^T
+Y_{ij}\leftarrow \sum_{k\in N(j, A)\cap subg2(i)} X_{ik}\Rightarrow Y\leftarrow(X\odot B)A^T
 $$
+
 *worse case: change edge*
+
 $$
 Y_{ij}\leftarrow \sum_{k\in N(j, A^{(i)})} X_{ik}\\
 =\sum_{k}A_{jk}^{(i)}X_{ik}\\
 $$
+
 Need a three order tensor $A_{jk}^{(i)}$. Not considered now.
 
 
