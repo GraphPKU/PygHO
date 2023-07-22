@@ -9,32 +9,49 @@ import torch.nn as nn
 from .utils import MLP
 from typing import List
 
+
 class SubgConv(nn.Module):
     '''
     message passing within each subgraph
     '''
-    def __init__(self, emb_dim: int, mlplayer: int, aggr: str="sum", **kwargs):
+
+    def __init__(self,
+                 emb_dim: int,
+                 mlplayer: int,
+                 aggr: str = "sum",
+                 **kwargs):
         super().__init__()
         self.aggr = aggr
         self.lin = MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"])
 
-    def forward(self, X: SparseTensor, A: SparseTensor, datadict: dict)->SparseTensor:
-        tX = SparseTensor(X.indices, self.lin(X.values), shape=X.shape, is_coalesced=True)
+    def forward(self, X: SparseTensor, A: SparseTensor,
+                datadict: dict) -> SparseTensor:
+        tX = X.tuplewiseapply(self.lin)
         # print(tX.nnz, A.nnz, datadict["XA_tar"].shape, datadict["XA_acd"].max(dim=-1)[0])
         ret = messagepassing_tuple(A, tX, "XA", datadict, self.aggr)
-        return ret 
+        return ret
+
 
 class CrossSubgConv(nn.Module):
     '''
     message passing across subgraph
     '''
-    def __init__(self, emb_dim: int, mlplayer: int, aggr: str="sum", **kwargs):
+
+    def __init__(self,
+                 emb_dim: int,
+                 mlplayer: int,
+                 aggr: str = "sum",
+                 **kwargs):
         super().__init__()
         self.aggr = aggr
         self.lin = MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"])
 
-    def forward(self, X: SparseTensor, A: SparseTensor, datadict: dict)->SparseTensor:
-        tX = SparseTensor(X.indices, self.lin(X.values), shape=X.shape, is_coalesced=True)
+    def forward(self, X: SparseTensor, A: SparseTensor,
+                datadict: dict) -> SparseTensor:
+        tX = SparseTensor(X.indices,
+                          self.lin(X.values),
+                          shape=X.shape,
+                          is_coalesced=True)
         return messagepassing_tuple(A, tX, "AX", datadict, self.aggr)
 
 
@@ -42,26 +59,30 @@ class TwoFWLConv(nn.Module):
     '''
     output = X1X2
     '''
-    def __init__(self, emb_dim: int, mlplayer: int, aggr: str="sum", **kwargs):
+
+    def __init__(self,
+                 emb_dim: int,
+                 mlplayer: int,
+                 aggr: str = "sum",
+                 **kwargs):
         super().__init__()
         self.aggr = aggr
         self.lin1 = MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"])
         self.lin2 = MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"])
 
-    def forward(self, X: SparseTensor, datadict: dict)->SparseTensor:
-        X1 = SparseTensor(X.indices, self.lin1(X.values), shape=X.shape, is_coalesced=True)
-        X2 = SparseTensor(X.indices, self.lin2(X.values), shape=X.shape, is_coalesced=True)
+    def forward(self, X: SparseTensor, datadict: dict) -> SparseTensor:
+        X1 = X.tuplewiseapply(self.lin1)
+        X2 = X.tuplewiseapply(self.lin2)
         return messagepassing_tuple(X1, X2, "XX", datadict, self.aggr)
+
 
 class Convs(nn.Module):
     """
     Output:
         node representations
     """
-    def __init__(self,
-                 convlist: List[nn.Module],
-                 residual=False,
-                 **kwargs):
+
+    def __init__(self, convlist: List[nn.Module], residual=False, **kwargs):
         '''
             emb_dim (int): node embedding dimensionality
             num_layer (int): number of GNN message passing layers
@@ -75,11 +96,12 @@ class Convs(nn.Module):
         ###List of GNNs
         self.convs = nn.ModuleList(convlist)
 
-    def forward(self, X: SparseTensor, A: SparseTensor, datadict: dict)->SparseTensor:
+    def forward(self, X: SparseTensor, A: SparseTensor,
+                datadict: dict) -> SparseTensor:
         for conv in self.convs:
-            tX = conv(X, A, datadict)
+            tX: SparseTensor = conv(X, A, datadict)
             if self.residual:
-                X = SparseTensor(X.indices, tX.values+X.values, X.shape, is_coalesced=True)
+                X = tX.tuplewiseapply(lambda val: val + X.values)
             else:
                 X = tX
         return X

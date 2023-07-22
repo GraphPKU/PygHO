@@ -26,7 +26,7 @@ class SubgConv(nn.Module):
 
     def forward(self, X: MaskedTensor, A: Union[MaskedTensor,
                                                 SparseTensor]) -> MaskedTensor:
-        tX = MaskedTensor(self.lin(X.data), X.mask)
+        tX = X.tuplewiseapply(self.lin)
         # print(tX.nnz, A.nnz, datadict["XA_tar"].shape, datadict["XA_acd"].max(dim=-1)[0])
         ret = messagepassing_tuple(A, tX, "XA", self.aggr)
         return ret
@@ -48,7 +48,7 @@ class CrossSubgConv(nn.Module):
 
     def forward(self, X: MaskedTensor, A: Union[MaskedTensor,
                                                 SparseTensor]) -> SparseTensor:
-        tX = MaskedTensor(self.lin(X.data), X.mask)
+        tX = X.tuplewiseapply(self.lin)
         return messagepassing_tuple(A, tX, "AX", self.aggr)
 
 
@@ -68,8 +68,8 @@ class TwoFWLConv(nn.Module):
         self.lin2 = MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"])
 
     def forward(self, X: MaskedTensor) -> SparseTensor:
-        X1 = MaskedTensor(self.lin1(X.data), X.mask)
-        X2 = MaskedTensor(self.lin2(X.data), X.mask)
+        X1 = X.tuplewiseapply(self.lin1)
+        X2 = X.tuplewiseapply(self.lin2)
         return messagepassing_tuple(X1, X2, "XX", self.aggr)
 
 
@@ -96,12 +96,9 @@ class Convs(nn.Module):
     def forward(self, X: MaskedTensor, A: Union[SparseTensor,
                                                 MaskedTensor]) -> MaskedTensor:
         for conv in self.convs:
-            tX = conv(X, A)
+            tX: MaskedTensor = conv(X, A)
             if self.residual:
-                X = MaskedTensor(X.data + tX.data,
-                                 mask=tX.mask,
-                                 is_filled=(X.padvalue == tX.padvalue)
-                                 and (X.padvalue == 0))
+                X = tX.tuplewiseapply(lambda x: x + X.data)
             else:
                 X = tX
         return X

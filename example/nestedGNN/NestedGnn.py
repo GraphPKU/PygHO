@@ -148,8 +148,6 @@ class NestedGNN(nn.Module):
         TODO: !warning input must be coalesced
         '''
         datadict = self.data_encoder(datadict)
-        datadict["XA_tar"] = datadict["tupleid"]
-        #datadict["XA_acd"] = None
         A = SparseTensor(datadict["edge_index"],
                          datadict["edge_attr"],
                          shape=[datadict["num_nodes"], datadict["num_nodes"]] +

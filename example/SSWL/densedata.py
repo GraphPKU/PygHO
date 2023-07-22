@@ -59,7 +59,7 @@ def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
             data.edge_attr = data.edge_attr.reshape(-1, 1).to(torch.long)
             data.y = data.y.reshape(-1, 1)
             return data
-        kwargs["pre_transform"] = ZINC_pretransform, kwargs["pre_transform"]
+        kwargs["pre_transform"] = ZINC_pretransform
         trn_d = ZINC("dataset/ZINC", subset=True, split="train", **kwargs)
         val_d = ZINC("dataset/ZINC", subset=True, split="val", **kwargs)
         tst_d = ZINC("dataset/ZINC", subset=True, split="test", **kwargs)

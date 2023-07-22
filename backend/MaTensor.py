@@ -1,6 +1,6 @@
 import torch
 from torch import Tensor, BoolTensor
-from typing import Optional
+from typing import Optional, Callable
 # merge torch.nested or torch.masked API in the long run.
 # Maybe we can let inherit torch.Tensor, but seems very complex https://pytorch.org/docs/stable/notes/extending.html#subclassing-torch-tensor
 
@@ -24,6 +24,7 @@ class MaskedTensor:
         assert data.shape[:mask.
                           ndim] == mask.shape, "data and mask's first dimensions should match"
         self.__data = data
+        self.__rawmask = mask
         while mask.ndim < data.ndim:
             mask = mask.unsqueeze(-1)
         mask = mask.expand_as(data)
@@ -33,15 +34,21 @@ class MaskedTensor:
             self.fill_masked_(padvalue)
         else:
             self.__padvalue = padvalue
+         
 
     def fill_masked_(self, val: float = 0):
+        '''
+        inplace fill the masked values
+        '''
         if self.padvalue == val:
             return
         self.__padvalue = val
-        self.__data = self.__data.masked_fill(torch.logical_not(self.__mask),
-                                              val)  # can be inplace?
+        self.__data = self.__data.masked_fill(torch.logical_not(self.__mask),val)
 
     def fill_masked(self, val: float = 0) -> Tensor:
+        '''
+        return a tensor with masked values filled with val.
+        '''
         if self.__padvalue == val:
             return self.data
         return torch.where(self.mask, self.data, val)
@@ -106,6 +113,9 @@ class MaskedTensor:
             ret = torch.min(tmp, dim=dim, keepdim=keepdim)[0]
         return filterinf(ret)
 
+    def tuplewiseapply(self, func: Callable):
+        ndata = func(self.data)
+        return MaskedTensor(ndata, self.__rawmask)
 
 if __name__ == "__main__":
     A = torch.tensor([-torch.inf, 0, torch.inf, 1, 2, -torch.inf, 3])
@@ -124,3 +134,4 @@ if __name__ == "__main__":
     print(mt.max(0), mt.min(0), mt.sum(0), mt.mean(0))
     print(mt.max(), mt.min(), mt.sum(), mt.mean())
     print(mt.fill_masked(1))
+    print(mt.tuplewiseapply(lambda x: x + torch.ones_like(x)).data)

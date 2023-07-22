@@ -20,21 +20,21 @@ def messagepassing_tuple(A: SparseTensor,
                       aggr,
                       acd=datadict.get(f"{key}_acd", None),
                       bcd=datadict.get(f"{key}_bcd", None),
-                      tar_ij=datadict.get(f"{key}_tar", None))
+                      tar_ij=datadict.get(f"tupleid", None))
     elif key == "XA":
         return spspmm(X,
                       A,
                       aggr,
                       acd=datadict.get(f"{key}_acd", None),
                       bcd=datadict.get(f"{key}_bcd", None),
-                      tar_ij=datadict.get(f"{key}_tar", None))
+                      tar_ij=datadict.get(f"tupleid", None))
     elif key == "XX":
         return spspmm(A,
                       X,
                       aggr,
                       acd=datadict.get(f"{key}_acd", None),
                       bcd=datadict.get(f"{key}_bcd", None),
-                      tar_ij=datadict.get(f"{key}_tar", None))
+                      tar_ij=datadict.get(f"tupleid", None))
     else:
         raise NotImplementedError
 
@@ -57,6 +57,7 @@ def unpooling_node(nodeX: Tensor, tarX: SparseTensor, dim=1) -> SparseTensor:
     '''
     X_{ij} = nodeX_{i} for dim = 1
     X_{ij} = nodeX_{j} for dim = 0 
+    tarX is used for provide indice for the output
     '''
     assert tarX.sparse_dim == 2, "high-order sparse tensor not implemented"
     assert dim in [0, 1], "can only pool sparse dim "

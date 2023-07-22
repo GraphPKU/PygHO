@@ -1,5 +1,5 @@
 import torch
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Callable
 from torch import LongTensor, Tensor
 from torch_scatter import scatter
 
@@ -50,44 +50,6 @@ def coalesce(edge_index: LongTensor,
         reduce (str, optional): The reduce operation to use for merging edge
             features (:obj:`"add"`, :obj:`"mean"`, :obj:`"min"`, :obj:`"max"`,
             :obj:`"mul"`, :obj:`"any"`). (default: :obj:`"add"`)
-        is_sorted (bool, optional): If set to :obj:`True`, will expect
-            :obj:`edge_index` to be already sorted row-wise.
-        sort_by_row (bool, optional): If set to :obj:`False`, will sort
-            :obj:`edge_index` column-wise.
-
-    :rtype: :class:`LongTensor` if :attr:`edge_attr` is not passed, else
-        (:class:`LongTensor`, :obj:`Optional[Tensor]` or :obj:`List[Tensor]]`)
-
-    .. warning::
-
-        From :pyg:`PyG >= 2.3.0` onwards, this function will always return a
-        tuple whenever :obj:`edge_attr` is passed as an argument (even in case
-        it is set to :obj:`None`).
-
-    Example:
-
-        >>> edge_index = torch.tensor([[1, 1, 2, 3],
-        ...                            [3, 3, 1, 2]])
-        >>> edge_attr = torch.tensor([1., 1., 1., 1.])
-        >>> coalesce(edge_index)
-        tensor([[1, 2, 3],
-                [3, 1, 2]])
-
-        >>> # Sort `edge_index` column-wise
-        >>> coalesce(edge_index, sort_by_row=False)
-        tensor([[2, 3, 1],
-                [1, 2, 3]])
-
-        >>> coalesce(edge_index, edge_attr)
-        (tensor([[1, 2, 3],
-                [3, 1, 2]]),
-        tensor([2., 1., 1.]))
-
-        >>> # Use 'mean' operation to merge edge features
-        >>> coalesce(edge_index, edge_attr, reduce='mean')
-        (tensor([[1, 2, 3],
-                [3, 1, 2]]),
-        tensor([1., 1., 1.]))
     """
     sparsedim = edge_index.shape[0]
     eihash = indicehash(edge_index)
@@ -173,6 +135,10 @@ class SparseTensor:
                                       size=self.shape)
         ret = ret._coalesced_(self.is_coalesced())
         return ret
+    
+    def tuplewiseapply(self, func: Callable):
+        nvalues = func(self.values)
+        return SparseTensor(self.indices, nvalues, self.shape[:self.sparse_dim]+tuple(nvalues.shape[1:]), is_coalesced=True)
 
     def __repr__(self):
         return f'SparseTensor(shape={self.shape}, sparse_dim={self.sparse_dim}, nnz={self.nnz})'
@@ -234,3 +200,6 @@ if __name__ == "__main__":
           (A1t - A1).coalesce().values().abs().max())
 
     print("should of same shape and nnz ", A1c, A1t, A2, A2f, A2cf, sep="\n")
+    A3 = A2.tuplewiseapply(lambda x: torch.ones_like(x))
+    assert torch.all(A3.values==1)
+    print("debug tuplewiseapply ", A3)
