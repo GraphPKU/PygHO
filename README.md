@@ -248,3 +248,10 @@ for batch in train_loader:
         datadict = batch2dense(datadict)
 
 ```
+
+
+# Speed issue
+
+You can use python -O to disable all `assert` when you are sure there is no bug.
+
+Change the `transform` of dataset to `pre_transform` can accelerate significantly. 
