@@ -3,7 +3,7 @@ from ogb.utils.features import get_atom_feature_dims, get_bond_feature_dims
 from torch import Tensor
 from typing import Optional, List
 import torch.nn as nn
-from norm import BatchNorm
+from .utils import BatchNorm
 
 
 def x2dims(x: Tensor):

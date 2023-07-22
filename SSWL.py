@@ -7,7 +7,7 @@ from backend.MaTensor import MaskedTensor
 from backend.SpTensor import SparseTensor
 import torch.nn as nn
 from subgnn.utils import MLP
-from Emb import SingleEmbedding, MultiEmbedding, x2dims
+from subgnn.Emb import SingleEmbedding, MultiEmbedding, x2dims
 from typing import List
 
 pool_dict = {
