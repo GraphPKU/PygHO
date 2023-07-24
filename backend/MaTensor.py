@@ -34,7 +34,6 @@ class MaskedTensor:
             self.fill_masked_(padvalue)
         else:
             self.__padvalue = padvalue
-         
 
     def fill_masked_(self, val: float = 0):
         '''
@@ -43,7 +42,8 @@ class MaskedTensor:
         if self.padvalue == val:
             return
         self.__padvalue = val
-        self.__data = self.__data.masked_fill(torch.logical_not(self.__mask),val)
+        self.__data = self.__data.masked_fill(torch.logical_not(self.__mask),
+                                              val)
 
     def fill_masked(self, val: float = 0) -> Tensor:
         '''
@@ -116,6 +116,7 @@ class MaskedTensor:
     def tuplewiseapply(self, func: Callable):
         ndata = func(self.data)
         return MaskedTensor(ndata, self.__rawmask)
+
 
 if __name__ == "__main__":
     A = torch.tensor([-torch.inf, 0, torch.inf, 1, 2, -torch.inf, 3])

@@ -2,11 +2,15 @@ import torch
 from typing import List, Optional, Tuple, Callable
 from torch import LongTensor, Tensor
 from torch_scatter import scatter
+from typing import Iterable
+import numpy as np
 
 
 def indicehash(indice: LongTensor) -> LongTensor:
     assert indice.ndim == 2
     sparse_dim = indice.shape[0]
+    if sparse_dim == 1:
+        return indice.flatten()
     interval = (63 // sparse_dim)
     assert torch.max(indice).item() < (
         1 << interval), "too large indice, hash is not injective"
@@ -22,12 +26,48 @@ def decodehash(indhash: LongTensor, sparse_dim: int) -> LongTensor:
     '''
     transfer hash into pairs
     '''
+    if sparse_dim == 1:
+        return indhash
+    assert indhash.ndim == 1, "indhash should of shape (nnz) "
     interval = (63 // sparse_dim)
     mask = eval("0b" + "1" * interval)
     offset = (sparse_dim - 1 - torch.arange(
         sparse_dim, device=indhash.device)).unsqueeze(-1) * interval
     ret = torch.bitwise_right_shift(indhash.unsqueeze(0),
                                     offset).bitwise_and_(mask)
+    return ret
+
+
+def indicehash_tight(indice: LongTensor, dimsize: LongTensor) -> LongTensor:
+    assert indice.ndim == 2, "indice shoule be of shape (sparse_dim, nnz) "
+    assert dimsize.ndim == 1, "dim size should be of shape (sparse_dim)"
+    assert dimsize.shape[0] == indice.shape[
+        0], "indice dim and dim size not match"
+    assert torch.all(indice.max(dim=1)[0] < dimsize), "indice exceeds dimsize"
+    assert torch.prod(dimsize) < (
+        1 << 62), "total size exceeds the range that torch.long can express"
+    if indice.shape[0] == 1:
+        return indice
+    step = torch.ones_like(dimsize)
+    step[:-1] = torch.flip(torch.cumprod(torch.flip(dimsize[1:], (0, )), 0),
+                           (0, ))
+    return torch.sum(step.unsqueeze(-1) * indice, dim=0)
+
+
+def decodehash_tight(indhash: LongTensor, dimsize: LongTensor) -> LongTensor:
+    '''
+    transfer hash into pair
+    '''
+    assert indhash.ndim == 1, "indhash should of shape (nnz) "
+    assert torch.prod(dimsize) < (
+        1 << 62), "total size exceeds the range that torch.long can express"
+    if dimsize.shape[0] == 1:
+        return indhash
+    step = torch.ones_like(dimsize)
+    step[:-1] = torch.flip(torch.cumprod(torch.flip(dimsize[1:], (0, )), 0),
+                           (0, ))
+    ret = indhash.reshape(1, -1) // step.reshape(-1, 1)
+    ret[1:] -= ret[:-1] * dimsize[1:].reshape(-1, 1)
     return ret
 
 
@@ -81,7 +121,9 @@ class SparseTensor:
             self.__shape = tuple(shape)
         else:
             self.__shape = tuple(
-                torch.max(indices, dim=1).tolist() + list(values.shape[1:]))
+                list(map(lambda x: x + 1,
+                         torch.max(indices, dim=1).tolist())) +
+                list(values.shape[1:]))
         self.__sparse_dim = indices.shape[0]
         self.__maxsparsesize = max(self.shape[:self.sparse_dim])
         if is_coalesced:
@@ -123,22 +165,92 @@ class SparseTensor:
     def shape(self):
         return self.__shape
 
+    def _reduce_to_sparse(self, dim: Iterable[int], reduce: str):
+        assert np.all(np.array(dim) < self.__sparse_dim
+                      ), "please use tuplewiseapply for operation on dense dim"
+        assert np.all(np.array(dim) >= 0), "do not support negative dim"
+        idx = [i for i in range(self.sparse_dim) if i not in list(dim)]
+        other_ind = self.indices[idx]
+        other_shape = [self.shape[i] for i in idx]
+        other_ind, other_value = coalesce(other_ind, self.values,
+                                          self.maxsparsesize, reduce)
+        return SparseTensor(indices=other_ind,
+                            values=other_value,
+                            shape=other_shape,
+                            is_coalesced=True)
+
+    def _reduce_to_dense(self, dim: Iterable[int], reduce: str) -> Tensor:
+        assert np.all(np.array(dim) < self.__sparse_dim
+                      ), "please use tuplewiseapply for operation on dense dim"
+        assert np.all(np.array(dim) >= 0), "do not support negative dim"
+        idx = [i for i in range(self.sparse_dim) if i not in list(dim)]
+        nsparse_dim = len(idx)
+        other_ind = self.indices[idx]
+        other_shape = [self.shape[i] for i in idx]
+        nsparse_shape = other_shape[:nsparse_dim]
+        nsparse_size = np.prod(nsparse_shape)
+
+        thash = indicehash_tight(
+            other_ind,
+            torch.LongTensor(nsparse_shape).to(other_ind.device))
+        ret = scatter(self.values,
+                      thash,
+                      dim=0,
+                      dim_size=nsparse_size,
+                      reduce=reduce)
+        ret = ret.unflatten(0, nsparse_shape)
+        return ret
+
+    def sum(self, dim: Optional[Iterable[int]], return_sparse: bool = False):
+        if isinstance(dim, int):
+            dim = [dim]
+        if dim == None:
+            return torch.sum(self.values, dim=0)
+        elif return_sparse:
+            return self._reduce_to_sparse(dim, "sum")
+        else:
+            return self._reduce_to_dense(dim, "sum")
+
+    def max(self, dim: Optional[Iterable[int]], return_sparse: bool = False):
+        if isinstance(dim, int):
+            dim = [dim]
+        if dim == None:
+            return torch.max(self.values, dim=0)
+        elif return_sparse:
+            return self._reduce_to_sparse(dim, "max")
+        else:
+            return self._reduce_to_dense(dim, "max")
+
+    def mean(self, dim: Optional[Iterable[int]], return_sparse: bool = False):
+        if isinstance(dim, int):
+            dim = [dim]
+        if dim == None:
+            return torch.mean(self.values, dim=0)
+        elif return_sparse:
+            return self._reduce_to_sparse(dim, "mean")
+        else:
+            return self._reduce_to_dense(dim, "mean")
+
     @classmethod
     def from_torch_sparse_coo(cls, A: torch.Tensor):
         assert A.is_sparse, "from_torch_sparse_coo converts a torch.sparse_coo_tensor to SparseTensor"
         ret = cls(A._indices(), A._values(), A.shape, A.is_coalesced())
         return ret
 
-    def to_torch_sparse_coo(self):
+    def to_torch_sparse_coo(self) -> Tensor:
         ret = torch.sparse_coo_tensor(self.indices,
                                       self.values,
                                       size=self.shape)
         ret = ret._coalesced_(self.is_coalesced())
         return ret
-    
+
     def tuplewiseapply(self, func: Callable):
         nvalues = func(self.values)
-        return SparseTensor(self.indices, nvalues, self.shape[:self.sparse_dim]+tuple(nvalues.shape[1:]), is_coalesced=True)
+        return SparseTensor(self.indices,
+                            nvalues,
+                            self.shape[:self.sparse_dim] +
+                            tuple(nvalues.shape[1:]),
+                            is_coalesced=True)
 
     def __repr__(self):
         return f'SparseTensor(shape={self.shape}, sparse_dim={self.sparse_dim}, nnz={self.nnz})'
@@ -146,6 +258,19 @@ class SparseTensor:
 
 if __name__ == "__main__":
     # 2D SparseTensor
+    sd, sshape, nnz, d = 5, (2, 3, 7, 11, 13), 17, 7
+    indices = torch.stack(
+        tuple(torch.randint(sshape[i], (nnz, )) for i in range(sd)))
+    values = torch.randn((nnz, d))
+    tsshape = torch.LongTensor(sshape)
+    thash = indicehash_tight(indices, tsshape)
+    hhash = (((
+        (indices[0]) * sshape[1] + indices[1]) * sshape[2] + indices[2]) *
+             sshape[3] + indices[3]) * sshape[4] + indices[4]
+    print(torch.all(thash == hhash))
+    dthash = decodehash_tight(thash, tsshape)
+    print(torch.all(dthash == indices))
+
     n, m, nnz, d = 5, 7, 17, 7
     indices = torch.stack(
         (torch.randint(0, n, (nnz, )), torch.randint(0, m, (nnz, ))))
@@ -201,5 +326,9 @@ if __name__ == "__main__":
 
     print("should of same shape and nnz ", A1c, A1t, A2, A2f, A2cf, sep="\n")
     A3 = A2.tuplewiseapply(lambda x: torch.ones_like(x))
-    assert torch.all(A3.values==1)
+    assert torch.all(A3.values == 1)
     print("debug tuplewiseapply ", A3)
+
+    A2m = A2.max(dim=1, return_sparse=True)
+    Adm = A2.max(dim=1)
+    print(A2m.indices, A2m.values, Adm, A1.to_dense().max(dim=1)[0])
