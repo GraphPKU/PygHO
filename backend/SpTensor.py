@@ -2,7 +2,7 @@ import torch
 from typing import List, Optional, Tuple, Callable
 from torch import LongTensor, Tensor
 from torch_scatter import scatter
-from typing import Iterable
+from typing import Iterable, Union
 import numpy as np
 
 
@@ -201,7 +201,9 @@ class SparseTensor:
         ret = ret.unflatten(0, nsparse_shape)
         return ret
 
-    def sum(self, dim: Optional[Iterable[int]], return_sparse: bool = False):
+    def sum(self,
+            dim: Union[int, Optional[Iterable[int]]],
+            return_sparse: bool = False):
         if isinstance(dim, int):
             dim = [dim]
         if dim == None:
@@ -211,7 +213,9 @@ class SparseTensor:
         else:
             return self._reduce_to_dense(dim, "sum")
 
-    def max(self, dim: Optional[Iterable[int]], return_sparse: bool = False):
+    def max(self,
+            dim: Union[int, Optional[Iterable[int]]],
+            return_sparse: bool = False):
         if isinstance(dim, int):
             dim = [dim]
         if dim == None:
@@ -221,7 +225,9 @@ class SparseTensor:
         else:
             return self._reduce_to_dense(dim, "max")
 
-    def mean(self, dim: Optional[Iterable[int]], return_sparse: bool = False):
+    def mean(self,
+             dim: Union[int, Optional[Iterable[int]]],
+             return_sparse: bool = False):
         if isinstance(dim, int):
             dim = [dim]
         if dim == None:
@@ -230,6 +236,36 @@ class SparseTensor:
             return self._reduce_to_sparse(dim, "mean")
         else:
             return self._reduce_to_dense(dim, "mean")
+
+    def unpooling(self, dim: Union[int, Iterable[int]], tarX):
+        '''
+        unit test TODO??
+        '''
+        if isinstance(dim, int):
+            dim = [dim]
+        self_hash = indicehash(self.indices)
+        assert torch.all(torch.diff(self_hash)), "self is not coalesced"
+        tarX: SparseTensor = tarX
+        taridx = [i for i in range(tarX.sparse_dim) if i not in list(dim)]
+        tar_hash = indicehash(tarX.indices[taridx])
+
+        b2a = torch.clamp_min_(
+            torch.searchsorted(self_hash, tar_hash, right=True) - 1, 0)
+
+        matchmask = (self_hash[b2a] == tar_hash)
+        ret = torch.zeros((tar_hash.shape[0], ) + self.values.shape[1:],
+                          dtype=self.values.dtype,
+                          device=self.values.device)
+        ret[matchmask] = self.values[b2a[matchmask]]
+        return tarX.tuplewiseapply(lambda x: ret)
+
+    def unpooling_fromdense1dim(self, dim: int, X: Tensor):
+        '''
+        unit test TODO??
+        '''
+        assert dim < self.sparse_dim, "only unpooling sparse dim"
+        assert X.shape[0] == self.shape[dim], "shape not match"
+        return self.tuplewiseapply(lambda _: X[self.indices[dim]])
 
     @classmethod
     def from_torch_sparse_coo(cls, A: torch.Tensor):
@@ -332,3 +368,5 @@ if __name__ == "__main__":
     A2m = A2.max(dim=1, return_sparse=True)
     Adm = A2.max(dim=1)
     print(A2m.indices, A2m.values, Adm, A1.to_dense().max(dim=1)[0])
+    A2mu = A2m.unpooling(dim=1, tarX=A2)
+    print(A2mu.indices, A2mu.values)
