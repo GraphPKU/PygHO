@@ -1,6 +1,6 @@
 import torch
 from torch import LongTensor
-from typing import Optional, Tuple
+from typing import Optional
 from torch_scatter import scatter
 from .SpTensor import SparseTensor, indicehash, decodehash
 import warnings
@@ -10,6 +10,8 @@ def ptr2batch(ptr: LongTensor, dim_size: int) -> LongTensor:
     '''
     ptr: LongTensor, ptr[0]=0, torch.all(diff(ptr)>=0) is true
     output: (dim_size) LongTensor batch, batch[ptr[i]:ptr[i+1]]=i
+
+    TODO: use torch_scatter gather instead?
     '''
     assert ptr[0] == 0 and torch.all(
         torch.diff(ptr) >= 0), "should put in a ptr tensor"
@@ -61,22 +63,82 @@ def spspmm_ind(ind1: LongTensor, ind2: LongTensor) -> LongTensor:
     return ij, ret[:, sorted_idx]
 
 
-def spsphadamard_ind(tar_ij: LongTensor, ij: LongTensor) -> LongTensor:
+def spspmm_ind_nD(ind1: LongTensor, dim1: int, ind2: LongTensor,
+                  dim2: int, is_k2_sorted: bool=False) -> LongTensor:
+    '''
+    TODO: unit test
+    ind1, ind2 are indices of two sparse tensors.
+    ind1 (sparsedim1, M1)
+    ind2 (sparsedim2, M2)
+    in einsum term, eliminate dim1 in Tensor1 and dim2 in Tensor2, and cat dims left.
+    (\vec i_1, k, \vec i_2), (\vec j_1, k, \vec j_2) -> (\vec i_1, \vec i_2, \vec j_1, \vec j_2) (b, c, d), c represent index of \vec i, d represent index of \vec j, b represent index of output
+    '''
+    assert dim1 < ind1.shape[0], "ind1's reduced dim is out of range"
+    assert dim2 < ind2.shape[0], "ind2's reduced dim is out of range"
+    k1, k2 = ind1[dim1], ind2[dim2]
+    nnz1, nnz2, sparsedim1, sparsedim2 = ind1.shape[1], ind2.shape[1], ind1.shape[0], ind2.shape[0]
+    if dim2 != 0 and not (is_k2_sorted):
+        perm = torch.argsort(k2)
+        ij, bcd = spspmm_ind_nD(ind1, dim1, ind2[perm], dim2, True)
+        invperm = torch.empty_like(perm)
+        invperm[perm] = torch.arange(nnz2, device=invperm.device)
+        bcd[2] = invperm[bcd[2]]
+        return ij, bcd
+    else:
+        assert torch.all(torch.diff(k2) >= 0), "ind2[0] should be sorted"
+
+        # for each k in k1, it can match a interval of k2 as k2 is sorted
+        upperbound = torch.searchsorted(k2, k1, right=True)
+        lowerbound = torch.searchsorted(k2, k1, right=False)
+        matched_num = torch.clamp_min_(upperbound - lowerbound, 0)
+
+        # ptr[i] provide the offset to place pair of ind1[:, i] and the matched ind2
+        retptr = torch.zeros((nnz1 + 1),
+                            dtype=matched_num.dtype,
+                            device=matched_num.device)
+        torch.cumsum(matched_num, dim=0, out=retptr[1:])
+        retsize = retptr[-1]
+
+        # fill the output with ptr
+        ret = torch.zeros((3, retsize), device=ind1.device, dtype=ind1.dtype)
+        ret[1] = ptr2batch(retptr, retsize)
+        torch.arange(retsize, out=ret[2], device=ret.device, dtype=ret.dtype)
+        offset = (ret[2][retptr[:-1]] - lowerbound)[ret[1]]
+        ret[2] -= offset
+
+        # compute the ij pair index
+
+        combinedij = indicehash(
+            torch.concat(
+                ((torch.concat((ind1[:dim1], ind1[dim1 + 1:])))[:, ret[1]],
+                torch.concat((ind2[:dim2], ind2[dim2 + 1:]))[:, ret[2]])))
+        combinedij, taridx = torch.unique(combinedij,
+                                        sorted=True,
+                                        return_inverse=True)
+        ij = decodehash(combinedij, sparsedim1+sparsedim2-2)
+        ret[0] = taridx
+
+        sorted_idx = torch.argsort(ret[0])  # sort is optional
+        return ij, ret[:, sorted_idx]
+
+
+def spsphadamard_ind(tar_ind: LongTensor, ind: LongTensor) -> LongTensor:
     '''
     Auxiliary function for SparseTensor-SparseTensor hadamard product
-    tar_ij the indice of A, ij the indice of b
+    tar_ind the indice of A, ind the indice of b
     return:
-      b2a of shape ij.shape[1]. ij[:, i] matches tar_ij[:, b2a[i]]. 
-        if b2a<0, ij[:, i] is not matched 
+      b2a of shape ind.shape[1]. ind[:, i] matches tar_ind[:, b2a[i]]. 
+        if b2a<0, ind[:, i] is not matched 
     '''
-    combine_tar_ij = indicehash(tar_ij)
+    assert tar_ind.shape[0] == ind.shape[0]
+    combine_tar_ind = indicehash(tar_ind)
     assert torch.all(
-        torch.diff(combine_tar_ij) > 0), "tar_ij should be sorted and coalesce"
-    combine_ij = indicehash(ij)
+        torch.diff(combine_tar_ind) > 0), "tar_ind should be sorted and coalesce"
+    combine_ind = indicehash(ind)
 
     b2a = torch.clamp_min_(
-        torch.searchsorted(combine_tar_ij, combine_ij, right=True) - 1, 0)
-    notmatchmask = (combine_ij != combine_tar_ij[b2a])
+        torch.searchsorted(combine_tar_ind, combine_ind, right=True) - 1, 0)
+    notmatchmask = (combine_ind != combine_tar_ind[b2a])
     b2a[notmatchmask] = -1
     return b2a
 
