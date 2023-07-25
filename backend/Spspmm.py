@@ -2,7 +2,7 @@ import torch
 from torch import LongTensor
 from typing import Optional
 from torch_scatter import scatter
-from SpTensor import SparseTensor, indicehash, decodehash
+from .SpTensor import SparseTensor, indicehash, decodehash
 import warnings
 
 
@@ -22,7 +22,7 @@ def ptr2batch(ptr: LongTensor, dim_size: int) -> LongTensor:
     return ret
 
 
-def spspmm_ind_nD(ind1: LongTensor,
+def spspmm_ind(ind1: LongTensor,
                   dim1: int,
                   ind2: LongTensor,
                   dim2: int,
@@ -41,7 +41,7 @@ def spspmm_ind_nD(ind1: LongTensor,
         0], f"ind2's reduced dim {dim2} is out of range"
     if dim2 != 0 and not (is_k2_sorted):
         perm = torch.argsort(ind2[dim2])
-        tarind, bcd = spspmm_ind_nD(ind1, dim1, ind2[:, perm], dim2, True)
+        tarind, bcd = spspmm_ind(ind1, dim1, ind2[:, perm], dim2, True)
         bcd[2] = perm[bcd[2]]
         return tarind, bcd
     else:
@@ -186,7 +186,7 @@ def spspmm(A: SparseTensor,
     else:
         warnings.warn("acd is not found")
         if bcd is None:
-            ind, bcd = spspmm_ind_nD(A.indices, dim1, B.indices, dim2)
+            ind, bcd = spspmm_ind(A.indices, dim1, B.indices, dim2)
         if tar_ind is not None:
             acd = filterind(tar_ind, ind, bcd)
             return spspmm(A, dim1, B, dim2, aggr, acd=acd, tar_ind=tar_ind)
@@ -220,7 +220,7 @@ if __name__ == "__main__":
     C = A @ B
     C = C.coalesce()
 
-    ind, bcd = spspmm_ind_nD(ind1, 1, ind2, 0)
+    ind, bcd = spspmm_ind(ind1, 1, ind2, 0)
     mult = val1[bcd[1]] * val2[bcd[2]]
     outval = scatter_add(mult, bcd[0], dim_size=ind.shape[1])
     out = torch.sparse_coo_tensor(ind, outval)
@@ -279,7 +279,7 @@ if __name__ == "__main__":
     C = torch.einsum("nkm,lkd->nmld", A.to_dense(), B.to_dense())
     Cs = C.to_sparse_coo().coalesce()
 
-    ind, bcd = spspmm_ind_nD(ind1, 1, ind2, 1)
+    ind, bcd = spspmm_ind(ind1, 1, ind2, 1)
     mult = val1[bcd[1]] * val2[bcd[2]]
     outval = scatter_add(mult, bcd[0], dim_size=ind.shape[1])
     out = torch.sparse_coo_tensor(ind, outval)

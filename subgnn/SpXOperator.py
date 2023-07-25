@@ -6,67 +6,59 @@ from torch_scatter import scatter
 
 
 def messagepassing_tuple(A: SparseTensor,
-                         X: SparseTensor,
-                         key: str = "AX",
+                         dim1: int,
+                         B: SparseTensor,
+                         dim2: int,
+                         key: str = "A_1_X_0",
                          datadict: dict = {},
                          aggr: str = "sum") -> SparseTensor:
     '''
     A means adjacency matrix, X means tuple representations for key="AX", "XA". 
     A, X means X1, X2 for key = "XX"
     '''
-    if key == "AX":
-        return spspmm(A,
-                      X,
-                      aggr,
-                      acd=datadict.get(f"{key}_acd", None),
-                      bcd=datadict.get(f"{key}_bcd", None),
-                      tar_ij=datadict.get(f"tupleid", None))
-    elif key == "XA":
-        return spspmm(X,
-                      A,
-                      aggr,
-                      acd=datadict.get(f"{key}_acd", None),
-                      bcd=datadict.get(f"{key}_bcd", None),
-                      tar_ij=datadict.get(f"tupleid", None))
-    elif key == "XX":
-        return spspmm(A,
-                      X,
-                      aggr,
-                      acd=datadict.get(f"{key}_acd", None),
-                      bcd=datadict.get(f"{key}_bcd", None),
-                      tar_ij=datadict.get(f"tupleid", None))
-    else:
-        raise NotImplementedError
+    return spspmm(A,
+                  dim1,
+                  B,
+                  dim2,
+                  aggr,
+                  acd=datadict.get(f"{key}_acd", None),
+                  bcd=datadict.get(f"{key}_bcd", None),
+                  tar_ind=datadict.get(f"tupleid", None))
 
-def pooling_tuple(X: SparseTensor, dim=1, pool: str = "sum") -> Tensor:
+
+def pooling2nodes(X: SparseTensor, dims=1, pool: str = "sum") -> Tensor:
     '''
     ret_{i} = pool(X_{ij}) for dim = 1
     ret_{i} = pool(X_{ji}) for dim = 0
     '''
-    assert X.sparse_dim == 2, "high-order sparse tensor not implemented"
-    assert dim in [0, 1], "can only pool sparse dim "
-    ind, val = X.indices, X.values
-    return scatter(val,
-                   ind[1 - dim],
-                   dim=0,
-                   dim_size=X.shape[1 - dim],
-                   reduce=pool)
+    assert len(set(dims)) == X.sparse_dim - 1
+    return getattr(X, pool)(dims, return_sparse=False)
 
 
-def unpooling_node(nodeX: Tensor, tarX: SparseTensor, dim=1) -> SparseTensor:
+def pooling2tuple(X: SparseTensor, dims=1, pool: str = "sum") -> Tensor:
+    '''
+    ret_{i} = pool(X_{ij}) for dim = 1
+    ret_{i} = pool(X_{ji}) for dim = 0
+    '''
+    return getattr(X, pool)(dims, return_sparse=True)
+
+
+def unpooling4node(nodeX: Tensor, tarX: SparseTensor, dim=1) -> SparseTensor:
     '''
     X_{ij} = nodeX_{i} for dim = 1
     X_{ij} = nodeX_{j} for dim = 0 
     tarX is used for provide indice for the output
     '''
-    assert tarX.sparse_dim == 2, "high-order sparse tensor not implemented"
-    assert dim in [0, 1], "can only pool sparse dim "
-    ind = tarX.indices
-    val = nodeX[ind[1-dim]]
-    return SparseTensor(tarX.indices,
-                        val,
-                        shape=list(tarX.shape[:2]) + list(val.shape[1:]),
-                        is_coalesced=True)
+    return tarX.unpooling_fromdense1dim(dim, nodeX)
+
+
+def unpooling4tuple(srcX: SparseTensor, tarX: SparseTensor, dims=1) -> SparseTensor:
+    '''
+    X_{ij} = nodeX_{i} for dim = 1
+    X_{ij} = nodeX_{j} for dim = 0 
+    tarX is used for provide indice for the output
+    '''
+    return srcX.unpooling(dims, tarX)
 
 
 def messagepassing_node(A: SparseTensor,

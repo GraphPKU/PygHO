@@ -2,14 +2,14 @@ import torch
 from torch_geometric.datasets import TUDataset, ZINC, GNNBenchmarkDataset, QM9
 from ogb.graphproppred import PygGraphPropPredDataset
 from subgdata.SpData import sp_datapreprocess
-from subgdata.SpSubgSampler import KhopSampler
+from subgdata.SpSubgSampler import I2Sampler
 import torch_geometric.transforms as T
 from torchmetrics import Accuracy, MeanAbsoluteError
 from functools import partial
 from datasets import SRDataset, PlanarSATPairsDataset, GraphCountDataset, myEvaluator
 
 def loaddataset(name: str, **kwargs): #-> Iterable[Dataset], str, Callable, str
-    kwargs["transform"] = partial(sp_datapreprocess, subgsampler=partial(KhopSampler, hop=3), keys=["X_1_A_0_acd"])
+    kwargs["transform"] = partial(sp_datapreprocess, subgsampler=partial(I2Sampler, hop=3), keys=["X_2_A_0_acd"])
     if name == "sr":
         dataset = SRDataset(**kwargs)
         # dataset = dataset[:2]

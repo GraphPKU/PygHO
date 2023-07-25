@@ -10,7 +10,7 @@ from .utils import MLP
 from typing import List, Union
 
 
-class SubgConv(nn.Module):
+class NestedConv(nn.Module):
     '''
     message passing within each subgraph
     '''
@@ -28,7 +28,7 @@ class SubgConv(nn.Module):
                                                 SparseTensor]) -> MaskedTensor:
         tX = X.tuplewiseapply(self.lin)
         # print(tX.nnz, A.nnz, datadict["XA_tar"].shape, datadict["XA_acd"].max(dim=-1)[0])
-        ret = messagepassing_tuple(A, tX, "XA", self.aggr)
+        ret = messagepassing_tuple(tX, A, self.aggr)
         return ret
 
 
@@ -49,7 +49,7 @@ class CrossSubgConv(nn.Module):
     def forward(self, X: MaskedTensor, A: Union[MaskedTensor,
                                                 SparseTensor]) -> SparseTensor:
         tX = X.tuplewiseapply(self.lin)
-        return messagepassing_tuple(A, tX, "AX", self.aggr)
+        return messagepassing_tuple(A, tX, self.aggr)
 
 
 class TwoFWLConv(nn.Module):
@@ -70,7 +70,7 @@ class TwoFWLConv(nn.Module):
     def forward(self, X: MaskedTensor) -> SparseTensor:
         X1 = X.tuplewiseapply(self.lin1)
         X2 = X.tuplewiseapply(self.lin2)
-        return messagepassing_tuple(X1, X2, "XX", self.aggr)
+        return messagepassing_tuple(X1, X2, self.aggr)
 
 
 class Convs(nn.Module):

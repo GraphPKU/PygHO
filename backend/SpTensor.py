@@ -10,7 +10,7 @@ def indicehash(indice: LongTensor) -> LongTensor:
     assert indice.ndim == 2
     sparse_dim = indice.shape[0]
     if sparse_dim == 1:
-        return indice.flatten()
+        return indice[0]
     interval = (63 // sparse_dim)
     assert torch.max(indice).item() < (
         1 << interval), "too large indice, hash is not injective"
@@ -27,7 +27,7 @@ def decodehash(indhash: LongTensor, sparse_dim: int) -> LongTensor:
     transfer hash into pairs
     '''
     if sparse_dim == 1:
-        return indhash
+        return indhash.unsqueeze(0)
     assert indhash.ndim == 1, "indhash should of shape (nnz) "
     interval = (63 // sparse_dim)
     mask = eval("0b" + "1" * interval)
@@ -47,7 +47,7 @@ def indicehash_tight(indice: LongTensor, dimsize: LongTensor) -> LongTensor:
     assert torch.prod(dimsize) < (
         1 << 62), "total size exceeds the range that torch.long can express"
     if indice.shape[0] == 1:
-        return indice
+        return indice[0]
     step = torch.ones_like(dimsize)
     step[:-1] = torch.flip(torch.cumprod(torch.flip(dimsize[1:], (0, )), 0),
                            (0, ))
@@ -62,7 +62,7 @@ def decodehash_tight(indhash: LongTensor, dimsize: LongTensor) -> LongTensor:
     assert torch.prod(dimsize) < (
         1 << 62), "total size exceeds the range that torch.long can express"
     if dimsize.shape[0] == 1:
-        return indhash
+        return indhash.unsqueeze(0)
     step = torch.ones_like(dimsize)
     step[:-1] = torch.flip(torch.cumprod(torch.flip(dimsize[1:], (0, )), 0),
                            (0, ))

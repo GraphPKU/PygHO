@@ -8,49 +8,31 @@ from backend.MaTensor import MaskedTensor
 
 
 def messagepassing_tuple(A: Union[SparseTensor, Tensor, MaskedTensor],
-                         X: MaskedTensor,
-                         key: str = "AX",
+                         B: Union[SparseTensor, Tensor, MaskedTensor],
                          aggr: str = "sum") -> MaskedTensor:
     '''
     A means adjacency matrix, X means tuple representations for key="AX", "XA". 
     A, X means X1, X2 for key = "XX"
     '''
     if isinstance(A, SparseTensor):
-        if key == "AX":
-            return spmamm(A, X, X.mask, aggr)
-        elif key == "XA":
-            return maspmm(X, A, X.mask, aggr)
-        else:
-            raise NotImplementedError
-    elif isinstance(A, MaskedTensor):
-        assert aggr == "sum", "dense adjacency only supports ordinary matrix multiplication"
-        if key == "AX":
-            return mamamm(A, X, mask=X.mask)
-        elif key == "XA":
-            return mamamm(X, A, mask=X.mask)
-        elif key == "XX":
-            return mamamm(A, X, mask=X.mask)
-        else:
-            raise NotImplementedError
-    elif A.layout == torch.strided:
-        assert aggr == "sum", "dense adjacency only supports ordinary matrix multiplication"
-        if key == "AX":
-            return mmamm(A, X, mask=X.mask)
-        elif key == "XA":
-            return mamm(X, A, mask=X.mask)
-        else:
-            raise NotImplementedError
+        assert isinstance(B, MaskedTensor)
+        return spmamm(A, B, B.mask, aggr)
+    elif isinstance(B, SparseTensor):
+        return maspmm(A, B)
+    if isinstance(A, Tensor):
+        assert isinstance(B, MaskedTensor)
+        assert aggr == "sum", "dense adjacency only support sum aggr"
+        return mmamm(A, B, B.mask)
+    elif isinstance(B, Tensor):
+        assert isinstance(A, MaskedTensor)
+        assert aggr == "sum", "dense adjacency only support sum aggr"
+        return mamm(A, B, A.mask)
     raise NotImplementedError
 
 
 def pooling_tuple(X: MaskedTensor, dim=1, pool: str = "sum") -> MaskedTensor:
     assert dim in [1, 2]
-    if pool == "sum":
-        return X.sum(dim=dim)
-    elif pool == "max":
-        return X.max(dim=dim)
-    elif pool == "mean":
-        return X.mean(dim=dim)
+    return getattr(X, pool)(dim=dim)
 
 
 def unpooling_node(nodeX: Tensor, tarX: MaskedTensor, dim=1) -> MaskedTensor:
