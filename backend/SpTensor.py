@@ -164,6 +164,10 @@ class SparseTensor:
     @property
     def shape(self):
         return self.__shape
+    
+    @property
+    def sparseshape(self):
+        return self.shape[:self.sparse_dim]
 
     def _reduce_to_sparse(self, dim: Iterable[int], reduce: str):
         assert np.all(np.array(dim) < self.__sparse_dim
