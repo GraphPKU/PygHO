@@ -169,13 +169,59 @@ class SparseTensor:
     def sparseshape(self):
         return self.shape[:self.sparse_dim]
 
+    def _diag_to_sparse(self, dim: Iterable[int]):
+        assert np.all(np.array(dim) < self.__sparse_dim
+                      ), "please use tuplewiseapply for operation on dense dim"
+        assert np.all(np.array(dim) >= 0), "do not support negative dim"
+        dim = sorted(list(dim))
+        mask = torch.all((self.indices[dim] - self.indices[[dim[0]]])==0, dim=0)
+        idx = [i for i in range(self.sparse_dim) if i not in dim[1:]]
+        other_shape = [self.shape[i] for i in idx] + self.values.shape[1]
+        return SparseTensor(indices=self.indices[idx][:, mask],
+                            values=self.values[mask],
+                            shape=other_shape,
+                            is_coalesced=(idx[0]==0) and np.all(np.diff(idx)==1))
+
+    def _diag_to_dense(self, dim: Iterable[int]) -> Tensor:
+        assert np.all(np.array(dim) < self.__sparse_dim
+                      ), "please use tuplewiseapply for operation on dense dim"
+        assert np.all(np.array(dim) >= 0), "do not support negative dim"
+        dim = sorted(list(dim))
+        mask = torch.all((self.indices[dim] - self.indices[[dim[0]]])==0, dim=0)
+        idx = [i for i in range(self.sparse_dim) if i not in dim[1:]]
+        nsparse_shape = [self.shape[i] for i in idx]
+        nsparse_size = np.prod(nsparse_shape)
+
+        thash = indicehash_tight(
+            self.indices[idx][:, mask],
+            torch.LongTensor(nsparse_shape).to(self.indices.device))
+        ret = torch.zeros((nsparse_size, self.shape[self.sparse_dim+1:]))
+        ret[thash] = self.values[mask]
+        ret = ret.unflatten(0, nsparse_shape)
+        return ret
+
+    def diag(self,
+            dim: Optional[Iterable[int]],
+            return_sparse: bool = False):
+        '''
+        TODO: unit test ??
+        '''
+        if isinstance(dim, int):
+            dim = [dim]
+        if dim == None:
+            dim = list(range(self.sparse_dim))
+        if return_sparse:
+            return self._diag_to_sparse(dim)
+        else:
+            return self._diag_to_dense(dim)
+
     def _reduce_to_sparse(self, dim: Iterable[int], reduce: str):
         assert np.all(np.array(dim) < self.__sparse_dim
                       ), "please use tuplewiseapply for operation on dense dim"
         assert np.all(np.array(dim) >= 0), "do not support negative dim"
         idx = [i for i in range(self.sparse_dim) if i not in list(dim)]
         other_ind = self.indices[idx]
-        other_shape = [self.shape[i] for i in idx]
+        other_shape = [self.shape[i] for i in idx] + self.shape[self.sparse_dim+1:]
         other_ind, other_value = coalesce(other_ind, self.values,
                                           self.maxsparsesize, reduce)
         return SparseTensor(indices=other_ind,
@@ -188,10 +234,9 @@ class SparseTensor:
                       ), "please use tuplewiseapply for operation on dense dim"
         assert np.all(np.array(dim) >= 0), "do not support negative dim"
         idx = [i for i in range(self.sparse_dim) if i not in list(dim)]
-        nsparse_dim = len(idx)
         other_ind = self.indices[idx]
         other_shape = [self.shape[i] for i in idx]
-        nsparse_shape = other_shape[:nsparse_dim]
+        nsparse_shape = other_shape
         nsparse_size = np.prod(nsparse_shape)
 
         thash = indicehash_tight(
@@ -204,7 +249,7 @@ class SparseTensor:
                       reduce=reduce)
         ret = ret.unflatten(0, nsparse_shape)
         return ret
-
+    
     def sum(self,
             dim: Union[int, Optional[Iterable[int]]],
             return_sparse: bool = False):

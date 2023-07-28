@@ -3,7 +3,7 @@ from backend.Spspmm import spspmm
 from backend.Spmm import spmm
 from backend.SpTensor import SparseTensor
 from torch_scatter import scatter
-
+from typing import Optional, Iterable
 
 def messagepassing_tuple(A: SparseTensor,
                          dim1: int,
@@ -26,6 +26,28 @@ def messagepassing_tuple(A: SparseTensor,
                   tar_ind=datadict.get(f"tupleid", None))
 
 
+def diag2nodes(X: SparseTensor, dims=Optional[Iterable[int]]) -> Tensor:
+    '''
+    ret_{i} = pool(X_{ij}) for dim = 1
+    ret_{i} = pool(X_{ji}) for dim = 0
+    '''
+    dims = set(dims)
+    assert len(dims) > 1, "need 2 or more dims for diag"
+    assert len(dims) == X.sparse_dim
+    return X.diag(dims, return_sparse=False)
+
+
+def diag2tuple(X: SparseTensor,  dims=Optional[Iterable[int]]) -> SparseTensor:
+    '''
+    ret_{i} = pool(X_{ij}) for dim = 1
+    ret_{i} = pool(X_{ji}) for dim = 0
+    '''
+    dims = set(dims)
+    assert len(dims) > 1, "need 2 or more dims for diag"
+    assert len(dims) == X.sparse_dim
+    return X.diag(dims, return_sparse=False)
+
+
 def pooling2nodes(X: SparseTensor, dims=1, pool: str = "sum") -> Tensor:
     '''
     ret_{i} = pool(X_{ij}) for dim = 1
@@ -35,11 +57,12 @@ def pooling2nodes(X: SparseTensor, dims=1, pool: str = "sum") -> Tensor:
     return getattr(X, pool)(dims, return_sparse=False)
 
 
-def pooling2tuple(X: SparseTensor, dims=1, pool: str = "sum") -> Tensor:
+def pooling2tuple(X: SparseTensor, dims=1, pool: str = "sum") -> SparseTensor:
     '''
     ret_{i} = pool(X_{ij}) for dim = 1
     ret_{i} = pool(X_{ji}) for dim = 0
     '''
+    dims = set(dims)
     return getattr(X, pool)(dims, return_sparse=True)
 
 
@@ -58,6 +81,7 @@ def unpooling4tuple(srcX: SparseTensor, tarX: SparseTensor, dims=1) -> SparseTen
     X_{ij} = nodeX_{j} for dim = 0 
     tarX is used for provide indice for the output
     '''
+    dims = set(dims)
     return srcX.unpooling(dims, tarX)
 
 

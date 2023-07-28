@@ -119,19 +119,18 @@ Tuple representation $X\in \mathbb{R}^{n\times n\times d1}$, adjacency matrix $A
 
 * Message passing within subgraph, equivalent to $XA$. You can use 
 ```
-subgnn.SpXoperator.messagepassing_tuple(A, X, "XA", datadict, aggr)
+subgnn.SpXoperator.messagepassing_tuple(X, A, "X_1_A_0", datadict, aggr)
 ```
 
 * Message passing across subgraph, equivalent to $AX$. You can use 
 ```
-subgnn.SpXoperator.messagepassing_tuple(A, X, "AX", datadict, aggr)
+subgnn.SpXoperator.messagepassing_tuple(A, X, "A_1_X_0", datadict, aggr)
 ```
 
 * 2FWL, equivalent to $XX$. You can use 
 ```
-subgnn.SpXoperator.messagepassing_tuple(X1, X2, "XX", datadict, aggr).
+subgnn.SpXoperator.messagepassing_tuple(X1, X2, "X_1_X_0", datadict, aggr).
 ```
-
 
 We also directly provide some out-of-box convolution layers in  subgnn.Spconv.
 
@@ -145,11 +144,13 @@ X.tuplewiseapply(f)
 #### Pooling and Unpooling
 Pooling: tuple representation to dense node representation.
 ```
-subgnn.SpXOperator.pooling_tuple(X: SparseTensor, dim=1, pool: str = "sum")
+subgnn.SpXOperator.pooling2nodes(X: SparseTensor, dim=1, pool: str = "sum")
+subgnn.SpXOperator.pooling2tuples(X: SparseTensor, dim=1, pool: str = "sum")
 ```
-Unpooling: dense node representation to tuple representation as SparseTensor. Output uses the same indices as tarX.
+Unpooling: 
 ```
-subgnn.SpXOperator.unpooling_node(nodeX: Tensor, tarX: SparseTensor, dim=1)
+subgnn.SpXOperator.unpooling4nodes(nodeX: Tensor, tarX: SparseTensor, dim=1)
+subgnn.SpXOperator.unpooling4tuples(srcX: SparseTensor, tarX: SparseTensor, dim=1)
 ```
 
 ### Dense Representation
@@ -159,21 +160,21 @@ Tuple representation $X\in \mathbb{R}^{B\times n\times n\times d1}$, adjacency m
 
 * Message passing within subgraph, equivalent to $XA$. You can use 
 ```
-subgnn.MaXoperator.messagepassing_tuple(A, X, "XA", datadict, aggr)
+subgnn.MaXoperator.messagepassing_tuple(X, A, datadict, aggr)
 ```
 
 * Message passing across subgraph, equivalent to $AX$. You can use 
 ```
-subgnn.MaXoperator.messagepassing_tuple(A, X, "AX", datadict, aggr)
+subgnn.MaXoperator.messagepassing_tuple(A, X, datadict, aggr)
 ```
 
 * 2FWL, equivalent to $XX$. You can use 
 ```
-subgnn.MaXoperator.messagepassing_tuple(X1, X2, "XX", datadict, aggr).
+subgnn.MaXoperator.messagepassing_tuple(X1, X2, datadict, aggr).
 ```
 
 
-We also directly provide some out-of-box convolution layers in  subgnn.Spconv.
+We also directly provide some out-of-box convolution layers in subgnn.Spconv.
 
 #### Tuple-wise operation
 
