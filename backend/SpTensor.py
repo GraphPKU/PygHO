@@ -117,14 +117,17 @@ class SparseTensor:
         if values is not None:
             assert indices.shape[1] == values.shape[
                 0], "indices and values should have the same number of nnz"
+        self.__sparse_dim = indices.shape[0]
         if shape is not None:
             self.__shape = tuple(shape)
+            # print(self.shape, self.denseshape, self.sparseshape, values.shape)
+            if values is not None:
+                assert self.denseshape == values.shape[1:], "shape, value not match"
         else:
             self.__shape = tuple(
                 list(map(lambda x: x + 1,
                          torch.max(indices, dim=1).tolist())) +
                 list(values.shape[1:]))
-        self.__sparse_dim = indices.shape[0]
         self.__maxsparsesize = max(self.shape[:self.sparse_dim])
         if is_coalesced:
             self.__indices, self.__values = indices, values
@@ -168,6 +171,10 @@ class SparseTensor:
     @property
     def sparseshape(self):
         return self.shape[:self.sparse_dim]
+    
+    @property
+    def denseshape(self):
+        return self.shape[self.sparse_dim:]
 
     def _diag_to_sparse(self, dim: Iterable[int]):
         assert np.all(np.array(dim) < self.__sparse_dim
@@ -176,7 +183,7 @@ class SparseTensor:
         dim = sorted(list(dim))
         mask = torch.all((self.indices[dim] - self.indices[[dim[0]]])==0, dim=0)
         idx = [i for i in range(self.sparse_dim) if i not in dim[1:]]
-        other_shape = [self.shape[i] for i in idx] + self.values.shape[1]
+        other_shape = tuple([self.shape[i] for i in idx]) + self.denseshape
         return SparseTensor(indices=self.indices[idx][:, mask],
                             values=self.values[mask],
                             shape=other_shape,
@@ -195,7 +202,7 @@ class SparseTensor:
         thash = indicehash_tight(
             self.indices[idx][:, mask],
             torch.LongTensor(nsparse_shape).to(self.indices.device))
-        ret = torch.zeros((nsparse_size, self.shape[self.sparse_dim+1:]))
+        ret = torch.zeros((nsparse_size,)+self.denseshape, device=thash.device, dtype=self.values.dtype)
         ret[thash] = self.values[mask]
         ret = ret.unflatten(0, nsparse_shape)
         return ret
@@ -221,7 +228,7 @@ class SparseTensor:
         assert np.all(np.array(dim) >= 0), "do not support negative dim"
         idx = [i for i in range(self.sparse_dim) if i not in list(dim)]
         other_ind = self.indices[idx]
-        other_shape = [self.shape[i] for i in idx] + self.shape[self.sparse_dim+1:]
+        other_shape = tuple([self.shape[i] for i in idx]) + self.denseshape
         other_ind, other_value = coalesce(other_ind, self.values,
                                           self.maxsparsesize, reduce)
         return SparseTensor(indices=other_ind,
@@ -302,7 +309,7 @@ class SparseTensor:
             torch.searchsorted(self_hash, tar_hash, right=True) - 1, 0)
 
         matchmask = (self_hash[b2a] == tar_hash)
-        ret = torch.zeros((tar_hash.shape[0], ) + self.values.shape[1:],
+        ret = torch.zeros((tar_hash.shape[0], ) + self.denseshape,
                           dtype=self.values.dtype,
                           device=self.values.device)
         ret[matchmask] = self.values[b2a[matchmask]]
@@ -333,7 +340,7 @@ class SparseTensor:
         nvalues = func(self.values)
         return SparseTensor(self.indices,
                             nvalues,
-                            self.shape[:self.sparse_dim] +
+                            self.sparseshape +
                             tuple(nvalues.shape[1:]),
                             is_coalesced=True)
 

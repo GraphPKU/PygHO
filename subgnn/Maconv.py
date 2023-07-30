@@ -19,10 +19,10 @@ class NestedConv(nn.Module):
                  emb_dim: int,
                  mlplayer: int,
                  aggr: str = "sum",
-                 **kwargs):
+                 mlp: dict = {}):
         super().__init__()
         self.aggr = aggr
-        self.lin = MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"])
+        self.lin = MLP(emb_dim, emb_dim, mlplayer, True, **mlp)
 
     def forward(self, X: MaskedTensor, A: Union[MaskedTensor,
                                                 SparseTensor]) -> MaskedTensor:
@@ -41,10 +41,10 @@ class CrossSubgConv(nn.Module):
                  emb_dim: int,
                  mlplayer: int,
                  aggr: str = "sum",
-                 **kwargs):
+                 mlp: dict = {}):
         super().__init__()
         self.aggr = aggr
-        self.lin = MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"])
+        self.lin = MLP(emb_dim, emb_dim, mlplayer, True, **mlp)
 
     def forward(self, X: MaskedTensor, A: Union[MaskedTensor,
                                                 SparseTensor]) -> SparseTensor:
@@ -61,11 +61,11 @@ class TwoFWLConv(nn.Module):
                  emb_dim: int,
                  mlplayer: int,
                  aggr: str = "sum",
-                 **kwargs):
+                 mlp: dict = {}):
         super().__init__()
         self.aggr = aggr
-        self.lin1 = MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"])
-        self.lin2 = MLP(emb_dim, emb_dim, mlplayer, True, **kwargs["mlp"])
+        self.lin1 = MLP(emb_dim, emb_dim, mlplayer, True, **mlp)
+        self.lin2 = MLP(emb_dim, emb_dim, mlplayer, True, **mlp)
 
     def forward(self, X: MaskedTensor) -> SparseTensor:
         X1 = X.tuplewiseapply(self.lin1)
@@ -79,7 +79,7 @@ class Convs(nn.Module):
         node representations
     """
 
-    def __init__(self, convlist: List[nn.Module], residual=False, **kwargs):
+    def __init__(self, convlist: List[nn.Module], residual=False):
         '''
             emb_dim (int): node embedding dimensionality
             num_layer (int): number of GNN message passing layers

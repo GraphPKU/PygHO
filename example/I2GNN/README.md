@@ -1,1 +1,3 @@
-python run_I2GNN.py --dataset zinc --epochs 1000  --dp 0.0 --batch_size 1024 --repeat 10  --lr 0.03  --nnnorm bn  --K 0.000472 --K2 7.04e-06 --lossparam 0.01922 --normK 0.008064 --normK2 0 --emb_dim 256 --warmstart 30  --aggr sum --gpool sum --lpool max --mlplayer 2  --outlayer 4 --normparam 0.0425  --res 
+run `python minimal.py` for I2GNN on ZINc
+
+Remember to delete preprocessed data (`dataset/ZINC/subset/preprocessed`) when the preprocess function changes
