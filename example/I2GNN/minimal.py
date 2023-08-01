@@ -1,6 +1,6 @@
 import torch
 from torch_geometric.datasets import ZINC
-from subgdata.SpData import sp_datapreprocess
+from subgdata import SpDataloader, Sppretransform, SubgDatasetClass
 from subgdata.SpSubgSampler import I2Sampler
 from functools import partial
 import torch
@@ -10,7 +10,6 @@ from subgnn.SpXOperator import pooling2nodes, pooling2tuple
 import torch.nn as nn
 from backend.SpTensor import SparseTensor
 from subgnn.utils import MLP
-from torch_geometric.data import DataLoader as PygDataloader
 import torch.nn.functional as F
 import numpy as np
 
@@ -90,7 +89,7 @@ class I2GNN(nn.Module):
         X = SparseTensor(datadict["tupleid"],
                          self.tupleinit(datadict["tupleid"],
                                         datadict["tuplefeat"], datadict["x"]),
-                         shape=[datadict["num_nodes"], datadict["num_nodes"]] +
+                         shape=[datadict["num_nodes"], datadict["num_nodes"], datadict["num_nodes"]] +
                          list(datadict["edge_attr"].shape[1:]),
                          is_coalesced=True)
         X = self.subggnns.forward(X, A, datadict)
@@ -107,27 +106,21 @@ model = I2GNN(mlp={
             "normparam": 0.1
         })
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
-trn_dataset = ZINC("dataset/ZINC",
+trn_dataset =  SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="train",
-                   pre_transform=partial(sp_datapreprocess,
-                                         subgsampler=partial(I2Sampler, hop=3),
-                                         keys=["X_2_A_0_acd"]))
-val_dataset = ZINC("dataset/ZINC",
+                   pre_transform=Sppretransform(partial(I2Sampler, hop=3), ["X_2_A_0_acd"]))
+val_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="val",
-                   pre_transform=partial(sp_datapreprocess,
-                                         subgsampler=partial(I2Sampler, hop=3),
-                                         keys=["X_2_A_0_acd"]))
-tst_dataset = ZINC("dataset/ZINC",
+                   pre_transform=Sppretransform(partial(I2Sampler, hop=3), ["X_2_A_0_acd"]))
+tst_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="test",
-                   pre_transform=partial(sp_datapreprocess,
-                                         subgsampler=partial(I2Sampler, hop=3),
-                                         keys=["X_2_A_0_acd"]))
-trn_dataloader = PygDataloader(trn_dataset, batch_size=256)
-val_dataloader = PygDataloader(val_dataset, batch_size=256)
-tst_dataloader = PygDataloader(tst_dataset, batch_size=256)
+                   pre_transform=Sppretransform(partial(I2Sampler, hop=3), ["X_2_A_0_acd"]))
+trn_dataloader = SpDataloader(trn_dataset, batch_size=32)
+val_dataloader = SpDataloader(val_dataset, batch_size=32)
+tst_dataloader = SpDataloader(tst_dataset, batch_size=32)
 device = torch.device("cuda")
 model = model.to(device)
 

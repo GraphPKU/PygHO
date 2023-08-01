@@ -101,19 +101,19 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
 trn_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="train",
-                   pre_transform=Mapretransform(None, subgsampler=partial(spdsampler, hop=4)))
+                   pre_transform=Mapretransform(partial(spdsampler, hop=4)))
 val_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="val",
-                   pre_transform=Mapretransform(None, subgsampler=partial(spdsampler, hop=4)))
+                   pre_transform=Mapretransform(partial(spdsampler, hop=4)))
 tst_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="test",
-                   pre_transform=Mapretransform(None, subgsampler=partial(spdsampler, hop=4)))
-trn_dataloader = MaDataloader(trn_dataset, batch_size=256)
-val_dataloader = MaDataloader(val_dataset, batch_size=256)
-tst_dataloader = MaDataloader(tst_dataset, batch_size=256)
+                   pre_transform=Mapretransform(partial(spdsampler, hop=4)))
 device = torch.device("cuda")
+trn_dataloader = MaDataloader(trn_dataset, batch_size=256, device=device)
+val_dataloader = MaDataloader(val_dataset, batch_size=256, device=device)
+tst_dataloader = MaDataloader(tst_dataset, batch_size=256, device=device)
 model = model.to(device)
 
 
