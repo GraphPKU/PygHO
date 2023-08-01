@@ -118,7 +118,7 @@ tst_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="test",
                    pre_transform=Sppretransform(partial(I2Sampler, hop=3), ["X_2_A_0_acd"]))
-trn_dataloader = SpDataloader(trn_dataset, batch_size=32)
+trn_dataloader = SpDataloader(trn_dataset, batch_size=32, shuffle=True, drop_last=True)
 val_dataloader = SpDataloader(val_dataset, batch_size=32)
 tst_dataloader = SpDataloader(tst_dataset, batch_size=32)
 device = torch.device("cuda")

@@ -198,9 +198,12 @@ tst_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="test",
                    pre_transform=Sppretransform(partial(KhopSampler, hop=3), ["X_1_A_0_acd"]))
-trn_dataloader = SpDataloader(trn_dataset, batch_size=256)
+trn_dataloader = SpDataloader(trn_dataset, batch_size=256, shuffle=True, drop_last=True)
 val_dataloader = SpDataloader(val_dataset, batch_size=256)
 tst_dataloader = SpDataloader(tst_dataset, batch_size=256)
+
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=40*len(trn_dataloader))
+
 device = torch.device("cuda")
 model = model.to(device)
 def train(dataloader):
@@ -214,6 +217,7 @@ def train(dataloader):
         loss = F.l1_loss(datadict["y"].unsqueeze(-1), pred, reduction="mean")
         loss.backward()
         optimizer.step()
+        scheduler.step()
         losss.append(loss)
     losss = np.average(list(map(lambda x: x.item(), losss)))
     return losss

@@ -111,7 +111,7 @@ tst_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    split="test",
                    pre_transform=Mapretransform(partial(spdsampler, hop=4)))
 device = torch.device("cuda")
-trn_dataloader = MaDataloader(trn_dataset, batch_size=256, device=device)
+trn_dataloader = MaDataloader(trn_dataset, batch_size=256, device=device, shuffle=True, drop_last=True)
 val_dataloader = MaDataloader(val_dataset, batch_size=256, device=device)
 tst_dataloader = MaDataloader(tst_dataset, batch_size=256, device=device)
 model = model.to(device)
