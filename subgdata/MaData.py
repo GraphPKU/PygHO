@@ -1,7 +1,7 @@
 '''
 transform for dense data
 '''
-from torch_geometric.data import Data as PygData
+from torch_geometric.data import Data as PygData, Batch as PygBatch
 import torch
 from torch import Tensor, LongTensor, BoolTensor
 from typing import Any, Callable, Optional, Tuple
@@ -122,31 +122,30 @@ def to_dense_tuplefeat(tuplefeat: Tensor,
     return ret
 
 
-def batch2dense(datadict: dict,
+def batch2dense(batch: PygBatch,
                 batch_size: int = None,
                 max_num_nodes: int = None,
                 denseadj: bool = False):
-    x, nodemask = to_dense_x(datadict["x"], datadict["ptr"], max_num_nodes,
+    x, nodemask = to_dense_x(batch.x, batch.ptr, max_num_nodes,
                              batch_size)
-    datadict["x"], datadict["nodemask"] = x, nodemask
+    batch.x, batch.nodemask = x, nodemask
     batch_size, max_num_nodes = x.shape[0], x.shape[1]
     if denseadj:
-        datadict["A"] = to_dense_adj(datadict["edge_index"],
-                                     datadict["edge_index_batch"],
-                                     datadict["edge_attr"], max_num_nodes,
-                                     batch_size)
+        batch.A = to_dense_adj(batch.edge_index,
+                                  batch.edge_index_batch,
+                                  batch.edge_attr, max_num_nodes,
+                                  batch_size)
     else:
-        datadict["A"] = to_sparse_adj(datadict["edge_index"],
-                                      datadict["edge_index_batch"],
-                                      datadict["edge_attr"], max_num_nodes,
-                                      batch_size)
-    datadict["tuplefeat"] = to_dense_tuplefeat(datadict["tuplefeat"],
-                                               datadict["ptr"],
-                                               datadict["tuplefeat_ptr"],
-                                               max_num_nodes, batch_size)
-    datadict["tuplemask"] = torch.logical_and(nodemask.unsqueeze(1),
-                                              nodemask.unsqueeze(2))
-    return datadict
+        batch.A = to_sparse_adj(batch.edge_index,
+                                   batch.edge_index_batch,
+                                   batch.edge_attr, max_num_nodes,
+                                   batch_size)
+    batch.tuplefeat = to_dense_tuplefeat(batch.tuplefeat, batch.ptr,
+                                            batch.tuplefeat_ptr,
+                                            max_num_nodes, batch_size)
+    batch.tuplemask = torch.logical_and(nodemask.unsqueeze(1),
+                                           nodemask.unsqueeze(2))
+    return batch
 
 
 def ma_datapreprocess(data: PygData, subgsampler: Callable) -> MaSubgData:

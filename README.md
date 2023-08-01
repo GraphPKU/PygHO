@@ -15,6 +15,17 @@ torch_geometric==2.3.0
 torch_scatter==2.1.1+pt20cu118
 torchmetrics==0.11.4
 ```
+
+## TODO
+
+Note on backend's Sparse and Masked Tensor
+
+Change Ma to Dense
+
+example on Dense Nested GNN.
+
+benchmarking
+
 ## Preliminary
 
 Subgraph GNNs all use tuple representations $X\in \mathbb{R}^{n\times n\times d}$, where $X_{ij}$ is feature of node $j$ in subgraph $i$. $X$ can be sparse or dense. For simplicity, we neglect the $d$ dimension. We can build a subgraph identity matrix $B\in \{0,1\}^{n\times n}$, $B_{ik}=1$ means $k\in subg(j)$.

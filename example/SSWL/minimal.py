@@ -1,6 +1,7 @@
 import torch
 from torch import Tensor
 from torch_geometric.datasets import ZINC
+from subgdata import SubgDatasetClass, Mapretransform, MaDataloader
 from subgdata.MaData import ma_datapreprocess, batch2dense
 from subgdata.MaSubgSampler import spdsampler
 from functools import partial
@@ -97,21 +98,21 @@ model = SSWL(mlp={
             "normparam": 0.1
         })
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
-trn_dataset = ZINC("dataset/ZINC",
+trn_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="train",
-                   pre_transform=partial(ma_datapreprocess, subgsampler=partial(spdsampler, hop=4)))
-val_dataset = ZINC("dataset/ZINC",
+                   pre_transform=Mapretransform(None, subgsampler=partial(spdsampler, hop=4)))
+val_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="val",
-                   pre_transform=partial(ma_datapreprocess, subgsampler=partial(spdsampler, hop=4)))
-tst_dataset = ZINC("dataset/ZINC",
+                   pre_transform=Mapretransform(None, subgsampler=partial(spdsampler, hop=4)))
+tst_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="test",
-                   pre_transform=partial(ma_datapreprocess, subgsampler=partial(spdsampler, hop=4)))
-trn_dataloader = PygDataloader(trn_dataset, batch_size=256, follow_batch=["edge_index", "tuplefeat"])
-val_dataloader = PygDataloader(val_dataset, batch_size=256, follow_batch=["edge_index", "tuplefeat"])
-tst_dataloader = PygDataloader(tst_dataset, batch_size=256, follow_batch=["edge_index", "tuplefeat"])
+                   pre_transform=Mapretransform(None, subgsampler=partial(spdsampler, hop=4)))
+trn_dataloader = MaDataloader(trn_dataset, batch_size=256)
+val_dataloader = MaDataloader(val_dataset, batch_size=256)
+tst_dataloader = MaDataloader(tst_dataset, batch_size=256)
 device = torch.device("cuda")
 model = model.to(device)
 
@@ -123,7 +124,6 @@ def train(dataloader):
         batch = batch.to(device, non_blocking=True)
         optimizer.zero_grad()
         datadict = batch.to_dict()
-        datadict = batch2dense(datadict)
         pred = model(datadict)
         loss = F.l1_loss(datadict["y"].unsqueeze(-1), pred, reduction="mean")
         loss.backward()
@@ -140,7 +140,6 @@ def eval(dataloader):
     for batch in dataloader:
         batch = batch.to(device, non_blocking=True)
         datadict = batch.to_dict()
-        datadict = batch2dense(datadict)
         pred = model(datadict)
         loss += F.l1_loss(datadict["y"].unsqueeze(-1), pred, reduction="sum")
         size += pred.shape[0]

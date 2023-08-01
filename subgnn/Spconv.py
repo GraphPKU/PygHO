@@ -28,6 +28,9 @@ class NestedConv(nn.Module):
     def forward(self, X: SparseTensor, A: SparseTensor,
                 datadict: dict) -> SparseTensor:
         tX = X.tuplewiseapply(self.lin)
+        '''
+        A_{ik} <- \sum_j X_{ij} A_{jk}
+        '''
         ret = messagepassing_tuple(tX, 1, A, 0, "X_1_A_0", datadict, self.aggr)
         return ret
 
@@ -107,6 +110,9 @@ class I2Conv(nn.Module):
     def forward(self, X: SparseTensor, A: SparseTensor,
                 datadict: dict) -> SparseTensor:
         tX = X.tuplewiseapply(self.lin)
+        '''
+        \sum_k X_{ijk}A_{kl}
+        '''
         ret = messagepassing_tuple(tX, 2, A, 0, "X_2_A_0", datadict, self.aggr)
         return ret
 
@@ -131,6 +137,9 @@ class CrossSubgConv(nn.Module):
                           self.lin(X.values),
                           shape=X.shape,
                           is_coalesced=True)
+        '''
+        \sum_k A_{ik}X_{kj}
+        '''
         return messagepassing_tuple(A, 1, tX, 0, "A_1_X_0", datadict,
                                     self.aggr)
 

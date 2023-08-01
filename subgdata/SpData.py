@@ -47,6 +47,9 @@ def sp_datapreprocess(data: PygData, subgsampler: Callable,
                                                data.edge_attr,
                                                num_nodes=data.num_nodes)
     tupleid, tuplefeat = subgsampler(data)
+    '''
+    (#sparsedim, #nnz), (#nnz, *)
+    '''
     datadict = data.to_dict()
     datadict.update({
         "num_nodes": data.num_nodes,

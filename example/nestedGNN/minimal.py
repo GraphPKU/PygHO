@@ -1,11 +1,11 @@
 import torch
 from torch_geometric.datasets import ZINC
-from subgdata.SpData import sp_datapreprocess
+from subgdata import SpDataloader, Sppretransform, SubgDatasetClass
 from subgdata.SpSubgSampler import KhopSampler
 from functools import partial
 import torch
 from torch_geometric.nn.aggr import SumAggregation, MeanAggregation, MaxAggregation
-from subgnn.Spconv import Convs, NestedConv, DSSGINConv
+from subgnn.Spconv import Convs, NestedConv, DSSGINConv, SUNConv
 from subgnn.SpXOperator import pooling2nodes, diag2nodes
 import torch.nn as nn
 from backend.SpTensor import SparseTensor
@@ -117,6 +117,9 @@ class GNNAK(NestedGNN):
     def __init__(self, num_tasks=1, num_layer=5, emb_dim=256, aggr="sum", npool="sum", lpool="max", residual=True, outlayer: int = 1, ln_out: bool = False, mlp: dict = {}):
         super().__init__(num_tasks, num_layer, emb_dim, aggr, npool, lpool, residual, outlayer, ln_out, mlp)
         self.mergelin= MLP(3*emb_dim, emb_dim, 1, tailact=True, **mlp) 
+        self.subggnns = Convs(
+            [SUNConv(emb_dim, 1, aggr, mlp) for i in range(num_layer)],
+            residual=residual)
 
     def forward(self, datadict: dict):
         '''
@@ -183,30 +186,21 @@ model = NestedGNN(mlp={
 })
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
-trn_dataset = ZINC("dataset/ZINC",
+trn_dataset =  SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="train",
-                   pre_transform=partial(sp_datapreprocess,
-                                         subgsampler=partial(KhopSampler,
-                                                             hop=3),
-                                         keys=["X_1_A_0_acd"]))
-val_dataset = ZINC("dataset/ZINC",
+                   pre_transform=Sppretransform(partial(KhopSampler, hop=3), ["X_1_A_0_acd"]))
+val_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="val",
-                   pre_transform=partial(sp_datapreprocess,
-                                         subgsampler=partial(KhopSampler,
-                                                             hop=3),
-                                         keys=["X_1_A_0_acd"]))
-tst_dataset = ZINC("dataset/ZINC",
+                   pre_transform=Sppretransform(partial(KhopSampler, hop=3), ["X_1_A_0_acd"]))
+tst_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="test",
-                   pre_transform=partial(sp_datapreprocess,
-                                         subgsampler=partial(KhopSampler,
-                                                             hop=3),
-                                         keys=["X_1_A_0_acd"]))
-trn_dataloader = PygDataloader(trn_dataset, batch_size=256)
-val_dataloader = PygDataloader(val_dataset, batch_size=256)
-tst_dataloader = PygDataloader(tst_dataset, batch_size=256)
+                   pre_transform=Sppretransform(partial(KhopSampler, hop=3), ["X_1_A_0_acd"]))
+trn_dataloader = SpDataloader(trn_dataset, batch_size=256)
+val_dataloader = SpDataloader(val_dataset, batch_size=256)
+tst_dataloader = SpDataloader(tst_dataset, batch_size=256)
 device = torch.device("cuda")
 model = model.to(device)
 def train(dataloader):
