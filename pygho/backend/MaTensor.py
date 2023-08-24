@@ -35,7 +35,7 @@ class MaskedTensor:
         else:
             self.__padvalue = padvalue
 
-    def fill_masked_(self, val: float = 0):
+    def fill_masked_(self, val: float = 0) -> None:
         '''
         inplace fill the masked values
         '''
@@ -93,7 +93,7 @@ class MaskedTensor:
             return self.sum(dim, keepdim) / gsize
         else:
             return self.sum(dim, keepdim) / torch.clamp_min_(
-                torch.sum(self.mask), 1)
+                torch.sum(self.mask, dim=dim, keepdim=keepdim), 1)
 
     def max(self, dim: Optional[int] = None, keepdim: bool = False) -> Tensor:
         tmp = self.fill_masked(-torch.inf)
@@ -114,25 +114,6 @@ class MaskedTensor:
         return filterinf(ret)
 
     def tuplewiseapply(self, func: Callable):
-        ndata = func(self.data)
+        # it may cause nan in gradient and makes amp unable to update
+        ndata = func(self.fill_masked(0))
         return MaskedTensor(ndata, self.__rawmask)
-
-
-if __name__ == "__main__":
-    A = torch.tensor([-torch.inf, 0, torch.inf, 1, 2, -torch.inf, 3])
-    print(filterinf(A))
-    B = 2
-    N = 3
-    M = 2
-    data = torch.randn((B, N, M))
-    mask = torch.zeros((B, N), dtype=torch.bool)
-    mask[0, :2] = True
-    mask[1, :1] = True
-    mt = MaskedTensor(data, mask, padvalue=torch.inf)
-    print(mt.data)
-    print(mt.mask)
-    print(mt.shape)
-    print(mt.max(0), mt.min(0), mt.sum(0), mt.mean(0))
-    print(mt.max(), mt.min(), mt.sum(), mt.mean())
-    print(mt.fill_masked(1))
-    print(mt.tuplewiseapply(lambda x: x + torch.ones_like(x)).data)

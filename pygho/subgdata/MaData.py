@@ -5,7 +5,7 @@ from torch_geometric.data import Data as PygData, Batch as PygBatch
 import torch
 from torch import Tensor, LongTensor, BoolTensor
 from typing import Any, Callable, Optional, Tuple
-from backend.SpTensor import SparseTensor
+from ..backend.SpTensor import SparseTensor
 from torch_geometric.utils import coalesce
 import torch
 
@@ -126,6 +126,7 @@ def batch2dense(batch: PygBatch,
                 batch_size: int = None,
                 max_num_nodes: int = None,
                 denseadj: bool = False):
+    # print(batch[1].x, batch[1].tuplefeat)
     x, nodemask = to_dense_x(batch.x, batch.ptr, max_num_nodes,
                              batch_size)
     batch.x, batch.nodemask = x, nodemask
@@ -163,36 +164,4 @@ def ma_datapreprocess(data: PygData, subgsampler: Callable) -> MaSubgData:
         "tuplefeat": tuplefeat,
     })
     return MaSubgData(**datadict)
-
-
-if __name__ == "__main__":
-    num_nodes1 = 2
-    num_edges1 = 3
-    edge_index1 = torch.randint(num_nodes1, size=(2, num_edges1))
-    edge_attr1 = torch.arange(num_edges1)
-    x1 = torch.arange(num_nodes1)
-    tuplefeat1 = torch.ones((num_nodes1, num_nodes1)).flatten()
-    data1 = MaSubgData(x=x1,
-                       tuplefeat=tuplefeat1,
-                       edge_index=edge_index1,
-                       edge_attr=edge_attr1,
-                       num_nodes=num_nodes1)
-    num_nodes2 = 5
-    num_edges2 = 7
-    edge_index2 = torch.randint(num_nodes2, size=(2, num_edges2))
-    edge_attr2 = torch.arange(num_edges2)
-    x2 = torch.arange(num_nodes2)
-    tuplefeat2 = 2 * torch.ones((num_nodes2, num_nodes2)).flatten()
-    data2 = MaSubgData(x=x2,
-                       tuplefeat=tuplefeat2,
-                       edge_index=edge_index2,
-                       edge_attr=edge_attr2,
-                       num_nodes=num_nodes2)
-    from torch_geometric.data import Batch as PygBatch
-    batch = PygBatch.from_data_list([data1, data2],
-                                    follow_batch=["edge_index", "tuplefeat"])
-    datadict = batch.to_dict()
-    datadict = batch2dense(datadict)
-    print(data1, data2)
-    print(datadict["tuplefeat"], datadict["x"], datadict["A"],
-          datadict["nodemask"], datadict["tuplemask"])
+    

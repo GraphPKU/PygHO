@@ -4,7 +4,7 @@ transform for sparse data
 from torch_geometric.data import Data as PygData
 import torch
 from typing import Any, List, Callable
-from backend.Spspmm import spspmm_ind, filterind
+from ..backend.Spspmm import spspmm_ind, filterind
 from torch_geometric.utils import coalesce
 
 

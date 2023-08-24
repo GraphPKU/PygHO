@@ -7,7 +7,7 @@ from torch import Tensor, LongTensor
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 from typing import Tuple
 import scipy.sparse as ssp
-from backend.SpTensor import coalesce
+from ..backend.SpTensor import coalesce
 
 def k_hop_subgraph(
     node_idx: Union[int, List[int], LongTensor],

@@ -1,7 +1,7 @@
 from torch import Tensor
-from backend.Spspmm import spspmm
-from backend.Spmm import spmm
-from backend.SpTensor import SparseTensor
+from ..backend.Spspmm import spspmm
+from ..backend.Spmm import spmm
+from ..backend.SpTensor import SparseTensor
 from torch_scatter import scatter
 from typing import Optional, Iterable
 

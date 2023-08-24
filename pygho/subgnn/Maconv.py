@@ -1,8 +1,8 @@
 '''
 convolution layers for dense tuple representation
 '''
-from backend.MaTensor import MaskedTensor
-from backend.SpTensor import SparseTensor
+from ..backend.MaTensor import MaskedTensor
+from ..backend.SpTensor import SparseTensor
 import torch.nn as nn
 from .MaXOperator import messagepassing_tuple
 import torch.nn as nn
@@ -102,7 +102,3 @@ class Convs(nn.Module):
             else:
                 X = tX
         return X
-
-
-if __name__ == "__main__":
-    pass

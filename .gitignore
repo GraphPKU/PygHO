@@ -3,6 +3,8 @@ out/*
 *.test
 plot/*
 __pycache__
+*/__pycache__
+*/*/__pycache__
 dataset/*
 *.db
 past

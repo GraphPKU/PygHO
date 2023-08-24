@@ -1,16 +1,19 @@
+import sys
+sys.path.append('./')
+
 import torch
 from torch import Tensor
 from torch_geometric.datasets import ZINC
-from subgdata import SubgDatasetClass, Mapretransform, MaDataloader
-from subgdata.MaData import ma_datapreprocess, batch2dense
-from subgdata.MaSubgSampler import spdsampler
+from pygho.subgdata import SubgDatasetClass, Mapretransform, MaDataloader
+from pygho.subgdata.MaData import ma_datapreprocess, batch2dense
+from pygho.subgdata.MaSubgSampler import spdsampler
 from functools import partial
 import torch
 import torch.nn as nn
-from subgnn.Maconv import CrossSubgConv, NestedConv, Convs
-from subgnn.MaXOperator import pooling_tuple
-from subgnn.utils import MLP
-from backend.MaTensor import MaskedTensor
+from pygho.subgnn.Maconv import CrossSubgConv, NestedConv, Convs
+from pygho.subgnn.MaXOperator import pooling_tuple
+from pygho.subgnn.utils import MLP
+from pygho import MaskedTensor
 from torch_geometric.data import DataLoader as PygDataloader
 import torch.nn.functional as F
 import numpy as np
@@ -40,7 +43,7 @@ class SSWL(nn.Module):
                  gpool="mean",
                  lpool="mean",
                  residual=True,
-                 outlayer: int = 1,
+                 outlayer: int = 2,
                  ln_out: bool = False,
                  mlp: dict = {}):
         '''
@@ -55,8 +58,8 @@ class SSWL(nn.Module):
         self.lin_tupleinit = nn.Linear(emb_dim, emb_dim)
 
         ### GNN to generate node embeddings
-        self.subggnns = Convs(sum([[NestedConv(emb_dim, 1, "sum", mlp)] +
-                                   [CrossSubgConv(emb_dim, 1, "sum", mlp)]
+        self.subggnns = Convs(sum([[NestedConv(emb_dim, 2, "sum", mlp)] +
+                                   [CrossSubgConv(emb_dim, 2, "sum", mlp)]
                                    for i in range(num_layer)],
                                   start=[]),
                               residual=residual)
@@ -94,10 +97,10 @@ class SSWL(nn.Module):
 model = SSWL(mlp={
             "dp": 0,
             "norm": "ln",
-            "act": "relu",
+            "act": "silu",
             "normparam": 0.1
         })
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-5)
 trn_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="train",
@@ -122,6 +125,8 @@ def train(dataloader):
     losss = []
     for batch in dataloader:
         batch = batch.to(device, non_blocking=True)
+        # num_nodes =  batch.ptr[2]-batch.ptr[1]
+        # print(batch.x[1][:num_nodes], num_nodes, batch.nodemask[1][:num_nodes+1], batch.A.indices, batch.tuplemask[1][:num_nodes+1, :num_nodes+1], batch.tuplefeat[1][:num_nodes, :num_nodes].flatten())
         optimizer.zero_grad()
         datadict = batch.to_dict()
         pred = model(datadict)
@@ -159,4 +164,3 @@ for epoch in range(1, 1001):
         tst_score = eval(tst_dataloader)
     t3 = time.time()
     print(f"epoch {epoch} trn time {t2-t1:.2f} val time {t3-t2:.2f}  l1loss {losss:.4f} val MAE {val_score:.4f} tst MAE {tst_score:.4f}")
-
