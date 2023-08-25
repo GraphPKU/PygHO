@@ -1,0 +1,8 @@
+Metadata-Version: 2.1
+Name: pygho
+Version: 0.0.1
+Summary: PygHO is a library for high-order GNNs
+Download-URL: https://github.com/GraphPKU/PygHO
+Author: GraphPKU
+Requires-Python: >=3.10
+License-File: LICENSE

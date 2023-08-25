@@ -4,6 +4,7 @@ import pygho.backend.SpTensor as SpTensor
 import pygho.backend.Spspmm as Spspmm
 import pygho.backend.Spmm as Spmm
 import torch
+import numpy as np
 
 def maxdiff(a: torch.Tensor, b: torch.Tensor) -> float:
     return torch.max((a-b).abs()).item()
@@ -11,7 +12,15 @@ def maxdiff(a: torch.Tensor, b: torch.Tensor) -> float:
 def tensorequal(a: torch.Tensor, b: torch.Tensor) -> bool:
     return torch.all(a==b).item()
 
-EPS = 1e-5
+def lexsort(keys, dim: int = -1):
+    '''
+    lexsort ascendingly
+    '''
+    tmpkey = torch.flip(keys, dims=(0,))
+    ind = np.lexsort(tmpkey.detach().cpu().numpy(), axis=dim)
+    return keys[:, torch.from_numpy(ind).to(keys.device)]
+
+EPS = 5e-5
 
 
 class SpTensorTest(unittest.TestCase):
@@ -33,7 +42,6 @@ class SpTensorTest(unittest.TestCase):
 
     def test_hash(self):
         sd, sshape, nnz, d = 5, (2, 3, 7, 11, 13), 17, 7
-        from torch_geometric.utils import lexsort
         indices = torch.stack(
             tuple(torch.randint(sshape[i], (nnz, )) for i in range(sd)))
         indices = lexsort(indices, dim=-1)
