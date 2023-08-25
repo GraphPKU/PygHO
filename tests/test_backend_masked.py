@@ -59,7 +59,6 @@ class MaTensorTest(unittest.TestCase):
 class SpmammTest(unittest.TestCase):
     def setUp(self) -> None:
         b, n, m, l, d = 5, 3, 7, 13, 11
-
         A = torch.rand((b, n, m, d))
         Amask = torch.rand_like(A[:, :, :, 0]) > 0.9
         MA = MaskedTensor(A, Amask)

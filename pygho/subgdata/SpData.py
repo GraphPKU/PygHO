@@ -46,13 +46,13 @@ def sp_datapreprocess(data: PygData, subgsampler: Callable,
     data.edge_index, data.edge_attr = coalesce(data.edge_index,
                                                data.edge_attr,
                                                num_nodes=data.num_nodes)
-    tupleid, tuplefeat = subgsampler(data)
+    tupleid, tuplefeat, num_nodes = subgsampler(data)
     '''
-    (#sparsedim, #nnz), (#nnz, *)
+    (#sparsedim, #nnz), (#nnz, *), int if num of subgraph = num of node else tensor of the sparse shape of representation ((a), (b), ...)
     '''
     datadict = data.to_dict()
     datadict.update({
-        "num_nodes": data.num_nodes,
+        "num_nodes": num_nodes,
         "num_edges": data.edge_index.shape[1],
         "x": data.x,
         "edge_index": data.edge_index,

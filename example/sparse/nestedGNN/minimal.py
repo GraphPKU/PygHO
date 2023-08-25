@@ -188,7 +188,7 @@ model = NestedGNN(mlp={
 })
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
-trn_dataset =  SubgDatasetClass(ZINC)("dataset/ZINC",
+trn_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
                    subset=True,
                    split="train",
                    pre_transform=Sppretransform(partial(KhopSampler, hop=3), ["X_1_A_0_acd"]))

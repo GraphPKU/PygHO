@@ -25,7 +25,7 @@ def _repr(obj: Any) -> str:
     return ret
 
 
-def Sppretransform(sampler: Callable, keys: List[str], pre_transform: Callable=None):
+def Sppretransform(sampler: Callable, keys: List[str]=[], pre_transform: Callable=None):
     subgpre_transform = partial(sp_datapreprocess,
                                 subgsampler=sampler,
                                 keys=keys)

@@ -1,8 +1,10 @@
-# pyg_subg
+TODO: fix spmamm and mamamm (for min, max, min aggregation)
+# PygHO
 
-A library for subgraph GNN based on torch_geometric.
+A library for high-order GNN based on torch_geometric.
 
-# Tested environments
+## Installation
+We have tested `PygHO` in the following environments
 ```
 Python 3.10.10
 networkx==2.8.4
@@ -15,84 +17,79 @@ torch_geometric==2.3.0
 torch_scatter==2.1.1+pt20cu118
 torchmetrics==0.11.4
 ```
+First clone our repo
+```
 
-## TODO
+```
+Then install it locally
+```
+cd PygHO
+pip install -e ./
+```
+`-e` enables modifying the library code dynamically and is optional. 
 
-Note on backend's Sparse and Masked Tensor
-
-Change Ma to Dense
-
-example on Dense Nested GNN.
-
-benchmarking
 
 ## Preliminary
 
-Subgraph GNNs all use tuple representations $X\in \mathbb{R}^{n\times n\times d}$, where $X_{ij}$ is feature of node $j$ in subgraph $i$. $X$ can be sparse or dense. For simplicity, we neglect the $d$ dimension. We can build a subgraph identity matrix $B\in \{0,1\}^{n\times n}$, $B_{ik}=1$ means $k\in subg(j)$.
+PygHO is a library for high-order GNN. Ordinary GNNs, like GCN, GIN, GraphSage, all pass messages between nodes and produce node representations. The node representation forms a dense matrix of shape $(n, d)$, where $n$ is the number of nodes and $d$ is the hidden dimension. Existing libraries like PyG can easily implement them.
 
-https://arxiv.org/pdf/2302.07090.pdf categorized subgraph GNNs' operators.
+In constrast, higher-order GNNs use node tuples as the message passing unit and produce representations for the tuples. The tuple representation can be of shape $(n, n, d)$, $(n, n, n, d)$, and even more dimensions. Furthermore, to reduce complexity, the representation can be sparse. Our library aims to provide support for them. 
 
-**Single Point Operation:** 
+## Introduction by Example
 
+We shortly introduce the fundamental concepts of PygHO through self-contained examples.
+
+PygHO provides the following main features:
+
+* Basic Data Structure
+
+* High-Order Graph Data Preprocessing
+
+* Mini-batches and DataLoader
+
+* Learning Methods on Graphs
+
+### Basic Data Structure
+We provide data structures for high order tensors: Sparse and Dense. In implementation, they are very different. However, they are essentially represent high-order tensors.
+
+#### Sparse Data Structure
+The ordinary tensor used in machine learning stores each element contiguously in physical memory. However, in graph machine learning, some tensors (like graph adjacency matrix) have almost all its elements equals to $0$ (in other words, have few non-zero elements and are sparse). Therefore, sparse tensor can be applied for saving memory and time. 
+
+Various sparse storage formats have been developed over the years. Among them, PygHO implements COO format for sparse tensor. The non-zero elements are stored as tuples of element indices and the corresponding values.
+
+* The indices of non-zero elements are collected in a `indices` LongTensor of shape `(sparsedim, nnz)`, where `sparsedim` the number of sparse dimensions and `nnz` is the number of non-zero elements.
+
+* The corresponding element values are collected in `values` tensor of shape `(nnz, denseshape)` of the value type, where `denseshape` can be arbitrary.
+
+For example, the following matrix 
 $$
-Y_{ij}\leftarrow X_{ij}, X_{ii}, X_{jj}, X_{ji} \Rightarrow Y\leftarrow X, diag(X)11^T, 11^Tdiag(X), X^T
+\begin{bmatrix}
+0&1&0\\
+0&0&2\\
+3&0&0
+\end{bmatrix}
 $$
-
-**Global-Global Operation:** pooling on the whole graph
-
-$$
-Y_{ij}\leftarrow \sum_k X_{ik},\sum_k X_{kj}\Rightarrow Y\leftarrow X11^T, 11^TX
-$$
-
-**Global-Local Operation**: message passing on the whole graph
-
-$$
-Y_{ij}\leftarrow \sum_{k\in N(j, A)} X_{ik},\sum_{k\in N(i, A)} X_{kj} \Rightarrow
-Y\leftarrow AX, XA
-$$
-
-**Local-Global Operation**: pooling within subgraph. 
-
-$$
-Y_{ij}\leftarrow \sum_{k\in subg(i)} X_{ik}\Rightarrow Y\leftarrow (X\odot B)11^T
-$$
-
-**Local-Local Operation**: message passing in each subgraph
-for induced subgraphs
-
-$$
-Y_{ij}\leftarrow \sum_{k\in N(j, A)\cap subg(i)} X_{ik}\Rightarrow Y\leftarrow(X\odot B)A^T
-$$
-
-*worse case: change edge*
-
-$$
-Y_{ij}\leftarrow \sum_{k\in N(j, A^{(i)})} X_{ik}\\
-=\sum_{k}A_{jk}^{(i)}X_{ik}\\
-$$
-
-Need a three order tensor $A_{jk}^{(i)}$. Not considered now.
-
-
-# Getting started
-
-## Data structure: SparseTensor and DenseTensor
-
-For each graph, 2-Tuple Representation $X$ can have two data formats. For each graph, the 2-Tuple representation is $n\times n\times d$ tensor. We have two ways to express them.
-* Sparse tensor (backend.SparseTensor). indice $\in \mathbb{N}^{2\times nnz}$, value $\in \mathbb{N} ^{nnz\times d}$. 
-
-You can create a SparseTensor ( Spare(indices, values, shape) ) as follows.
-
+can be represented as 
 ```
+indices = [[0, 1, 2], [1, 2, 0]]
+values = [1, 2, 3]
+```
+
+To create a SparseTensor, we can use `SpTensor` class.
+```
+from pygho import SparseTensor
 n, m, nnz, d = 5, 7, 17, 7
 indices = torch.stack(
         (torch.randint(0, n, (nnz, )), torch.randint(0, m, (nnz, ))))
 values = torch.randn((nnz, d))
-A1 = torch.sparse_coo_tensor(indices, values, size=(n, m, d))
+A = SparseTensor(indices, values, shape=(n, m, d))
 ```
 
+Note that each non-zero elements in SpTensor format takes `sparse_dim` int64 as indices and the elements itself, if the tensor is not sparse enough, SpTensor can take more space than dense tensor. 
 
-* Masked tensor (backend.MaskedTensor). value $\in \mathbb{R}^{n\times n \times d}$. mask $\{0,1\}^{n\times n}$. mask[i, j] = True means the tuple (i, j)  is not masked.
+#### Dense Data Structure
+
+For tensors not sparse enough, we still need to use dense tensor to store data but keeps sparsity: ignore elements that should not exists. For example, as graph size varies, the size of embedding changes and padding is needed. Therefore, we propose MaskedTensor: a dense tensor `data` to save values of the tensor and a BoolTensor `mask` to show whether an elements exists in the tensor.
 
 You can create a masked tensor MaskedTensor(data, mask) as follows.
 ```
@@ -104,28 +101,103 @@ mask = torch.zeros((B, N), dtype=torch.bool)
 mask[0, :2] = True
 mask[1, :1] = True
 mt = MaskedTensor(data, mask, padvalue=torch.inf)
-print(mt.data)
-print(mt.mask)
-print(mt.shape)
+```
+where `mask`'s shape should match to first dimensions of `data`. Elements in mask is true iff the corresponding elements in data exists in the tensor. 
+
+MaskedTensor is useful when the tensor is not sparse.
+
+#### Basic Operations
+Both MaskedTensor and SparseTensor have the following operations.
+* to(device)
+
+Transfer all data to device.
+
+* shape
+
+Return the shape of tensor
+
+* reduce operation: sum, mean, max, min
+
+Reduce dimensions.
+
+* tuplewiseapply(func)
+
+Apply function to each elements.
+
+### High-Order Graph Data Preprocessing
+
+In general, we wrap Pyg's dataset preprocessing routine.
+
+SubgDatasetClass is a wrapper that changes the preprocessed name with different pre_transform function. Otherwise, you need to delete the preprocessed dataset with different data pre_transform functions.
+
+```
+from pygho.subgdata import SubgDatasetClass
+trn_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
+                   subset=True,
+                   split="train")
+```
+To get high-order information, we wrap pre_transform function.
+
+#### Sparse
+
+For sparse, we can simply use `Sppretransform(your_tuple_sampler)` as the pre_transform function. 
+```
+from pygho.subgdata import Sppretransform, SubgDatasetClass
+from pygho.subgdata.SpSubgSampler import KhopSampler
+trn_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
+                   subset=True,
+                   split="train",
+                   pre_transform=Sppretransform(partial(KhopSampler, hop=3)))
 ```
 
-For a batch of size $b$. X is
-* Sparse tensor. indice $\in \mathbb{N}^{2\times nnz}$, value $\in \mathbb{N} ^{nnz\times d}$. With another batch tensor in $\mathbb{N}^{nnz}$
-* Masked tensor. value $\in \mathbb{R}^{b\times n\times n \times d}$. mask $\mathbb{R}^{b\times n\times n}$.
+After preprocess, each data contains all keys in original data, `tupleid` (the indices of tuples), and `tuplefeat` (extra features of tuples assigned by tuple sampler).
 
-For a batch. A is
+#### Dense
 
-* Sparse tensor of two sparse dimensions when X is a sparse tensor. 
+For dense, we can simply use `Mapretransform(your_tuple_sampler)` as the pre_transform function.
 
-* Sparse tensor of three sparse dimensions when X is a masked tensor.
+```
+from pygho.subgdata import SubgDatasetClass, Mapretransform
+from pygho.subgdata.MaSubgSampler import spdsampler
 
-## Basic Message passing operation.
+trn_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
+                   subset=True,
+                   split="train",
+                   pre_transform=Mapretransform(partial(spdsampler, hop=4)))
+```
 
+After preprocess, each data contains all keys in original data, `tuplemask` (the mask of tuples), and `tuplefeat` (extra features of tuples assigned by tuple sampler).
+### Mini-batch and DataLoader
+
+We provides dataloader for sparse and dense data respectively.
+
+```
+from pygho.subgdata import SpDataloader
+trn_dataloader = SpDataloader(trn_dataset, batch_size=32, shuffle=True, drop_last=True)
+```
+For a batch of size $b$, `tupleid` $\in \mathbb{N}^{2\times nnz}$, `tuplefeat` $\in \mathbb{N} ^{nnz\times d}$, where `nnz` is sum of the number of non-zero elements in each sparse data. The initial node representation can be a sparse tensor of shape $(N, N, *)$.
+```
+X = SparseTensor(batch.tupleid,
+                batch.tuplefeat,
+                shape=[batch.num_nodes, batch.num_nodes] + list(batch.tuplefeat.shape[1:]))
+```
+$X$ is a block diagonal matrix, whose blocks correspond to initial representations of each data.
+
+The adjacency is also a block diagonal matrix, whose blocks correspond to the adjacency matrix of each data.
+
+
+For dense, 
+```
+from pygho.subgdata import MaDataloader
+trn_dataloader = MaDataloader(trn_dataset, batch_size=256, device=device, shuffle=True, drop_last=True)
+```
+
+For a batch of size $b$. 
+`tuplefeat` is of shape $(b, n, n, *)$. `tuplemask` is of shape $(b, n, n)$. `A` is sparse adjacency matrix of shape (b, n, n, *). 
+
+### Learning Methods on Graph
 example/nestedGNN and example/SSWL are examples of sparse and dense subgraph GNNs, respectively. 
-
-### Sparse Representation
-
-#### Tuple message passing
+#### Basic Message passing operation.
 Tuple representation $X\in \mathbb{R}^{n\times n\times d1}$, adjacency matrix $A\in \mathbb{R}^{n\times n\times d2}$. d1, d2 can be the same number or any broadcastable shape.
 
 * Message passing within subgraph, equivalent to $XA$. You can use 
@@ -143,14 +215,7 @@ subgnn.SpXoperator.messagepassing_tuple(A, X, "A_1_X_0", datadict, aggr)
 subgnn.SpXoperator.messagepassing_tuple(X1, X2, "X_1_X_0", datadict, aggr).
 ```
 
-We also directly provide some out-of-box convolution layers in  subgnn.Spconv.
-
-#### Tuple-wise operation
-
-Tuple representation $X\in \mathbb{R}^{n\times n\times d1}$. You have an MLP $f$. To get $f(X)$. You can use
-'''
-X.tuplewiseapply(f)
-'''
+We also directly provide some out-of-box convolution layers in subgnn.Spconv.
 
 #### Pooling and Unpooling
 Pooling: tuple representation to dense node representation.
@@ -187,12 +252,6 @@ subgnn.MaXoperator.messagepassing_tuple(X1, X2, datadict, aggr).
 
 We also directly provide some out-of-box convolution layers in subgnn.Spconv.
 
-#### Tuple-wise operation
-
-Tuple representation $X\in \mathbb{R}^{n\times n\times d1}$. You have an MLP $f$. To get $f(X)$. You can use
-'''
-X.tuplewiseapply(f)
-'''
 
 #### Pooling and Unpooling
 Pooling: tuple representation to dense node representation.
@@ -204,77 +263,7 @@ Unpooling: dense node representation to tuple representation as MaskedTensor. Ou
 subgnn.MaXOperator.unpooling_node(nodeX: Tensor, tarX: Masked, dim=1)
 ```
 
-### Data process
-
-We also provide utility for data processing. 
-
-### Sparse data
-
-When you define a pygdataset, you can change to transform input to `subgdata.SpData.sp_datapreprocess`. You can combine with a subgraph sampler as follows.
-
-```
-from functools import partial
-from subgdata.SpSubgSampler import KhopSampler
-kwargs={}
-kwargs["transform"] = partial(sp_datapreprocess, subgsampler=partial(KhopSampler, hop=3), keys=["XA_acd", "XX_acd", "AX_acd"])
-trn_d = ZINC("dataset/ZINC", **kwargs)
-```
-The subgraph sampler produces tuples, and their structural label like shortest path distance. You can also use your own subgraph sampler policy. * Changing the `transform=...` to `pretransform=...` can save the subgraph data and thus avoids repeated data processing. However, you need to delete the preprocessed data with a different subgraph sampler.
-
-keys mean some precomputed quantities used in sparse-sparse tensor multiplication. For example, if your model uses XA operation, you can add "XA_acd" to the keys. It will accelerate computation but take more data processing time and space. 
-
-The transformed data have two extra properties, `tupleid` of shape (2, num_tuple), `tuplefeat` of shape (2, *).
-
-To load it, you can directly use pyg's dataloader. You can build A and X tensor as follows.
-
-```
-datadict = batch.to_dict()
-A = SparseTensor(datadict["edge_index"],
-                         datadict["edge_attr"],
-                         shape=[datadict["num_nodes"], datadict["num_nodes"]] +
-                         list(datadict["edge_attr"].shape[1:]),
-                         is_coalesced=True)
-X = SparseTensor(datadict["tupleid"],
-                         self.tupleinit(datadict["tupleid"],
-                                        datadict["tuplefeat"], datadict["x"]),
-                         shape=[datadict["num_nodes"], datadict["num_nodes"]] +
-                         list(datadict["edge_attr"].shape[1:]),
-                         is_coalesced=True)
-```
-
-
-* Madata.py
-
-Similar to sparse data, you can change to transform input to `subgdata.MaData.ma_datapreprocess`. You can combine with a subgraph sampler as follows.
-
-```
-import torch
-from subgdata.MaData import ma_datapreprocess
-from subgdata.MaSubgSampler import rdsampler, spdsampler
-import torch_geometric.transforms as T
-from functools import partial
-kwargs["transform"] = partial(ma_datapreprocess, subgsampler=partial(spdsampler, hop=4))
-trn_d = ZINC("dataset/ZINC", **kwargs)
-```
-
-To load it, you can still use pyg's dataloader with follow_batch.
-
-```
-train_loader = DataLoader(trn_d,
-                                  batch_size=args.batch_size,
-                                  shuffle=True,
-                                  drop_last=True,
-                                  num_workers=args.num_workers,
-                                  follow_batch=["edge_index", "tuplefeat"])
-from subgdata.MaData import batch2dense
-for batch in train_loader:
-        datadict = batch.to_dict()
-        datadict = batch2dense(datadict)
-
-```
-
-
-# Speed issue
+## Speed issue
 
 You can use python -O to disable all `assert` when you are sure there is no bug.
 

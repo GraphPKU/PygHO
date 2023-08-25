@@ -101,7 +101,7 @@ def CycleCenteredKhopSampler(data: PygData,
                     num_nodes=1,
                 ))
     subgbatch = PygBatch.from_data_list(subgraphs)
-    return subgbatch.subg_nodeidx.t(), subgbatch.x
+    return subgbatch.subg_nodeidx.t(), subgbatch.x, data.num_nodes
 
 
 def KhopSampler(data: PygData, hop: int = 2) -> Tuple[LongTensor, LongTensor]:
@@ -130,7 +130,7 @@ def KhopSampler(data: PygData, hop: int = 2) -> Tuple[LongTensor, LongTensor]:
                                   tuplefeat,
                                   num_nodes=data.num_nodes,
                                   reduce="min")
-    return tupleid, tuplefeat
+    return tupleid, tuplefeat, data.num_nodes
 
 
 def I2Sampler(data: PygData, hop: int = 3) -> Tuple[LongTensor, LongTensor]:
@@ -169,4 +169,4 @@ def I2Sampler(data: PygData, hop: int = 3) -> Tuple[LongTensor, LongTensor]:
                                   tuplefeat,
                                   num_nodes=data.num_nodes,
                                   reduce="max")
-    return tupleid, tuplefeat
+    return tupleid, tuplefeat, data.num_nodes

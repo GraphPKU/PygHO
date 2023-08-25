@@ -1,11 +1,7 @@
-import sys
-sys.path.append('./')
-
 import torch
 from torch import Tensor
 from torch_geometric.datasets import ZINC
 from pygho.subgdata import SubgDatasetClass, Mapretransform, MaDataloader
-from pygho.subgdata.MaData import ma_datapreprocess, batch2dense
 from pygho.subgdata.MaSubgSampler import spdsampler
 from functools import partial
 import torch
@@ -14,7 +10,6 @@ from pygho.subgnn.Maconv import CrossSubgConv, NestedConv, Convs
 from pygho.subgnn.MaXOperator import pooling_tuple
 from pygho.subgnn.utils import MLP
 from pygho import MaskedTensor
-from torch_geometric.data import DataLoader as PygDataloader
 import torch.nn.functional as F
 import numpy as np
 
