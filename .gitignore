@@ -16,3 +16,5 @@ mod/*
 !dataset/CSL
 test/*
 opt/*
+pygho.egg-info
+*toml
