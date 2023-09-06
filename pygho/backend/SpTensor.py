@@ -214,7 +214,7 @@ class SparseTensor:
         TODO: unit test ??
         '''
         if isinstance(dim, int):
-            dim = [dim]
+            raise NotImplementedError
         if dim == None:
             dim = list(range(self.sparse_dim))
         if return_sparse:
@@ -336,7 +336,7 @@ class SparseTensor:
         ret = ret._coalesced_(self.is_coalesced())
         return ret
 
-    def tuplewiseapply(self, func: Callable):
+    def tuplewiseapply(self, func: Callable[[Tensor], Tensor]):
         nvalues = func(self.values)
         return SparseTensor(self.indices,
                             nvalues,

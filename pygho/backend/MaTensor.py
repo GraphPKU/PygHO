@@ -25,6 +25,7 @@ class MaskedTensor:
                           ndim] == mask.shape, "data and mask's first dimensions should match"
         self.__data = data
         self.__rawmask = mask
+        self.__masked_dim = mask.ndim
         while mask.ndim < data.ndim:
             mask = mask.unsqueeze(-1)
         mask = mask.expand_as(data)
@@ -73,6 +74,22 @@ class MaskedTensor:
     @property
     def shape(self) -> torch.Size:
         return self.__data.shape
+    
+    @property
+    def masked_dim(self):
+        return self.__masked_dim
+    
+    @property
+    def dense_dim(self):
+        return len(self.denseshape)
+    
+    @property
+    def sparseshape(self):
+        return self.shape[:self.masked_dim]
+    
+    @property
+    def denseshape(self):
+        return self.shape[self.masked_dim:]
 
     def sum(self, dim: Optional[int] = None, keepdim: bool = False) -> Tensor:
         '''
@@ -113,7 +130,7 @@ class MaskedTensor:
             ret = torch.min(tmp, dim=dim, keepdim=keepdim)[0]
         return filterinf(ret)
 
-    def tuplewiseapply(self, func: Callable):
+    def tuplewiseapply(self, func: Callable[[Tensor], Tensor]):
         # it may cause nan in gradient and makes amp unable to update
         ndata = func(self.fill_masked(0))
         return MaskedTensor(ndata, self.__rawmask)

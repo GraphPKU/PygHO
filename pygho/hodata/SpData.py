@@ -1,10 +1,12 @@
 '''
 transform for sparse data
 '''
-from torch_geometric.data import Data as PygData
+from torch_geometric.data import Data as PygData, Batch as PygBatch
 import torch
-from typing import Any, List, Callable
+from typing import Any, List, Callable, Union, Tuple
+from torch import Tensor
 from ..backend.Spspmm import spspmm_ind, filterind
+from ..backend.SpTensor import SparseTensor
 from torch_geometric.utils import coalesce
 
 
@@ -25,7 +27,7 @@ class SpSubgData(PygData):
 
     def __inc__(self, key: str, value: Any, *args, **kwargs):
         if key == 'tupleid':
-            return self.num_nodes
+            return self.tupleshape.reshape(-1, 1)
         if key.endswith("_acd"):
             op1, _, op2, _ = parsekey(key)
             return torch.tensor(
@@ -41,24 +43,31 @@ class SpSubgData(PygData):
         return super().__cat_dim__(key, value, *args, **kwargs)
 
 
-def sp_datapreprocess(data: PygData, subgsampler: Callable,
+def batch2sparse(batch: PygBatch)->PygBatch:
+    batch.A = SparseTensor(batch.edge_index, batch.edge_attr, [batch.num_nodes, batch.num_nodes] if batch.edge_attr is None else [batch.num_nodes, batch.num_nodes]+batch.edge_attr.shape[1:], is_coalesced=True)
+    totaltupleshape = batch.tupleshape.sum(dim=0).tolist()
+    batch.X = SparseTensor(batch.tupleid, batch.tuplefeat, shape=totaltupleshape if batch.tuplefeat is None else totaltupleshape + batch.tuplefeat.shape[1:], is_coalesced=True)
+    return batch
+
+def sp_datapreprocess(data: PygData, subgsampler: Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]],
                       keys: List[str]) -> SpSubgData:
     data.edge_index, data.edge_attr = coalesce(data.edge_index,
                                                data.edge_attr,
                                                num_nodes=data.num_nodes)
-    tupleid, tuplefeat, num_nodes = subgsampler(data)
+    tupleid, tuplefeat, tupleshape = subgsampler(data)
     '''
     (#sparsedim, #nnz), (#nnz, *), int if num of subgraph = num of node else tensor of the sparse shape of representation ((a), (b), ...)
     '''
     datadict = data.to_dict()
     datadict.update({
-        "num_nodes": num_nodes,
+        "num_nodes": data.num_nodes,
         "num_edges": data.edge_index.shape[1],
         "x": data.x,
         "edge_index": data.edge_index,
         "edge_attr": data.edge_attr,
         "tupleid": tupleid,
         "tuplefeat": tuplefeat,
+        "tupleshape": torch.LongTensor(tupleshape).reshape(1, -1),
         "num_tuples": tupleid.shape[1]
     })
     for key in keys:

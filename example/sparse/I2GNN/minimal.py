@@ -1,17 +1,15 @@
-import sys
-sys.path.append('./')
 import torch
 from torch_geometric.datasets import ZINC
-from pygho.subgdata import SpDataloader, Sppretransform, SubgDatasetClass
-from pygho.subgdata.SpSubgSampler import I2Sampler
+from pygho.hodata import SpDataloader, Sppretransform, SubgDatasetClass
+from pygho.hodata.SpTupleSampler import I2Sampler
 from functools import partial
 import torch
 from torch_geometric.nn.aggr import SumAggregation, MeanAggregation, MaxAggregation
-from pygho.subgnn.Spconv import Convs, I2Conv
-from pygho.subgnn.SpXOperator import pooling2nodes, pooling2tuple
+from pygho.honn.Spconv import Convs, I2Conv
+from pygho.honn.SpXOperator import pooling2nodes, pooling2tuple
 import torch.nn as nn
 from pygho import SparseTensor
-from pygho.subgnn.utils import MLP
+from pygho.honn.utils import MLP
 import torch.nn.functional as F
 import numpy as np
 

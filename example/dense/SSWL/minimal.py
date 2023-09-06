@@ -1,14 +1,14 @@
 import torch
 from torch import Tensor
 from torch_geometric.datasets import ZINC
-from pygho.subgdata import SubgDatasetClass, Mapretransform, MaDataloader
-from pygho.subgdata.MaSubgSampler import spdsampler
+from pygho.hodata import SubgDatasetClass, Mapretransform, MaDataloader
+from pygho.hodata.MaTupleSampler import spdsampler
 from functools import partial
 import torch
 import torch.nn as nn
-from pygho.subgnn.Maconv import CrossSubgConv, NestedConv, Convs
-from pygho.subgnn.MaXOperator import pooling_tuple
-from pygho.subgnn.utils import MLP
+from pygho.honn.Maconv import CrossSubgConv, NestedConv, Convs
+from pygho.honn.MaXOperator import pooling_tuple
+from pygho.honn.utils import MLP
 from pygho import MaskedTensor
 import torch.nn.functional as F
 import numpy as np

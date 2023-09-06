@@ -1,6 +1,6 @@
 import torch
-from torch import LongTensor
-from typing import Optional
+from torch import LongTensor, Tensor
+from typing import Optional, Callable
 from torch_scatter import scatter
 from .SpTensor import SparseTensor, indicehash, decodehash
 import warnings
@@ -193,3 +193,35 @@ def spspmm(A: SparseTensor,
         else:
             warnings.warn("tar_ind is not found")
             return spspmm(A, dim1, B, dim2, aggr, acd=bcd, tar_ind=ind)
+
+
+
+def spspmpnn(A: SparseTensor,
+           dim1: int,
+           B: SparseTensor,
+           dim2: int,
+           C: SparseTensor,
+           acd: LongTensor,
+           message_func: Callable[[Tensor, Tensor, Tensor, LongTensor], Tensor],
+           aggr: str = "sum") -> SparseTensor:
+    '''
+    SparseTensor SparseTensor matrix multiplication at sparse dim.
+    tar_ind mean tuples need output.
+    Dense shapes of A, B must be broadcastable. 
+    '''
+    mult = message_func(None if A.values is None else A.values[acd[1]], 
+                        None if B.values is None else B.values[acd[2]], 
+                        None if C.values is None else C.values[acd[0]], 
+                        acd[0])
+    tar_ind = C.indices
+    retval = scatter(mult,
+                     acd[0],
+                     dim=0,
+                     dim_size=tar_ind.shape[1],
+                     reduce=aggr)
+    return SparseTensor(tar_ind,
+                        retval,
+                        shape=A.sparseshape[:dim1] +
+                        A.sparseshape[dim1 + 1:] + B.sparseshape[:dim2] +
+                        B.sparseshape[dim2 + 1:] + retval.shape[1:],
+                        is_coalesced=True)

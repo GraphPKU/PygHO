@@ -5,7 +5,8 @@ from torch_geometric.data.datapipes import DatasetAdapter
 from torch_geometric.loader import DataLoader as PygDataLoader
 import os.path as osp
 import re
-from typing import Any, Callable, List, Iterable, Sequence
+from typing import Any, Callable, List, Iterable, Sequence, Tuple, Union
+from torch import Tensor
 from functools import partial
 from .SpData import sp_datapreprocess
 from .MaData import ma_datapreprocess, batch2dense
@@ -25,7 +26,7 @@ def _repr(obj: Any) -> str:
     return ret
 
 
-def Sppretransform(sampler: Callable, keys: List[str]=[], pre_transform: Callable=None):
+def Sppretransform(sampler: Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]], keys: List[str]=[], pre_transform: Callable=None):
     subgpre_transform = partial(sp_datapreprocess,
                                 subgsampler=sampler,
                                 keys=keys)
@@ -81,6 +82,30 @@ class IterWrapper:
             batch = batch.to(self.device, non_blocking=True)
         batch = self.batch_transform(batch)
         return batch
+
+
+class SpDataloader(PygDataLoader):
+
+    def __init__(self,
+                 dataset: Dataset | Sequence[BaseData] | DatasetAdapter,
+                 batch_size: int = 1,
+                 shuffle: bool = False,
+                 follow_batch: List[str] | None = None,
+                 exclude_keys: List[str] | None = None,
+                 device = None,
+                 **kwargs):
+        if follow_batch is None:
+            follow_batch = []
+        for i in ["edge_index", "tuplefeat"]:
+            if i not in follow_batch:
+                follow_batch.append(i)
+        super().__init__(dataset, batch_size, shuffle, follow_batch,
+                         exclude_keys, **kwargs)
+        self.device = device
+
+    def __iter__(self) -> _BaseDataLoaderIter:
+        ret = super().__iter__()
+        return IterWrapper(ret, batch2dense, self.device)
 
 class MaDataloader(PygDataLoader):
 

@@ -1,33 +1,25 @@
 from torch_scatter import scatter
 from .SpTensor import SparseTensor
 from torch import Tensor
+import torch
 
-
-def spmm(A: SparseTensor, X: Tensor, aggr: str = "sum") -> Tensor:
+def spmm(A: SparseTensor, dim1: int, X: Tensor, aggr: str = "sum") -> Tensor:
     '''
     SparseTensor, Tensor Matrix multiplication.
-    Dense shapes of A and X.shape[1:] must be broadcastable. 
+    Dense shapes of A and X shape other than dim2 must be broadcastable. 
     '''
-    assert A.sparse_dim == 2, "A should be adjacency matrix with two sparse dim "
-    ind, val = A.indices, A.values
-    if val is None:
-        mult = X[ind[1]]
+    assert A.sparse_dim == 2, "can only use 2-dim sparse tensor"
+    val = A.values
+    if dim1 == 0:
+        srcind = A.indices[0]
+        tarind = A.indices[1]
+        tarshape = A.shape[1]
     else:
-        mult = val * X[ind[1]]
-    return scatter(mult, ind[0], dim=0, dim_size=A.shape[0], reduce=aggr)
-
-
-def mspmm(X: Tensor, A: SparseTensor, aggr: str = "sum") -> Tensor:
-    '''
-    Tensor, SparseTensor Matrix multiplication.
-    Dense shapes of A and X.shape[:1]+X.shape[2:] must be broadcastable. 
-    '''
-    assert A.sparse_dim == 2, "A should be adjacency matrix with two sparse dim "
-    X = X.transpose(0, 1)
-    ind, val = A.indices, A.values
+        srcind = A.indices[1]
+        tarind = A.indices[0]
+        tarshape = A.shape[0]
     if val is None:
-        mult = X[ind[0]]
+        mult = X[srcind]
     else:
-        mult = val * X[ind[0]]
-    return scatter(mult, ind[1], dim=0, dim_size=A.shape[1],
-                   reduce=aggr).transpose(0, 1)
+        mult = val * X[srcind]
+    return scatter(mult, tarind, dim=0, dim_size=tarshape, reduce=aggr)
