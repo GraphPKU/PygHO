@@ -1,16 +1,16 @@
 import torch
 from torch_geometric.datasets import ZINC
-from pygho.hodata import SpDataloader, Sppretransform, SubgDatasetClass
+from pygho.hodata import SpDataloader, Sppretransform, HoDatasetClass, ParallelPreprocessDataset
 from pygho.hodata.SpTupleSampler import KhopSampler
 from functools import partial
 import torch
 from torch_geometric.nn.aggr import SumAggregation, MeanAggregation, MaxAggregation
-from pygho.honn.Spconv import Convs, NestedConv, DSSGINConv, SUNConv
-from pygho.honn.SpXOperator import pooling2nodes, diag2nodes
+from pygho.honn.Conv import NGNNConv
+from pygho.honn.SpXOperator import parse_precomputekey
+from pygho.honn.TensorOp import OpPoolingSubg2D
 import torch.nn as nn
 from pygho import SparseTensor
 from pygho.honn.utils import MLP
-from torch_geometric.data import DataLoader as PygDataloader
 import torch.nn.functional as F
 import numpy as np
 
@@ -28,9 +28,8 @@ class InputEncoder(nn.Module):
 
     def forward(self, datadict: dict) -> dict:
         datadict["x"] = self.x_encoder(datadict["x"].flatten())
-        datadict["edge_attr"] = self.ea_encoder(datadict["edge_attr"])
-        datadict["tuplefeat"] = self.tuplefeat_encoder(
-            datadict["tuplefeat"])
+        datadict["A"] = datadict["A"].tuplewiseapply(self.ea_encoder)
+        datadict["X"] = datadict["X"].tuplewiseapply(self.tuplefeat_encoder)
         return datadict
 
 
@@ -69,17 +68,18 @@ class NestedGNN(nn.Module):
 
         self.lin_tupleinit = nn.Linear(emb_dim, emb_dim)
 
+
+        self.residual = residual
         ### GNN to generate node embeddings
-        self.subggnns = Convs(
-            [NestedConv(emb_dim, 1, aggr, mlp) for i in range(num_layer)],
-            residual=residual)
+        self.subggnns = nn.ModuleList(
+            [NGNNConv(emb_dim, 1, aggr, "SS", mlp) for _ in range(num_layer)])
         ### Pooling function to generate whole-graph embeddings
         self.npool = {
             "sum": SumAggregation,
             "mean": MeanAggregation,
             "max": MaxAggregation
         }[npool]()
-        self.lpool = lpool
+        self.lpool = OpPoolingSubg2D("S", lpool)
         self.data_encoder = InputEncoder(emb_dim)
 
         outdim = self.emb_dim
@@ -90,93 +90,28 @@ class NestedGNN(nn.Module):
             nn.LayerNorm(num_tasks, elementwise_affine=False)
             if ln_out else nn.Identity())
 
-    def tupleinit(self, tupleid, tuplefeat, x):
-        return x[tupleid[0]] * self.lin_tupleinit(x)[tupleid[1]] * tuplefeat
+    def tupleinit(self, X: SparseTensor, x):
+        return X.tuplewiseapply(lambda tpx: x[X.indices[0]] * self.lin_tupleinit(x)[X.indices[1]] * tpx)
 
     def forward(self, datadict: dict):
         datadict = self.data_encoder(datadict)
-        A = SparseTensor(datadict["edge_index"],
-                         datadict["edge_attr"],
-                         shape=[datadict["num_nodes"], datadict["num_nodes"]] +
-                         list(datadict["edge_attr"].shape[1:]),
-                         is_coalesced=True)
-        X = SparseTensor(datadict["tupleid"],
-                         self.tupleinit(datadict["tupleid"],
-                                        datadict["tuplefeat"], datadict["x"]),
-                         shape=[datadict["num_nodes"], datadict["num_nodes"]] +
-                         list(datadict["edge_attr"].shape[1:]),
-                         is_coalesced=True)
-        X = self.subggnns.forward(X, A, datadict)
-        x = pooling2nodes(X, dims=[1], pool=self.lpool)
+        A = datadict["A"]
+        X = datadict["X"]
+        x = datadict["x"]
+        X = self.tupleinit(X, x)
+        for conv in self.subggnns:
+            tX = conv.forward(X, A, datadict)
+            if self.residual:
+                X.add(tX, True)
+            else:
+                X = tX
+        x = self.lpool(X)
         h_graph = self.npool(x, datadict["batch"], dim=0)
         return self.pred_lin(h_graph)
 
 
-class GNNAK(NestedGNN):
-
-    def __init__(self, num_tasks=1, num_layer=5, emb_dim=256, aggr="sum", npool="sum", lpool="max", residual=True, outlayer: int = 1, ln_out: bool = False, mlp: dict = {}):
-        super().__init__(num_tasks, num_layer, emb_dim, aggr, npool, lpool, residual, outlayer, ln_out, mlp)
-        self.mergelin= MLP(3*emb_dim, emb_dim, 1, tailact=True, **mlp) 
-        self.subggnns = Convs(
-            [SUNConv(emb_dim, 1, aggr, mlp) for i in range(num_layer)],
-            residual=residual)
-
-    def forward(self, datadict: dict):
-        '''
-        TODO: !warning input must be coalesced
-        '''
-        datadict = self.data_encoder(datadict)
-        A = SparseTensor(datadict["edge_index"],
-                         datadict["edge_attr"],
-                         shape=[datadict["num_nodes"], datadict["num_nodes"]] + list(datadict["edge_attr"].shape[1:]),
-                         is_coalesced=True)
-        X = SparseTensor(datadict["tupleid"],
-                         self.tupleinit(datadict["tupleid"],
-                                        datadict["tuplefeat"], datadict["x"]),
-                         shape=[datadict["num_nodes"], datadict["num_nodes"]] +
-                         list(datadict["edge_attr"].shape[1:]),
-                         is_coalesced=True)
-        X = self.subggnns.forward(X, A, datadict)
-        x1 = pooling2nodes(X, dims=1, pool=self.lpool)
-        x2 = pooling2nodes(X, dims=0, pool=self.lpool)
-        x3 = diag2nodes(X, dims=[0, 1])
-        x = self.mergelin(torch.concat((x1,x2,x3), dim=-1))
-        h_graph = self.npool(x, datadict["batch"], dim=0)
-        return self.pred_lin(h_graph)
-
-class DSSGIN(NestedGNN):
-
-    def __init__(self, num_tasks=1, num_layer=5, emb_dim=256, aggr="sum", npool="sum", lpool="max", residual=True, outlayer: int = 1, ln_out: bool = False, mlp: dict = {}):
-        super().__init__(num_tasks, num_layer, emb_dim, aggr, npool, lpool, residual, outlayer, ln_out, mlp)
-        self.subggnns = Convs(
-            [DSSGINConv(emb_dim, 1, "sum", mlp) for i in range(num_layer)],
-            residual=residual)
-
-    def forward(self, datadict: dict):
-        '''
-        TODO: !warning input must be coalesced
-        '''
-        datadict = self.data_encoder(datadict)
-        A = SparseTensor(datadict["edge_index"],
-                         datadict["edge_attr"],
-                         shape=[datadict["num_nodes"], datadict["num_nodes"]] +
-                         list(datadict["edge_attr"].shape[1:]),
-                         is_coalesced=True)
-        X = SparseTensor(datadict["tupleid"],
-                         self.tupleinit(datadict["tupleid"],
-                                        datadict["tuplefeat"], datadict["x"]),
-                         shape=[datadict["num_nodes"], datadict["num_nodes"]] +
-                         list(datadict["edge_attr"].shape[1:]),
-                         is_coalesced=True)
-        X = self.subggnns.forward(X, A, datadict)
-        x = pooling2nodes(X, dims=1, pool=self.lpool)
-        h_graph = self.npool(x, datadict["batch"], dim=0)
-        return self.pred_lin(h_graph)
 
 
-'''
-main func
-'''
 
 model = NestedGNN(mlp={
     "dp": 0,
@@ -185,19 +120,21 @@ model = NestedGNN(mlp={
     "normparam": 0.1
 })
 
+keys = parse_precomputekey(model)
+
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
-trn_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
+trn_dataset = ZINC("dataset/ZINC",
                    subset=True,
-                   split="train",
-                   pre_transform=Sppretransform(partial(KhopSampler, hop=3), ["X_1_A_0_acd"]))
-val_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
+                   split="train")
+trn_dataset = ParallelPreprocessDataset("dataset/ZINC", trn_dataset, Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 16, "KP3")
+val_dataset = ZINC("dataset/ZINC",
                    subset=True,
-                   split="val",
-                   pre_transform=Sppretransform(partial(KhopSampler, hop=3), ["X_1_A_0_acd"]))
-tst_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
+                   split="val")
+val_dataset = ParallelPreprocessDataset("dataset/ZINC", val_dataset, Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 16, "KP3")
+tst_dataset = ZINC("dataset/ZINC",
                    subset=True,
-                   split="test",
-                   pre_transform=Sppretransform(partial(KhopSampler, hop=3), ["X_1_A_0_acd"]))
+                   split="test")
+tst_dataset = ParallelPreprocessDataset("dataset/ZINC", tst_dataset, Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 16, "KP3")
 trn_dataloader = SpDataloader(trn_dataset, batch_size=256, shuffle=True, drop_last=True)
 val_dataloader = SpDataloader(val_dataset, batch_size=256)
 tst_dataloader = SpDataloader(tst_dataset, batch_size=256)
@@ -213,6 +150,7 @@ def train(dataloader):
         batch = batch.to(device, non_blocking=True)
         optimizer.zero_grad()
         datadict = batch.to_dict()
+        print(datadict)
         pred = model(datadict)
         loss = F.l1_loss(datadict["y"].unsqueeze(-1), pred, reduction="mean")
         loss.backward()

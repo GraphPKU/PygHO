@@ -4,14 +4,14 @@ transform for dense data
 from torch_geometric.data import Data as PygData, Batch as PygBatch
 import torch
 from torch import Tensor, LongTensor, BoolTensor
-from typing import Any, Callable, Optional, Tuple, List
+from typing import Any, Callable, Optional, Tuple, List, Union, Iterable
 from ..backend.SpTensor import SparseTensor
 from ..backend.MaTensor import MaskedTensor
 from torch_geometric.utils import coalesce
 import torch
 
 
-class MaSubgData(PygData):
+class MaHoData(PygData):
 
     def __inc__(self, key: str, value: Any, *args, **kwargs):
         if key == 'edge_index':
@@ -142,7 +142,8 @@ def to_dense_tuplefeat(tuplefeat: Tensor,
 def batch2dense(batch: PygBatch,
                 batch_size: int = None,
                 max_num_nodes: int = None,
-                denseadj: bool = False)->PygBatch:
+                denseadj: bool = False,
+                keys: List[str]=[""])->PygBatch:
 
     batch.x = to_dense_x(batch.x, batch.ptr, max_num_nodes,
                              batch_size)
@@ -157,24 +158,37 @@ def batch2dense(batch: PygBatch,
                                    batch.edge_index_batch,
                                    batch.edge_attr, max_num_nodes,
                                    batch_size)
-    batch.X = to_dense_tuplefeat(batch.tuplefeat, batch.ptr, batch.tuplefeat_ptr, max_num_nodes, batch_size)
+    for key in keys:
+        tuplefeat = getattr(batch, f"tuplefeat{key}")
+        tupleshape = getattr(batch, f"tupleshape{key}")
+        tuplefeat_ptr = getattr(batch, f"tuplefeat{key}_ptr")
+        X = to_dense_tuplefeat(tuplefeat, tupleshape, tuplefeat_ptr, None, batch_size, None)
+        setattr(X, f"X{key}")
     return batch
 
 
-def ma_datapreprocess(data: PygData, subgsampler: Callable[[PygData], Tuple[Tensor, List[int]]]) -> MaSubgData:
+def ma_datapreprocess(data: PygData, tuplesamplers: Union[Callable[[PygData], Tuple[Tensor, List[int]]],List[Callable[[PygData], Tuple[Tensor, List[int]]]]], annotate: List[str]=[""]) -> MaHoData:
+    if not isinstance(tuplesamplers, Iterable):
+        tuplesamplers = [tuplesamplers]
+    assert len(tuplesamplers) == len(annotate), "each tuplesampler need a different annotate"
     data.edge_index, data.edge_attr = coalesce(data.edge_index,
                                                data.edge_attr,
                                                num_nodes=data.num_nodes)
-    tuplefeat, maskedshape  = subgsampler(data)
+    
     datadict = data.to_dict()
     datadict.update({
         "num_nodes": data.num_nodes,
         "num_edges": data.edge_index.shape[1],
-        "tupleshape": torch.LongTensor(maskedshape).reshape(1, -1),
         "x": data.x,
         "edge_index": data.edge_index,
-        "edge_attr": data.edge_attr,
-        "tuplefeat": tuplefeat,
+        "edge_attr": data.edge_attr
     })
-    return MaSubgData(**datadict)
+    for i, tuplesampler in enumerate(tuplesamplers):
+        tuplefeat, tupleshape = tuplesampler(data)
+        datadict.update({
+            f"tuplefeat{annotate[i]}": tuplefeat,
+            f"tupleshape{annotate[i]}": torch.LongTensor(tupleshape).reshape(1, -1),
+        })
+
+    return MaHoData(**datadict)
     

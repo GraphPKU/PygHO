@@ -5,10 +5,10 @@ from torch_geometric.data.datapipes import DatasetAdapter
 from torch_geometric.loader import DataLoader as PygDataLoader
 import os.path as osp
 import re
-from typing import Any, Callable, List, Iterable, Sequence, Tuple, Union
+from typing import Any, Callable, List, Iterable, Sequence, Tuple, Union, Optional
 from torch import Tensor
 from functools import partial
-from .SpData import sp_datapreprocess
+from .SpData import sp_datapreprocess, batch2sparse
 from .MaData import ma_datapreprocess, batch2dense
 from torch_geometric.transforms import Compose
 
@@ -26,25 +26,27 @@ def _repr(obj: Any) -> str:
     return ret
 
 
-def Sppretransform(sampler: Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]], keys: List[str]=[], pre_transform: Callable=None):
-    subgpre_transform = partial(sp_datapreprocess,
-                                subgsampler=sampler,
+def Sppretransform(pre_transform: Optional[Callable], tuplesamplers: Union[Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]], List[Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]]]],
+                      annotate: List[str]=[""], keys: List[str]=[""]):
+    hopre_transform = partial(sp_datapreprocess,
+                                tuplesamplers=tuplesamplers,
+                                annotate=annotate,
                                 keys=keys)
     if pre_transform is not None:
-        return Compose([pre_transform, subgpre_transform])
+        return Compose([pre_transform, hopre_transform])
     else:
-        return subgpre_transform
+        return hopre_transform
 
 
-def Mapretransform(sampler: Callable, pre_transform: Callable=None):
-    subgpre_transform = partial(ma_datapreprocess, subgsampler=sampler)
+def Mapretransform(pre_transform: Optional[Callable], tuplesamplers: Union[Callable[[PygData], Tuple[Tensor, List[int]]],List[Callable[[PygData], Tuple[Tensor, List[int]]]]], annotate: List[str]=[""]):
+    hopre_transform = partial(ma_datapreprocess, tuplesamplers=tuplesamplers, annotate=annotate)
     if pre_transform is not None:
-        return Compose([pre_transform, subgpre_transform])
+        return Compose([pre_transform, hopre_transform])
     else:
-        return subgpre_transform
+        return hopre_transform
 
 
-def SubgDatasetClass(datasetclass, processname: str=None):
+def HoDatasetClass(datasetclass, processname: str=None):
 
     @property
     def processed_dir(self) -> str:
@@ -94,18 +96,15 @@ class SpDataloader(PygDataLoader):
                  exclude_keys: List[str] | None = None,
                  device = None,
                  **kwargs):
-        if follow_batch is None:
-            follow_batch = []
-        for i in ["edge_index", "tuplefeat"]:
-            if i not in follow_batch:
-                follow_batch.append(i)
         super().__init__(dataset, batch_size, shuffle, follow_batch,
                          exclude_keys, **kwargs)
         self.device = device
+        keys = [k.removeprefix("tupleid") for k in dataset[0].to_dict().keys() if k.startswith("tupleid")]
+        self.keys = keys
 
     def __iter__(self) -> _BaseDataLoaderIter:
         ret = super().__iter__()
-        return IterWrapper(ret, batch2dense, self.device)
+        return IterWrapper(ret, partial(batch2sparse, keys=self.keys), self.device)
 
 class MaDataloader(PygDataLoader):
 
@@ -119,7 +118,9 @@ class MaDataloader(PygDataLoader):
                  **kwargs):
         if follow_batch is None:
             follow_batch = []
-        for i in ["edge_index", "tuplefeat"]:
+        keys = [k.removeprefix("tuplefeat") for k in dataset[0].to_dict().keys() if k.startswith("tuplefeat")]
+        self.keys = keys
+        for i in ["edge_index"] + [f"tuplefeat{_}" for _ in keys]:
             if i not in follow_batch:
                 follow_batch.append(i)
         super().__init__(dataset, batch_size, shuffle, follow_batch,
@@ -128,5 +129,5 @@ class MaDataloader(PygDataLoader):
 
     def __iter__(self) -> _BaseDataLoaderIter:
         ret = super().__iter__()
-        return IterWrapper(ret, batch2dense, self.device)
+        return IterWrapper(ret, partial(batch2dense, keys=self.keys), self.device)
         

@@ -10,61 +10,6 @@ filter_inf_ops = ["max", "min"]
 
 
 def spmamm(A: SparseTensor,
-           B: MaskedTensor,
-           mask: Optional[BoolTensor] = None,
-           aggr: str = "sum") -> MaskedTensor:
-    '''
-    A: (B, n, m, *) SparseTensor
-    B: (B, m, *) MaskedTensor
-    '''
-    assert A.sparse_dim == 3, f"A should have 3 sparse dims, but input has {A.sparse_dim}"
-    assert aggr != "mean", "not implemented"
-    b, n = A.shape[0], A.shape[1]
-    bij = A.indices
-    Aval = A.values
-    mult = Aval.unsqueeze(1) * B.data[bij[0], bij[2]]
-    validmask = B.__rawmask[bij[0], bij[2]]
-    mult.masked_fill(torch.logical_not(validmask), filled_value_dict[aggr])
-    val = scatter(mult,
-                  bij[0] * n + bij[1],
-                  dim=0,
-                  dim_size=b * n,
-                  reduce=aggr)
-    ret = val.unflatten(0, (b, n))
-    if aggr in filter_inf_ops:
-        ret = filterinf(ret)
-    return MaskedTensor(ret, mask if mask is not None else B.mask)
-
-
-def maspmm(A: MaskedTensor,
-           B: SparseTensor,
-           mask: Optional[BoolTensor] = None,
-           aggr: str = "sum") -> MaskedTensor:
-    '''
-    A: (B, k, m, *) MaskedTensor
-    B: (B, m, n, *) SparseTensor
-    '''
-    assert B.sparse_dim == 3, f"A should have 3 sparse dims, but input has {A.sparse_dim}"
-    assert aggr != "mean", "not implemented"
-    b, n = B.shape[0], B.shape[2]
-    bij = B.indices
-    Bval = B.values
-    mult = Bval.unsqueeze(1)* A.data[bij[0], :, bij[1]]
-    validmask = A.__rawmask[bij[0], :, bij[1]]
-    mult.masked_fill(torch.logical_not(validmask), filled_value_dict[aggr])
-    val = scatter(mult,
-                  (bij[0] * n + bij[2]),
-                  dim=0,
-                  dim_size=b * n,
-                  reduce=aggr)
-    ret = val.unflatten(0, (b, n)).transpose(1, 2)
-    if aggr in filter_inf_ops:
-        ret = filterinf(ret)
-    return MaskedTensor(ret, mask if mask is not None else A.mask)
-
-
-
-def spmamm_ge(A: SparseTensor,
            dim1: int,
            B: MaskedTensor,
            dim2: int,
@@ -105,4 +50,3 @@ def spmamm_ge(A: SparseTensor,
     if aggr in filter_inf_ops:
         ret = filterinf(ret)
     return MaskedTensor(ret, mask if mask is not None else B.mask)
-
