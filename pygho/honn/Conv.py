@@ -104,7 +104,7 @@ class DSSGNNConv(Module):
                 X: Union[SparseTensor, MaskedTensor],
                 datadict: dict) -> Union[SparseTensor, MaskedTensor]:
         X1 = self.unpooling2subg.forward(
-            self.aggr_subg(self.pool2global.forward(X)), X)
+            self.aggr_global.forward(A, self.pool2global.forward(X)), X)
         X2 = self.aggr_subg.forward(A, X, datadict, X)
         return X2.catvalue(X1, True).tuplewiseapply(self.lin)
 
@@ -147,18 +147,17 @@ class GNNAKConv(Module):
         self.aggr = TensorOp.OpMessagePassingOnSubg2D(mode, aggr)
         self.diag = TensorOp.OpDiag2D(mode[1])
         self.pool2subg = TensorOp.OpPoolingSubg2D(mode[1], pool)
-        self.unpool4subg = TensorOp.OpUnpoolingSubgNodes2D(mode[1], pool)
+        self.unpool4subg = TensorOp.OpUnpoolingSubgNodes2D(mode[1])
         self.ctx = ctx
         if ctx:
             self.pool2node = TensorOp.OpPoolingCrossSubg2D(mode[1], pool)
-            self.unpool4rootnode = TensorOp.OpUnpoolingRootNodes2D(
-                mode[1], pool)
+            self.unpool4rootnode = TensorOp.OpUnpoolingRootNodes2D(mode[1])
         self.lin = MLP(3 * indim if ctx else 2 * indim, outdim, **mlp1)
 
     def forward(self, A: Union[SparseTensor, MaskedTensor],
                 X: Union[SparseTensor, MaskedTensor],
                 datadict: dict) -> Union[SparseTensor, MaskedTensor]:
-        X = self.aggr.forward(A, X.tuplewiseapply(self.lin0), datadict)
+        X = self.aggr.forward(A, X.tuplewiseapply(self.lin0), datadict, X)
         X1 = self.unpool4subg.forward(self.diag.forward(X), X)
         X2 = self.unpool4subg.forward(self.pool2subg.forward(X), X)
         if self.ctx:
@@ -183,23 +182,24 @@ class SUNConv(Module):
         self.aggr = TensorOp.OpMessagePassingOnSubg2D(mode, aggr)
         self.diag = TensorOp.OpDiag2D(mode[1])
         self.pool2subg = TensorOp.OpPoolingSubg2D(mode[1], pool)
-        self.unpool4subg = TensorOp.OpUnpoolingSubgNodes2D(mode[1], pool)
+        self.unpool4subg = TensorOp.OpUnpoolingSubgNodes2D(mode[1])
         self.pool2node = TensorOp.OpPoolingCrossSubg2D(mode[1], pool)
-        self.unpool4rootnode = TensorOp.OpUnpoolingRootNodes2D(mode[1], pool)
-        self.lin = nn.Sequential(HeteroLinear(7 * indim, indim, 2, False),
-                                 MLP(indim, outdim, **mlp1))
+        self.unpool4rootnode = TensorOp.OpUnpoolingRootNodes2D(mode[1])
+        self.lin1_0 = HeteroLinear(7 * indim, indim, 2, False)
+        self.lin1_1 = MLP(indim, outdim, **mlp1)
 
     def forward(self, A: Union[SparseTensor, MaskedTensor],
                 X: Union[SparseTensor, MaskedTensor],
                 datadict: dict) -> Union[SparseTensor, MaskedTensor]:
-        X4 = self.aggr.forward(A, X.tuplewiseapply(self.lin0), datadict)
-        Xdiag = self.diag.forward(X), X
+        X4 = self.aggr.forward(A, X.tuplewiseapply(self.lin0), datadict, X)
+        Xdiag = self.diag.forward(X)
         X1 = X
-        X2 = self.unpool4subg(Xdiag)
-        X3 = self.unpool4rootnode(Xdiag)
-        X5 = self.unpool4rootnode(self.pool2node(X))
-        X6 = self.unpool4subg(self.pool2subg(X))
-        X7 = self.unpool4rootnode(self.pool2node(X4))
+        X2 = self.unpool4subg.forward(Xdiag, X)
+        X3 = self.unpool4rootnode.forward(Xdiag, X)
+        X5 = self.unpool4rootnode.forward(self.pool2node(X), X)
+        X6 = self.unpool4subg.forward(self.pool2subg(X), X)
+        X7 = self.unpool4rootnode.forward(self.pool2node(X4), X)
         X = X1.catvalue([X2, X3, X4, X5, X6, X7], True)
-        X.diagonalapply(self.lin)
+        X = X.diagonalapply(lambda val, ind: self.lin1_0(val.flatten(0, -2), ind.flatten()).unflatten(0, val.shape[0:-1]))
+        X = X.tuplewiseapply(self.lin1_1)
         return X

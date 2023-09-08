@@ -151,14 +151,14 @@ class MaskedTensor:
         return MaskedTensor(tdata, tmask, self.padvalue, True)
 
     def unpooling(self, dim: Union[int, Iterable[int]], tarX):
-        if isinstance(int):
+        if isinstance(dim, int):
             dim = [dim]
         dim = sorted(list(dim))
         tdata = self.data
         for _ in dim:
-            tdata.unsqueeze(_)
+            tdata = tdata.unsqueeze(_)
         tdata = tdata.expand(*(-1 if i not in dim else tarX.shape[i]
-                               for i in range(dim[-1] + 1)))
+                               for i in range(tdata.ndim)))
         return MaskedTensor(tdata, tarX.mask, self.padvalue, False)
 
     def tuplewiseapply(self, func: Callable[[Tensor], Tensor]):

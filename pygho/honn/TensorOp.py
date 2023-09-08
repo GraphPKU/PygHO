@@ -205,6 +205,7 @@ class OpPoolingCrossSubg2D(Module):
 class OpUnpoolingSubgNodes2D(Module):
 
     def __init__(self, mode: Literal["S", "D"] = "S") -> None:
+        super().__init__()
         if mode == "S":
             self.mod = SpXOperator.OpUnpoolingSubgNodes2D()
         elif mode == "D":
@@ -220,6 +221,7 @@ class OpUnpoolingSubgNodes2D(Module):
 class OpUnpoolingRootNodes2D(Module):
 
     def __init__(self, mode: Literal["S", "D"] = "S") -> None:
+        super().__init__()
         if mode == "S":
             self.mod = SpXOperator.OpUnpoolingRootNodes2D()
         elif mode == "D":

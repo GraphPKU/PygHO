@@ -208,7 +208,7 @@ class OpUnpooling(Module):
         if isinstance(X, Tensor):
             leftdim = list(set(range(tarX.sparse_dim)) - set(self.dims))
             assert len(leftdim) == 1, "canonly pooling from 1 dim"
-            return tarX.unpooling_fromdense1dim(leftdim, X)
+            return tarX.unpooling_fromdense1dim(leftdim[0], X)
         else:
             return X.unpooling(self.dims, tarX)
 
