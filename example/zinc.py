@@ -259,8 +259,6 @@ else:
                         "normparam": 0.1
                     })
 
-torch.set_float32_matmul_precision('high')
-model = torch.compile(model)
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
 
 device = torch.device("cuda")

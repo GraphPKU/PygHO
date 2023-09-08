@@ -23,7 +23,7 @@ class OpNodeMessagePassing(Module):
 
     def forward(self, A: Union[SparseTensor, MaskedTensor],
                 X: Union[Tensor, MaskedTensor]) -> Union[Tensor, MaskedTensor]:
-        return self.mod.forward(A, X)
+        return self.mod.forward(A, X, X)
 
 
 class Op2FWL(Module):
