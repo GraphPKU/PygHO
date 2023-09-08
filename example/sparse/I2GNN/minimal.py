@@ -13,10 +13,10 @@ from pygho import SparseTensor
 from pygho.honn.utils import MLP
 import torch.nn.functional as F
 import numpy as np
-
 '''
 model definition
 '''
+
 
 class InputEncoder(nn.Module):
 
@@ -24,12 +24,13 @@ class InputEncoder(nn.Module):
         super().__init__()
         self.x_encoder = nn.Embedding(32, emb_dim)
         self.ea_encoder = nn.Embedding(16, emb_dim)
-        self.tuplefeat_encoder = nn.Embedding(16, emb_dim//2)
+        self.tuplefeat_encoder = nn.Embedding(16, emb_dim // 2)
 
     def forward(self, datadict: dict) -> dict:
         datadict["x"] = self.x_encoder(datadict["x"].flatten())
         datadict["A"] = datadict["A"].tuplewiseapply(self.ea_encoder)
-        datadict["X"] = datadict["X"].tuplewiseapply(lambda val: self.tuplefeat_encoder(val).flatten(-2, -1))
+        datadict["X"] = datadict["X"].tuplewiseapply(
+            lambda val: self.tuplefeat_encoder(val).flatten(-2, -1))
         return datadict
 
 
@@ -70,7 +71,6 @@ class I2GNN(nn.Module):
         self.lin_tupleinit1 = nn.Linear(emb_dim, emb_dim)
         self.lin_tupleinit2 = nn.Linear(emb_dim, emb_dim)
 
-
         self.residual = residual
         ### GNN to generate node embeddings
         self.subggnns = nn.ModuleList(
@@ -94,7 +94,9 @@ class I2GNN(nn.Module):
             if ln_out else nn.Identity())
 
     def tupleinit(self, X: SparseTensor, x):
-        return X.tuplewiseapply(lambda tpx: self.lin_tupleinit0(x)[X.indices[0]] * self.lin_tupleinit1(x)[X.indices[1]] * self.lin_tupleinit2(x)[X.indices[2]] * tpx)
+        return X.tuplewiseapply(lambda tpx: self.lin_tupleinit0(x)[X.indices[
+            0]] * self.lin_tupleinit1(x)[X.indices[1]] * self.lin_tupleinit2(x)
+                                [X.indices[2]] * tpx)
 
     def forward(self, datadict: dict):
         datadict = self.data_encoder(datadict)
@@ -115,37 +117,40 @@ class I2GNN(nn.Module):
         h_graph = self.npool(x, datadict["batch"], dim=0)
         return self.pred_lin(h_graph)
 
-model = I2GNN(mlp={
-    "dp": 0,
-    "norm": "ln",
-    "act": "relu",
-    "normparam": 0.1
-})
+
+model = I2GNN(mlp={"dp": 0, "norm": "ln", "act": "relu", "normparam": 0.1})
 
 keys = parse_precomputekey(model)
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
-trn_dataset = ZINC("dataset/ZINC",
-                   subset=True,
-                   split="train")
+trn_dataset = ZINC("dataset/ZINC", subset=True, split="train")
 
-trn_dataset = ParallelPreprocessDataset("dataset/ZINC_trn", trn_dataset, Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 16)
-val_dataset = ZINC("dataset/ZINC",
-                   subset=True,
-                   split="val")
-val_dataset = ParallelPreprocessDataset("dataset/ZINC_val", val_dataset, Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 16)
-tst_dataset = ZINC("dataset/ZINC",
-                   subset=True,
-                   split="test")
-tst_dataset = ParallelPreprocessDataset("dataset/ZINC_tst", tst_dataset, Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 16)
-trn_dataloader = SpDataloader(trn_dataset, batch_size=256, shuffle=True, drop_last=True)
+trn_dataset = ParallelPreprocessDataset(
+    "dataset/ZINC_trn", trn_dataset,
+    Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 16)
+val_dataset = ZINC("dataset/ZINC", subset=True, split="val")
+val_dataset = ParallelPreprocessDataset(
+    "dataset/ZINC_val", val_dataset,
+    Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 16)
+tst_dataset = ZINC("dataset/ZINC", subset=True, split="test")
+tst_dataset = ParallelPreprocessDataset(
+    "dataset/ZINC_tst", tst_dataset,
+    Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 16)
+trn_dataloader = SpDataloader(trn_dataset,
+                              batch_size=256,
+                              shuffle=True,
+                              drop_last=True)
 val_dataloader = SpDataloader(val_dataset, batch_size=256)
 tst_dataloader = SpDataloader(tst_dataset, batch_size=256)
 
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=40*len(trn_dataloader))
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,
+                                                       T_max=40 *
+                                                       len(trn_dataloader))
 
 device = torch.device("cuda")
 model = model.to(device)
+
+
 def train(dataloader):
     model.train()
     losss = []
@@ -164,6 +169,7 @@ def train(dataloader):
     losss = np.average(list(map(lambda x: x.item(), losss)))
     return losss
 
+
 @torch.no_grad()
 def eval(dataloader):
     model.eval()
@@ -176,6 +182,7 @@ def eval(dataloader):
         loss += F.l1_loss(datadict["y"].unsqueeze(-1), pred, reduction="sum")
         size += pred.shape[0]
     return loss / size
+
 
 best_val = float("inf")
 tst_score = float("inf")
@@ -190,5 +197,6 @@ for epoch in range(1, 1001):
         best_val = val_score
         tst_score = eval(tst_dataloader)
     t3 = time.time()
-    print(f"epoch {epoch} trn time {t2-t1:.2f} val time {t3-t2:.2f}  l1loss {losss:.4f} val MAE {val_score:.4f} tst MAE {tst_score:.4f}")
-
+    print(
+        f"epoch {epoch} trn time {t2-t1:.2f} val time {t3-t2:.2f}  l1loss {losss:.4f} val MAE {val_score:.4f} tst MAE {tst_score:.4f}"
+    )

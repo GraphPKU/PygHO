@@ -23,10 +23,10 @@ def ptr2batch(ptr: LongTensor, dim_size: int) -> LongTensor:
 
 
 def spspmm_ind(ind1: LongTensor,
-                  dim1: int,
-                  ind2: LongTensor,
-                  dim2: int,
-                  is_k2_sorted: bool = False) -> LongTensor:
+               dim1: int,
+               ind2: LongTensor,
+               dim2: int,
+               is_k2_sorted: bool = False) -> LongTensor:
     '''
     TODO: unit test
     ind1, ind2 are indices of two sparse tensors.
@@ -46,7 +46,7 @@ def spspmm_ind(ind1: LongTensor,
         return tarind, bcd
     else:
         nnz1, nnz2, sparsedim1, sparsedim2 = ind1.shape[1], ind2.shape[
-        1], ind1.shape[0], ind2.shape[0]
+            1], ind1.shape[0], ind2.shape[0]
         k1, k2 = ind1[dim1], ind2[dim2]
         assert torch.all(torch.diff(k2) >= 0), "ind2[0] should be sorted"
         # for each k in k1, it can match a interval of k2 as k2 is sorted
@@ -106,7 +106,7 @@ def spsphadamard_ind(tar_ind: LongTensor, ind: LongTensor) -> LongTensor:
 
 
 def filterind(tar_ind: LongTensor, ind: LongTensor,
-             bcd: LongTensor) -> LongTensor:
+              bcd: LongTensor) -> LongTensor:
     '''
     A combination of hadamard and spspmm.
     A\odot(BC). BC's ind is ind and bcd, A's ind is tar_ind.
@@ -195,24 +195,23 @@ def spspmm(A: SparseTensor,
             return spspmm(A, dim1, B, dim2, aggr, acd=bcd, tar_ind=ind)
 
 
-
 def spspmpnn(A: SparseTensor,
-           dim1: int,
-           B: SparseTensor,
-           dim2: int,
-           C: SparseTensor,
-           acd: LongTensor,
-           message_func: Callable[[Tensor, Tensor, Tensor, LongTensor], Tensor],
-           aggr: str = "sum") -> SparseTensor:
+             dim1: int,
+             B: SparseTensor,
+             dim2: int,
+             C: SparseTensor,
+             acd: LongTensor,
+             message_func: Callable[[Tensor, Tensor, Tensor, LongTensor],
+                                    Tensor],
+             aggr: str = "sum") -> SparseTensor:
     '''
     SparseTensor SparseTensor matrix multiplication at sparse dim.
     tar_ind mean tuples need output.
     Dense shapes of A, B must be broadcastable. 
     '''
-    mult = message_func(None if A.values is None else A.values[acd[1]], 
-                        None if B.values is None else B.values[acd[2]], 
-                        None if C.values is None else C.values[acd[0]], 
-                        acd[0])
+    mult = message_func(None if A.values is None else A.values[acd[1]],
+                        None if B.values is None else B.values[acd[2]],
+                        None if C.values is None else C.values[acd[0]], acd[0])
     tar_ind = C.indices
     retval = scatter(mult,
                      acd[0],
@@ -221,7 +220,7 @@ def spspmpnn(A: SparseTensor,
                      reduce=aggr)
     return SparseTensor(tar_ind,
                         retval,
-                        shape=A.sparseshape[:dim1] +
-                        A.sparseshape[dim1 + 1:] + B.sparseshape[:dim2] +
-                        B.sparseshape[dim2 + 1:] + retval.shape[1:],
+                        shape=A.sparseshape[:dim1] + A.sparseshape[dim1 + 1:] +
+                        B.sparseshape[:dim2] + B.sparseshape[dim2 + 1:] +
+                        retval.shape[1:],
                         is_coalesced=True)

@@ -9,6 +9,7 @@ from typing import Tuple
 import scipy.sparse as ssp
 from ..backend.SpTensor import coalesce
 
+
 def k_hop_subgraph(
     node_idx: Union[int, List[int], LongTensor],
     num_hops: int,
@@ -101,7 +102,7 @@ def CycleCenteredKhopSampler(data: PygData,
                     num_nodes=1,
                 ))
     subgbatch = PygBatch.from_data_list(subgraphs)
-    return subgbatch.subg_nodeidx.t(), subgbatch.x, data.num_nodes
+    return subgbatch.subg_nodeidx.t(), subgbatch.x, [data.num_nodes, data.num_nodes]
 
 
 def KhopSampler(data: PygData, hop: int = 2) -> Tuple[LongTensor, LongTensor]:
@@ -136,10 +137,11 @@ def KhopSampler(data: PygData, hop: int = 2) -> Tuple[LongTensor, LongTensor]:
 def I2Sampler(data: PygData, hop: int = 3) -> Tuple[LongTensor, LongTensor]:
     subgraphs = []
     spadj = to_scipy_sparse_matrix(data.edge_index, num_nodes=data.num_nodes)
-    dist_matrix = torch.from_numpy(ssp.csgraph.shortest_path(spadj,
-                                            directed=False,
-                                            unweighted=True,
-                                            return_predecessors=False)).to(torch.long)
+    dist_matrix = torch.from_numpy(
+        ssp.csgraph.shortest_path(spadj,
+                                  directed=False,
+                                  unweighted=True,
+                                  return_predecessors=False)).to(torch.long)
     ei = data.edge_index
     for i in range(ei.shape[1]):
         nodepair = ei[:, i]

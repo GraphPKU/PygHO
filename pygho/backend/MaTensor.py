@@ -3,7 +3,6 @@ from torch import Tensor, BoolTensor, LongTensor
 from typing import Optional, Callable, Iterable
 from typing import Union
 # merge torch.nested or torch.masked API in the long run.
-# Maybe we can let inherit torch.Tensor, but seems very complex https://pytorch.org/docs/stable/notes/extending.html#subclassing-torch-tensor
 
 
 def filterinf(X: Tensor, filled_value: float = 0):
@@ -53,7 +52,7 @@ class MaskedTensor:
             return self.data
         return torch.where(self.fullmask, self.data, val)
 
-    def to(self, device: torch.DeviceObjType, non_blocking: bool=True):
+    def to(self, device: torch.DeviceObjType, non_blocking: bool = True):
         self.__data = self.__data.to(device, non_blocking=non_blocking)
         self.__mask = self.__mask.to(device, non_blocking=non_blocking)
         self.__fullmask = self.__fullmask.to(device, non_blocking=non_blocking)
@@ -78,19 +77,19 @@ class MaskedTensor:
     @property
     def shape(self) -> torch.Size:
         return self.__data.shape
-    
+
     @property
     def masked_dim(self):
         return self.__masked_dim
-    
+
     @property
     def dense_dim(self):
         return len(self.denseshape)
-    
+
     @property
     def sparseshape(self):
         return self.shape[:self.masked_dim]
-    
+
     @property
     def denseshape(self):
         return self.shape[self.masked_dim:]
@@ -99,23 +98,40 @@ class MaskedTensor:
         '''
         mask true elements
         '''
-        return MaskedTensor(torch.sum(self.fill_masked(0), dim=dims, keepdim=keepdim), torch.amax(self.mask, dims, keepdim=keepdim), padvalue=0, is_filled=True)
+        return MaskedTensor(torch.sum(self.fill_masked(0),
+                                      dim=dims,
+                                      keepdim=keepdim),
+                            torch.amax(self.mask, dims, keepdim=keepdim),
+                            padvalue=0,
+                            is_filled=True)
 
     def mean(self, dims: Union[Iterable[int], int], keepdim: bool = False):
         '''
         mask true elements
         '''
-        count = torch.clamp_min_(torch.sum(self.fullmask, dim=dims, keepdim=keepdim), 1)
+        count = torch.clamp_min_(
+            torch.sum(self.fullmask, dim=dims, keepdim=keepdim), 1)
         valsum = self.sum(dims, keepdim)
-        return  MaskedTensor(valsum.data/count , valsum.mask, padvalue=valsum.padvalue, is_filled=True)
+        return MaskedTensor(valsum.data / count,
+                            valsum.mask,
+                            padvalue=valsum.padvalue,
+                            is_filled=True)
 
     def max(self, dims: Union[Iterable[int], int], keepdim: bool = False):
         tmp = self.fill_masked(-torch.inf)
-        return  MaskedTensor(filterinf(torch.amax(tmp, dim=dims, keepdim=keepdim), 0), torch.amax(self.mask, dims, keepdim=keepdim), padvalue=0, is_filled=True)
+        return MaskedTensor(filterinf(
+            torch.amax(tmp, dim=dims, keepdim=keepdim), 0),
+                            torch.amax(self.mask, dims, keepdim=keepdim),
+                            padvalue=0,
+                            is_filled=True)
 
     def min(self, dims: Union[Iterable[int], int], keepdim: bool = False):
         tmp = self.fill_masked(torch.inf)
-        return  MaskedTensor(filterinf(torch.amax(tmp, dim=dims, keepdim=keepdim), 0), torch.amax(self.mask, dims, keepdim=keepdim), padvalue=0, is_filled=True)
+        return MaskedTensor(filterinf(
+            torch.amax(tmp, dim=dims, keepdim=keepdim), 0),
+                            torch.amax(self.mask, dims, keepdim=keepdim),
+                            padvalue=0,
+                            is_filled=True)
 
     def diag(self, dim: Iterable[int]):
         '''
@@ -141,33 +157,43 @@ class MaskedTensor:
         tdata = self.data
         for _ in dim:
             tdata.unsqueeze(_)
-        tdata = tdata.expand(*(-1 if i not in dim else tarX.shape[i] for i in range(dim[-1]+1)))
+        tdata = tdata.expand(*(-1 if i not in dim else tarX.shape[i]
+                               for i in range(dim[-1] + 1)))
         return MaskedTensor(tdata, tarX.mask, self.padvalue, False)
-
 
     def tuplewiseapply(self, func: Callable[[Tensor], Tensor]):
         # it may cause nan in gradient and makes amp unable to update
         ndata = func(self.fill_masked(0))
         return MaskedTensor(ndata, self.mask)
-    
+
     def diagonalapply(self, func: Callable[[Tensor, LongTensor], Tensor]):
         assert self.masked_dim == 3, "only implemented for 3D"
-        diagonaltype = torch.eye(self.shape[1], self.shape[2], dtype=torch.long, device=self.data.device)
+        diagonaltype = torch.eye(self.shape[1],
+                                 self.shape[2],
+                                 dtype=torch.long,
+                                 device=self.data.device)
         diagonaltype = diagonaltype.unsqueeze(0).expand_as(self.mask)
         ndata = func(self.data, diagonaltype)
         return MaskedTensor(ndata, self.mask)
-    
+
     def add(self, tarX, samesparse: bool):
         if samesparse:
-            return MaskedTensor(tarX.data+self.data, self.mask, self.padvalue, is_filled=self.padvalue==tarX.padvalue)
+            return MaskedTensor(tarX.data + self.data,
+                                self.mask,
+                                self.padvalue,
+                                is_filled=self.padvalue == tarX.padvalue)
         else:
-            return MaskedTensor(tarX.fill_masked(0)+self.fill_masked(0), torch.logical_or(self.mask, tarX.mask), 0, True)
+            return MaskedTensor(
+                tarX.fill_masked(0) + self.fill_masked(0),
+                torch.logical_or(self.mask, tarX.mask), 0, True)
 
     def catvalue(self, tarX, samesparse: bool):
         assert samesparse == True, "must have the same sparcity to concat value"
-        if isinstance(tarX, MaskedTensor): 
-            return self.tuplewiseapply(lambda _: torch.concat((self.data, tarX.data), dim=-1))
+        if isinstance(tarX, MaskedTensor):
+            return self.tuplewiseapply(lambda _: torch.concat(
+                (self.data, tarX.data), dim=-1))
         elif isinstance(tarX, Iterable):
-            return self.tuplewiseapply(lambda _: torch.concat([self.data]+[_.data for _ in tarX], dim=-1))
+            return self.tuplewiseapply(lambda _: torch.concat(
+                [self.data] + [_.data for _ in tarX], dim=-1))
         else:
             raise NotImplementedError

@@ -26,27 +26,43 @@ def _repr(obj: Any) -> str:
     return ret
 
 
-def Sppretransform(pre_transform: Optional[Callable], tuplesamplers: Union[Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]], List[Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]]]],
-                      annotate: List[str]=[""], keys: List[str]=[""]):
+def Sppretransform(pre_transform: Optional[Callable],
+                   tuplesamplers: Union[Callable[[PygData],
+                                                 Tuple[Tensor, Tensor,
+                                                       Union[List[int], int]]],
+                                        List[Callable[[PygData],
+                                                      Tuple[Tensor, Tensor,
+                                                            Union[List[int],
+                                                                  int]]]]],
+                   annotate: List[str] = [""],
+                   keys: List[str] = [""]):
     hopre_transform = partial(sp_datapreprocess,
-                                tuplesamplers=tuplesamplers,
-                                annotate=annotate,
-                                keys=keys)
+                              tuplesamplers=tuplesamplers,
+                              annotate=annotate,
+                              keys=keys)
     if pre_transform is not None:
         return Compose([pre_transform, hopre_transform])
     else:
         return hopre_transform
 
 
-def Mapretransform(pre_transform: Optional[Callable], tuplesamplers: Union[Callable[[PygData], Tuple[Tensor, List[int]]],List[Callable[[PygData], Tuple[Tensor, List[int]]]]], annotate: List[str]=[""]):
-    hopre_transform = partial(ma_datapreprocess, tuplesamplers=tuplesamplers, annotate=annotate)
+def Mapretransform(pre_transform: Optional[Callable],
+                   tuplesamplers: Union[Callable[[PygData], Tuple[Tensor,
+                                                                  List[int]]],
+                                        List[Callable[[PygData],
+                                                      Tuple[Tensor,
+                                                            List[int]]]]],
+                   annotate: List[str] = [""]):
+    hopre_transform = partial(ma_datapreprocess,
+                              tuplesamplers=tuplesamplers,
+                              annotate=annotate)
     if pre_transform is not None:
         return Compose([pre_transform, hopre_transform])
     else:
         return hopre_transform
 
 
-def HoDatasetClass(datasetclass, processname: str=None):
+def HoDatasetClass(datasetclass, processname: str = None):
 
     @property
     def processed_dir(self) -> str:
@@ -56,11 +72,7 @@ def HoDatasetClass(datasetclass, processname: str=None):
                 f'processed__{_repr(self.pre_transform)}__{_repr(self.pre_filter)}'
             )
         else:
-            return osp.join(
-                self.root,
-                f'processed__{processname}'
-            )
-
+            return osp.join(self.root, f'processed__{processname}')
 
     setattr(datasetclass, "processed_dir", processed_dir)
     return datasetclass
@@ -70,7 +82,9 @@ SpDataloader = PygDataLoader
 
 
 class IterWrapper:
-    def __init__(self, iterator: Iterable, batch_transform: Callable, device) -> None:
+
+    def __init__(self, iterator: Iterable, batch_transform: Callable,
+                 device) -> None:
         self.iterator = iterator
         self.device = device
         self.batch_transform = batch_transform
@@ -94,17 +108,22 @@ class SpDataloader(PygDataLoader):
                  shuffle: bool = False,
                  follow_batch: List[str] | None = None,
                  exclude_keys: List[str] | None = None,
-                 device = None,
+                 device=None,
                  **kwargs):
         super().__init__(dataset, batch_size, shuffle, follow_batch,
                          exclude_keys, **kwargs)
         self.device = device
-        keys = [k.removeprefix("tupleid") for k in dataset[0].to_dict().keys() if k.startswith("tupleid")]
+        keys = [
+            k.removeprefix("tupleid") for k in dataset[0].to_dict().keys()
+            if k.startswith("tupleid")
+        ]
         self.keys = keys
 
     def __iter__(self) -> _BaseDataLoaderIter:
         ret = super().__iter__()
-        return IterWrapper(ret, partial(batch2sparse, keys=self.keys), self.device)
+        return IterWrapper(ret, partial(batch2sparse, keys=self.keys),
+                           self.device)
+
 
 class MaDataloader(PygDataLoader):
 
@@ -114,12 +133,15 @@ class MaDataloader(PygDataLoader):
                  shuffle: bool = False,
                  follow_batch: List[str] | None = None,
                  exclude_keys: List[str] | None = None,
-                 device = None,
+                 device=None,
                  denseadj: bool = True,
                  **kwargs):
         if follow_batch is None:
             follow_batch = []
-        keys = [k.removeprefix("tuplefeat") for k in dataset[0].to_dict().keys() if k.startswith("tuplefeat")]
+        keys = [
+            k.removeprefix("tuplefeat") for k in dataset[0].to_dict().keys()
+            if k.startswith("tuplefeat")
+        ]
         self.keys = keys
         for i in ["edge_index"] + [f"tuplefeat{_}" for _ in keys]:
             if i not in follow_batch:
@@ -131,5 +153,6 @@ class MaDataloader(PygDataLoader):
 
     def __iter__(self) -> _BaseDataLoaderIter:
         ret = super().__iter__()
-        return IterWrapper(ret, partial(batch2dense, keys=self.keys, denseadj=self.denseadj), self.device)
-        
+        return IterWrapper(
+            ret, partial(batch2dense, keys=self.keys, denseadj=self.denseadj),
+            self.device)

@@ -3,6 +3,7 @@ from .SpTensor import SparseTensor
 from torch import Tensor
 import torch
 
+
 def spmm(A: SparseTensor, dim1: int, X: Tensor, aggr: str = "sum") -> Tensor:
     '''
     SparseTensor, Tensor Matrix multiplication.

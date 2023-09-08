@@ -122,7 +122,8 @@ class SparseTensor:
             self.__shape = tuple(shape)
             # print(self.shape, self.denseshape, self.sparseshape, values.shape)
             if values is not None:
-                assert self.denseshape == values.shape[1:], "shape, value not match"
+                assert self.denseshape == values.shape[
+                    1:], "shape, value not match"
         else:
             self.__shape = tuple(
                 list(map(lambda x: x + 1,
@@ -139,7 +140,7 @@ class SparseTensor:
     def is_coalesced(self):
         return True
 
-    def to(self, device: torch.DeviceObjType, non_blocking: bool=False):
+    def to(self, device: torch.DeviceObjType, non_blocking: bool = False):
         self.__indices = self.__indices.to(device, non_blocking=non_blocking)
         self.__values = self.__values.to(device, non_blocking=non_blocking)
         return self
@@ -167,11 +168,11 @@ class SparseTensor:
     @property
     def shape(self):
         return self.__shape
-    
+
     @property
     def sparseshape(self):
         return self.shape[:self.sparse_dim]
-    
+
     @property
     def denseshape(self):
         return self.shape[self.sparse_dim:]
@@ -184,13 +185,15 @@ class SparseTensor:
         diag dim is then put at the first dim in dim list.
         '''
         dim = sorted(list(dim))
-        mask = torch.all((self.indices[dim] - self.indices[[dim[0]]])==0, dim=0)
+        mask = torch.all((self.indices[dim] - self.indices[[dim[0]]]) == 0,
+                         dim=0)
         idx = [i for i in range(self.sparse_dim) if i not in dim[1:]]
         other_shape = tuple([self.shape[i] for i in idx]) + self.denseshape
         return SparseTensor(indices=self.indices[idx][:, mask],
                             values=self.values[mask],
                             shape=other_shape,
-                            is_coalesced=(idx[0]==0) and np.all(np.diff(idx)==1))
+                            is_coalesced=(idx[0] == 0)
+                            and np.all(np.diff(idx) == 1))
 
     def _diag_to_dense(self, dim: Iterable[int]) -> Tensor:
         '''
@@ -200,7 +203,8 @@ class SparseTensor:
                       ), "please use tuplewiseapply for operation on dense dim"
         assert np.all(np.array(dim) >= 0), "do not support negative dim"
         dim = sorted(list(dim))
-        mask = torch.all((self.indices[dim] - self.indices[[dim[0]]])==0, dim=0)
+        mask = torch.all((self.indices[dim] - self.indices[[dim[0]]]) == 0,
+                         dim=0)
         idx = [i for i in range(self.sparse_dim) if i not in dim[1:]]
         nsparse_shape = [self.shape[i] for i in idx]
         nsparse_size = np.prod(nsparse_shape)
@@ -208,14 +212,14 @@ class SparseTensor:
         thash = indicehash_tight(
             self.indices[idx][:, mask],
             torch.LongTensor(nsparse_shape).to(self.indices.device))
-        ret = torch.zeros((nsparse_size,)+self.denseshape, device=thash.device, dtype=self.values.dtype)
+        ret = torch.zeros((nsparse_size, ) + self.denseshape,
+                          device=thash.device,
+                          dtype=self.values.dtype)
         ret[thash] = self.values[mask]
         ret = ret.unflatten(0, nsparse_shape)
         return ret
 
-    def diag(self,
-            dim: Optional[Iterable[int]],
-            return_sparse: bool = False):
+    def diag(self, dim: Optional[Iterable[int]], return_sparse: bool = False):
         '''
         TODO: unit test ??
         '''
@@ -260,7 +264,7 @@ class SparseTensor:
                       reduce=reduce)
         ret = ret.unflatten(0, nsparse_shape)
         return ret
-    
+
     def sum(self,
             dim: Union[int, Optional[Iterable[int]]],
             return_sparse: bool = False):
@@ -345,31 +349,35 @@ class SparseTensor:
         nvalues = func(self.values)
         return SparseTensor(self.indices,
                             nvalues,
-                            self.sparseshape +
-                            tuple(nvalues.shape[1:]),
+                            self.sparseshape + tuple(nvalues.shape[1:]),
                             is_coalesced=True)
-    
+
     def diagonalapply(self, func: Callable[[Tensor, LongTensor], Tensor]):
         assert self.sparse_dim == 2, "only implemented for 2D"
-        nvalues = func(self.values, (self.indices[0]==self.indices[1]).to(torch.long))
+        nvalues = func(self.values,
+                       (self.indices[0] == self.indices[1]).to(torch.long))
         return SparseTensor(self.indices,
                             nvalues,
-                            self.sparseshape +
-                            tuple(nvalues.shape[1:]),
+                            self.sparseshape + tuple(nvalues.shape[1:]),
                             is_coalesced=True)
 
     def add(self, tarX, samesparse: bool):
         if not samesparse:
-            return SparseTensor(torch.concat((self.indices, tarX.indices), dim=1), torch.concat((self.values, tarX.values), dim=1), self.shape, False)
+            return SparseTensor(
+                torch.concat((self.indices, tarX.indices), dim=1),
+                torch.concat((self.values, tarX.values), dim=1), self.shape,
+                False)
         else:
-            return self.tuplewiseapply(lambda x: x+tarX.values)
+            return self.tuplewiseapply(lambda x: x + tarX.values)
 
     def catvalue(self, tarX, samesparse: bool):
         assert samesparse == True, "must have the same sparcity to concat value"
-        if isinstance(tarX, SparseTensor): 
-            return self.tuplewiseapply(lambda _: torch.concat((self.values, tarX.values), dim=-1))
+        if isinstance(tarX, SparseTensor):
+            return self.tuplewiseapply(lambda _: torch.concat(
+                (self.values, tarX.values), dim=-1))
         elif isinstance(tarX, Iterable):
-            return self.tuplewiseapply(lambda _: torch.concat([self.values]+[_.values for _ in tarX], dim=-1))
+            return self.tuplewiseapply(lambda _: torch.concat(
+                [self.values] + [_.values for _ in tarX], dim=-1))
         else:
             raise NotImplementedError
 

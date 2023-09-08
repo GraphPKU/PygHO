@@ -24,11 +24,11 @@ def spmamm(A: SparseTensor,
     if dim1 == 1:
         b, n = A.shape[0], A.shape[2]
         bij = A.indices[0], A.indices[1]
-        tar_ind = n*A.indices[0] + A.indices[2]
+        tar_ind = n * A.indices[0] + A.indices[2]
     elif dim1 == 2:
         b, n = A.shape[0], A.shape[1]
         bij = A.indices[0], A.indices[2]
-        tar_ind = n*A.indices[0] + A.indices[1]
+        tar_ind = n * A.indices[0] + A.indices[1]
     else:
         raise NotImplementedError
     Aval = A.values
@@ -40,11 +40,7 @@ def spmamm(A: SparseTensor,
         mult = tB[bij[0], bij[1]]
     validmask = tBmask[bij[0], bij[1]]
     mult.masked_fill(torch.logical_not(validmask), filled_value_dict[aggr])
-    val = scatter(mult,
-                  tar_ind,
-                  dim=0,
-                  dim_size=b * n,
-                  reduce=aggr)
+    val = scatter(mult, tar_ind, dim=0, dim_size=b * n, reduce=aggr)
     ret = val.unflatten(0, (b, n))
     ret = torch.movedim(ret, 1, dim2)
     if aggr in filter_inf_ops:

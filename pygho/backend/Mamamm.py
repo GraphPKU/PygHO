@@ -4,7 +4,8 @@ from torch import BoolTensor, Tensor
 from typing import Optional, Tuple
 
 
-def batched_tensordot(A: Tensor, catdim1: int, dim1: int, B: Tensor, catdim2: int, dim2: int) -> Tensor:
+def batched_tensordot(A: Tensor, catdim1: int, dim1: int, B: Tensor,
+                      catdim2: int, dim2: int) -> Tensor:
     '''
     A (catdim1, densedim)
     B (catdim2, densedim)
@@ -18,31 +19,35 @@ def batched_tensordot(A: Tensor, catdim1: int, dim1: int, B: Tensor, catdim2: in
     ndim2 = B.ndim
     densedim2 = ndim2 - catdim2
     assert densedim1 == densedim2, "must of the same dense shape"
-    
+
     A = torch.movedim(A, dim1, -1)
     B = torch.movedim(B, dim2, -1)
-    for _ in range(catdim2-1): A = A.unsqueeze(catdim1-1)
-    for _ in range(catdim1-1): B = B.unsqueeze(0)
+    for _ in range(catdim2 - 1):
+        A = A.unsqueeze(catdim1 - 1)
+    for _ in range(catdim1 - 1):
+        B = B.unsqueeze(0)
 
     C = torch.sum(torch.multiply(A, B), dim=-1)
     return C
 
 
-def broadcast_denseshape(A: Tensor, densedim1: int, B: Tensor, densedim2: int) -> Tuple[Tensor, Tensor]:
+def broadcast_denseshape(A: Tensor, densedim1: int, B: Tensor,
+                         densedim2: int) -> Tuple[Tensor, Tensor]:
     while densedim1 < densedim2:
-        A.unsqueeze(-densedim1-1)
+        A.unsqueeze(-densedim1 - 1)
         densedim1 += 1
     while densedim2 < densedim1:
-        B.unsqueeze(-densedim2-1)
+        B.unsqueeze(-densedim2 - 1)
         densedim2 += 1
     return A, B
+
 
 def mamamm(A: MaskedTensor,
            dim1: int,
            B: MaskedTensor,
            dim2: int,
            mask: BoolTensor,
-           broadcast_firstdim: bool=True)->MaskedTensor:
+           broadcast_firstdim: bool = True) -> MaskedTensor:
     '''
     A: (B, maskeddims1, *) MaskedTensor
     B: (B, maskeddims2, *) MaskedTensor
@@ -55,7 +60,7 @@ def mamamm(A: MaskedTensor,
     densedim2 = B.dense_dim
 
     tA, tB = broadcast_denseshape(tA, densedim1, tB, densedim2)
-    
+
     densedim = max(densedim1, densedim2)
 
     if broadcast_denseshape:
@@ -63,11 +68,13 @@ def mamamm(A: MaskedTensor,
         assert dim2 > 0, "0 dim of B is batch, need to be broadcasted"
 
     if broadcast_firstdim:
-       tA = torch.movedim(tA, 0, -densedim-1)
-       tB = torch.movedim(tB, 0, -densedim-1)
-       densedim += 1
-       prod = batched_tensordot(tA, A.masked_dim-1, dim1-1, tB, B.masked_dim-1, dim2-1)
-       prod = torch.movedim(prod, -densedim, 0)
+        tA = torch.movedim(tA, 0, -densedim - 1)
+        tB = torch.movedim(tB, 0, -densedim - 1)
+        densedim += 1
+        prod = batched_tensordot(tA, A.masked_dim - 1, dim1 - 1, tB,
+                                 B.masked_dim - 1, dim2 - 1)
+        prod = torch.movedim(prod, -densedim, 0)
     else:
-       prod = batched_tensordot(tA, A.masked_dim, dim1, tB, B.masked_dim, dim2)
+        prod = batched_tensordot(tA, A.masked_dim, dim1, tB, B.masked_dim,
+                                 dim2)
     return MaskedTensor(prod, mask)

@@ -48,7 +48,9 @@ def to_dense_adj(edge_index: LongTensor,
     ret = torch.empty(size, dtype=edge_attr.dtype, device=edge_attr.device)
     ret.fill_(filled_value)
     ret[idx0, idx1, idx2] = edge_attr
-    mask = torch.zeros([batch_size, max_num_nodes, max_num_nodes], device=ret.device, dtype=torch.bool)
+    mask = torch.zeros([batch_size, max_num_nodes, max_num_nodes],
+                       device=ret.device,
+                       dtype=torch.bool)
     mask[idx0, idx1, idx2] = True
     return MaskedTensor(ret, mask, filled_value, True)
 
@@ -104,12 +106,13 @@ def to_dense_x(nodeX: Tensor,
     return MaskedTensor(ret, mask, filled_value, False)
 
 
-def to_dense_tuplefeat(tuplefeat: Tensor,
-                       tupleshape: LongTensor,
-                       tuplefeatptr: LongTensor,
-                       max_tupleshape: Optional[LongTensor] = None,
-                       batch_size: Optional[int] = None,
-                       feat2mask: Callable[[Tensor], BoolTensor]=None) -> MaskedTensor:
+def to_dense_tuplefeat(
+        tuplefeat: Tensor,
+        tupleshape: LongTensor,
+        tuplefeatptr: LongTensor,
+        max_tupleshape: Optional[LongTensor] = None,
+        batch_size: Optional[int] = None,
+        feat2mask: Callable[[Tensor], BoolTensor] = None) -> MaskedTensor:
     if batch_size is None:
         batch_size = tupleshape.shape[0]
 
@@ -117,27 +120,35 @@ def to_dense_tuplefeat(tuplefeat: Tensor,
         max_tupleshape = torch.amax(tupleshape, dim=0)
 
     ndim = max_tupleshape.shape[0]
-    fullidx = tuplefeatptr[:-1].reshape([-1]+[1]*ndim)
+    fullidx = tuplefeatptr[:-1].reshape([-1] + [1] * ndim)
     cumshape = torch.ones_like(tupleshape[:, [0]])
     # print(cumshape.shape)
     for i in range(ndim):
-        tidx = (torch.arange(max_tupleshape[-i-1], device=tuplefeat.device) * cumshape).reshape([batch_size]+[1]*(ndim-i-1)+[-1]+[1]*i)
+        tidx = (torch.arange(max_tupleshape[-i - 1], device=tuplefeat.device) *
+                cumshape).reshape([batch_size] + [1] * (ndim - i - 1) + [-1] +
+                                  [1] * i)
         # print(fullidx.shape, tidx.shape, max_tupleshape, ndim)
         fullidx = fullidx + tidx
-        cumshape = cumshape * tupleshape[:, [-i-1]]
+        cumshape = cumshape * tupleshape[:, [-i - 1]]
     fullidx.clamp_max_(tuplefeat.shape[0] - 1)
     ret = tuplefeat[fullidx]
     if feat2mask is not None:
         mask = feat2mask(ret)
     else:
-        mask = torch.ones([batch_size] + max_tupleshape.tolist(), device=ret.device, dtype=torch.bool)
-    
+        mask = torch.ones([batch_size] + max_tupleshape.tolist(),
+                          device=ret.device,
+                          dtype=torch.bool)
+
     for i in range(ndim):
-        tmask = torch.ones([batch_size]+[max_tupleshape[i]+1]+[1]*(ndim-1), dtype=torch.bool, device=ret.device)
-        tmask[torch.arange(batch_size, device=ret.device), tupleshape[:, i]] = False
+        tmask = torch.ones([batch_size] + [max_tupleshape[i] + 1] + [1] *
+                           (ndim - 1),
+                           dtype=torch.bool,
+                           device=ret.device)
+        tmask[torch.arange(batch_size, device=ret.device),
+              tupleshape[:, i]] = False
         tmask = torch.cummin(tmask, dim=1)[0]
         tmask = tmask[:, :-1]
-        tmask = torch.movedim(tmask, 1, i+1)
+        tmask = torch.movedim(tmask, 1, i + 1)
         mask.logical_and_(tmask)
     return MaskedTensor(ret, mask, 0, False)
 
@@ -146,37 +157,40 @@ def batch2dense(batch: PygBatch,
                 batch_size: int = None,
                 max_num_nodes: int = None,
                 denseadj: bool = False,
-                keys: List[str]=[""])->PygBatch:
-    batch.x = to_dense_x(batch.x, batch.ptr, max_num_nodes,
-                             batch_size)
+                keys: List[str] = [""]) -> PygBatch:
+    batch.x = to_dense_x(batch.x, batch.ptr, max_num_nodes, batch_size)
     batch_size, max_num_nodes = batch.x.shape[0], batch.x.shape[1]
     if denseadj:
-        batch.A = to_dense_adj(batch.edge_index,
-                                  batch.edge_index_batch,
-                                  batch.edge_attr, max_num_nodes,
-                                  batch_size)
+        batch.A = to_dense_adj(batch.edge_index, batch.edge_index_batch,
+                               batch.edge_attr, max_num_nodes, batch_size)
     else:
-        batch.A = to_sparse_adj(batch.edge_index,
-                                   batch.edge_index_batch,
-                                   batch.edge_attr, max_num_nodes,
-                                   batch_size)
+        batch.A = to_sparse_adj(batch.edge_index, batch.edge_index_batch,
+                                batch.edge_attr, max_num_nodes, batch_size)
     for key in keys:
         tuplefeat = getattr(batch, f"tuplefeat{key}")
         tupleshape = getattr(batch, f"tupleshape{key}")
         tuplefeat_ptr = getattr(batch, f"tuplefeat{key}_ptr")
-        X = to_dense_tuplefeat(tuplefeat, tupleshape, tuplefeat_ptr, None, batch_size, None)
+        X = to_dense_tuplefeat(tuplefeat, tupleshape, tuplefeat_ptr, None,
+                               batch_size, None)
         setattr(batch, f"X{key}", X)
     return batch
 
 
-def ma_datapreprocess(data: PygData, tuplesamplers: Union[Callable[[PygData], Tuple[Tensor, List[int]]],List[Callable[[PygData], Tuple[Tensor, List[int]]]]], annotate: List[str]=[""]) -> MaHoData:
+def ma_datapreprocess(data: PygData,
+                      tuplesamplers: Union[Callable[[PygData],
+                                                    Tuple[Tensor, List[int]]],
+                                           List[Callable[[PygData],
+                                                         Tuple[Tensor,
+                                                               List[int]]]]],
+                      annotate: List[str] = [""]) -> MaHoData:
     if not isinstance(tuplesamplers, Iterable):
         tuplesamplers = [tuplesamplers]
-    assert len(tuplesamplers) == len(annotate), "each tuplesampler need a different annotate"
+    assert len(tuplesamplers) == len(
+        annotate), "each tuplesampler need a different annotate"
     data.edge_index, data.edge_attr = coalesce(data.edge_index,
                                                data.edge_attr,
                                                num_nodes=data.num_nodes)
-    
+
     datadict = data.to_dict()
     datadict.update({
         "num_nodes": data.num_nodes,
@@ -188,9 +202,10 @@ def ma_datapreprocess(data: PygData, tuplesamplers: Union[Callable[[PygData], Tu
     for i, tuplesampler in enumerate(tuplesamplers):
         tuplefeat, tupleshape = tuplesampler(data)
         datadict.update({
-            f"tuplefeat{annotate[i]}": tuplefeat,
-            f"tupleshape{annotate[i]}": torch.LongTensor(tupleshape).reshape(1, -1),
+            f"tuplefeat{annotate[i]}":
+            tuplefeat,
+            f"tupleshape{annotate[i]}":
+            torch.LongTensor(tupleshape).reshape(1, -1),
         })
 
     return MaHoData(**datadict)
-    

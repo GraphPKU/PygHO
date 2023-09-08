@@ -17,18 +17,19 @@ import numpy as np
 
 class InputEncoder(nn.Module):
 
-    def __init__(self,
-                 emb_dim: int) -> None:
+    def __init__(self, emb_dim: int) -> None:
         super().__init__()
         self.x_encoder = nn.Embedding(32, emb_dim)
         self.ea_encoder = nn.Embedding(16, emb_dim, padding_idx=0)
         self.tuplefeat_encoder = nn.Embedding(16, emb_dim)
 
     def forward(self, datadict: dict) -> dict:
-        datadict["x"] = datadict["x"].tuplewiseapply(lambda x: self.x_encoder(x.squeeze(-1)))
+        datadict["x"] = datadict["x"].tuplewiseapply(
+            lambda x: self.x_encoder(x.squeeze(-1)))
         datadict["A"] = datadict["A"].tuplewiseapply(self.ea_encoder)
         datadict["X"] = datadict["X"].tuplewiseapply(self.tuplefeat_encoder)
         return datadict
+
 
 class SSWL(nn.Module):
 
@@ -54,7 +55,8 @@ class SSWL(nn.Module):
         self.lin_tupleinit = nn.Linear(emb_dim, emb_dim)
 
         ### GNN to generate node embeddings
-        self.subggnns = nn.ModuleList([SSWLConv(emb_dim, 2, mode="DD", mlp=mlp)])
+        self.subggnns = nn.ModuleList(
+            [SSWLConv(emb_dim, 2, mode="DD", mlp=mlp)])
         self.residual = residual
         ### Pooling function to generate whole-graph embeddings
         self.gpool = OpPooling(1, pool=gpool)
@@ -70,8 +72,9 @@ class SSWL(nn.Module):
             nn.LayerNorm(num_tasks, elementwise_affine=False)
             if ln_out else nn.Identity())
 
-    def tupleinit(self, X: MaskedTensor, x: MaskedTensor)->MaskedTensor:
-        return X.tuplewiseapply(lambda val: x.fill_masked(0).unsqueeze(1) * self.lin_tupleinit(x.fill_masked(0)).unsqueeze(2) * val)
+    def tupleinit(self, X: MaskedTensor, x: MaskedTensor) -> MaskedTensor:
+        return X.tuplewiseapply(lambda val: x.fill_masked(0).unsqueeze(
+            1) * self.lin_tupleinit(x.fill_masked(0)).unsqueeze(2) * val)
 
     def forward(self, datadict: dict):
         '''
@@ -91,30 +94,32 @@ class SSWL(nn.Module):
         return self.pred_lin(h_graph)
 
 
-model = SSWL(mlp={
-            "dp": 0,
-            "norm": "ln",
-            "act": "silu",
-            "normparam": 0.1
-        })
+model = SSWL(mlp={"dp": 0, "norm": "ln", "act": "silu", "normparam": 0.1})
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-5)
-trn_dataset = ZINC("dataset/ZINC",
-                   subset=True,
-                   split="train")
-trn_dataset = ParallelPreprocessDataset("dataset/ZINC_trn", trn_dataset,
-                   pre_transform=Mapretransform(None, partial(spdsampler, hop=4)), num_worker=16)
-val_dataset = ZINC("dataset/ZINC",
-                   subset=True,
-                   split="val")
-val_dataset = ParallelPreprocessDataset("dataset/ZINC_val", val_dataset,
-                   pre_transform=Mapretransform(None, partial(spdsampler, hop=4)), num_worker=16)
-tst_dataset = ZINC("dataset/ZINC",
-                   subset=True,
-                   split="test")
-tst_dataset = ParallelPreprocessDataset("dataset/ZINC_tst", tst_dataset,
-                   pre_transform=Mapretransform(None, partial(spdsampler, hop=4)), num_worker=16)
+trn_dataset = ZINC("dataset/ZINC", subset=True, split="train")
+trn_dataset = ParallelPreprocessDataset("dataset/ZINC_trn",
+                                        trn_dataset,
+                                        pre_transform=Mapretransform(
+                                            None, partial(spdsampler, hop=4)),
+                                        num_worker=16)
+val_dataset = ZINC("dataset/ZINC", subset=True, split="val")
+val_dataset = ParallelPreprocessDataset("dataset/ZINC_val",
+                                        val_dataset,
+                                        pre_transform=Mapretransform(
+                                            None, partial(spdsampler, hop=4)),
+                                        num_worker=16)
+tst_dataset = ZINC("dataset/ZINC", subset=True, split="test")
+tst_dataset = ParallelPreprocessDataset("dataset/ZINC_tst",
+                                        tst_dataset,
+                                        pre_transform=Mapretransform(
+                                            None, partial(spdsampler, hop=4)),
+                                        num_worker=16)
 device = torch.device("cuda")
-trn_dataloader = MaDataloader(trn_dataset, batch_size=256, device=device, shuffle=True, drop_last=True)
+trn_dataloader = MaDataloader(trn_dataset,
+                              batch_size=256,
+                              device=device,
+                              shuffle=True,
+                              drop_last=True)
 val_dataloader = MaDataloader(val_dataset, batch_size=256, device=device)
 tst_dataloader = MaDataloader(tst_dataset, batch_size=256, device=device)
 model = model.to(device)
@@ -137,6 +142,7 @@ def train(dataloader):
     losss = np.average(list(map(lambda x: x.item(), losss)))
     return losss
 
+
 @torch.no_grad()
 def eval(dataloader):
     model.eval()
@@ -149,6 +155,7 @@ def eval(dataloader):
         loss += F.l1_loss(datadict["y"].unsqueeze(-1), pred, reduction="sum")
         size += pred.shape[0]
     return loss / size
+
 
 best_val = float("inf")
 tst_score = float("inf")
@@ -163,4 +170,6 @@ for epoch in range(1, 1001):
         best_val = val_score
         tst_score = eval(tst_dataloader)
     t3 = time.time()
-    print(f"epoch {epoch} trn time {t2-t1:.2f} val time {t3-t2:.2f}  l1loss {losss:.4f} val MAE {val_score:.4f} tst MAE {tst_score:.4f}")
+    print(
+        f"epoch {epoch} trn time {t2-t1:.2f} val time {t3-t2:.2f}  l1loss {losss:.4f} val MAE {val_score:.4f} tst MAE {tst_score:.4f}"
+    )
