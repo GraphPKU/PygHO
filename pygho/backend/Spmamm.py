@@ -1,9 +1,9 @@
 from .MaTensor import MaskedTensor, filterinf
 import torch
-from torch import BoolTensor
+from torch import BoolTensor, Tensor
 from typing import Optional
-from torch_scatter import scatter
 from .SpTensor import SparseTensor
+from .utils import torch_scatter_reduce
 
 filled_value_dict = {"sum": 0, "max": -torch.inf, "min": torch.inf}
 filter_inf_ops = ["max", "min"]
@@ -40,7 +40,7 @@ def spmamm(A: SparseTensor,
         mult = tB[bij[0], bij[1]]
     validmask = tBmask[bij[0], bij[1]]
     mult.masked_fill(torch.logical_not(validmask), filled_value_dict[aggr])
-    val = scatter(mult, tar_ind, dim=0, dim_size=b * n, reduce=aggr)
+    val = torch_scatter_reduce(0, mult, tar_ind, b*n, aggr)
     ret = val.unflatten(0, (b, n))
     ret = torch.movedim(ret, 1, dim2)
     if aggr in filter_inf_ops:

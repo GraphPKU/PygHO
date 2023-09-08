@@ -16,7 +16,7 @@ from pygho.hodata.MaTupleSampler import spdsampler
 
 from pygho.honn.SpXOperator import parse_precomputekey
 
-from torch_geometric.nn.aggr import SumAggregation, MeanAggregation, MaxAggregation
+from pygho.backend.utils import torch_scatter_reduce
 from pygho.honn.Conv import NGNNConv, GNNAKConv, DSSGNNConv, SSWLConv, SUNConv
 from pygho.honn.TensorOp import OpPoolingSubg2D
 from pygho.honn.MaXOperator import OpPooling
@@ -67,12 +67,6 @@ class InputEncoderSp(nn.Module):
         datadict["X"] = datadict["X"].tuplewiseapply(self.tuplefeat_encoder)
         return datadict
 
-
-pool_dict = {
-    "sum": SumAggregation,
-    "mean": MeanAggregation,
-    "max": MaxAggregation
-}
 
 
 def transfermlpparam(mlp: dict):
@@ -215,11 +209,7 @@ class SpModel(nn.Module):
         self.subggnns = nn.ModuleList(
             [convfn(hiddim, mlp) for _ in range(num_layer)])
 
-        self.npool = {
-            "sum": SumAggregation,
-            "mean": MeanAggregation,
-            "max": MaxAggregation
-        }[npool]()
+        self.npool = npool
         self.lpool = OpPoolingSubg2D("S", lpool)
         self.data_encoder = InputEncoderSp(hiddim)
 
@@ -248,7 +238,7 @@ class SpModel(nn.Module):
             else:
                 X = tX
         x = self.lpool(X)
-        h_graph = self.npool(x, datadict["batch"], dim=0)
+        h_graph = torch_scatter_reduce(0, x, datadict["batch"], datadict["num_graphs"], self.npool)
         return self.pred_lin(h_graph)
 
 
@@ -269,6 +259,8 @@ else:
                         "normparam": 0.1
                     })
 
+torch.set_float32_matmul_precision('high')
+model = torch.compile(model)
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
 
 device = torch.device("cuda")
@@ -335,6 +327,7 @@ def train(dataloader):
         batch = batch.to(device, non_blocking=True)
         optimizer.zero_grad()
         datadict = batch.to_dict()
+        datadict["num_graphs"] = batch.num_graphs
         pred = model(datadict)
         loss = F.l1_loss(datadict["y"].unsqueeze(-1), pred, reduction="mean")
         loss.backward()
@@ -353,6 +346,7 @@ def eval(dataloader):
     for batch in dataloader:
         batch = batch.to(device, non_blocking=True)
         datadict = batch.to_dict()
+        datadict["num_graphs"] = batch.num_graphs
         pred = model(datadict)
         loss += F.l1_loss(datadict["y"].unsqueeze(-1), pred, reduction="sum")
         size += pred.shape[0]

@@ -129,7 +129,6 @@ def KhopSampler(data: PygData, hop: int = 2) -> Tuple[LongTensor, LongTensor]:
     tupleid, tuplefeat = subgbatch.subg_nodeidx.t(), subgbatch.x
     tupleid, tuplefeat = coalesce(tupleid,
                                   tuplefeat,
-                                  num_nodes=data.num_nodes,
                                   reduce="min")
     return tupleid, tuplefeat, [data.num_nodes, data.num_nodes]
 
@@ -169,6 +168,5 @@ def I2Sampler(data: PygData, hop: int = 3) -> Tuple[LongTensor, LongTensor]:
     tupleid, tuplefeat = subgbatch.subg_nodeidx.t(), subgbatch.x
     tupleid, tuplefeat = coalesce(tupleid,
                                   tuplefeat,
-                                  num_nodes=data.num_nodes,
                                   reduce="max")
     return tupleid, tuplefeat, [data.num_nodes, data.num_nodes, data.num_nodes]

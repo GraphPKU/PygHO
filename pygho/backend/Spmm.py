@@ -1,8 +1,7 @@
-from torch_scatter import scatter
 from .SpTensor import SparseTensor
 from torch import Tensor
 import torch
-
+from .utils import torch_scatter_reduce
 
 def spmm(A: SparseTensor, dim1: int, X: Tensor, aggr: str = "sum") -> Tensor:
     '''
@@ -23,4 +22,5 @@ def spmm(A: SparseTensor, dim1: int, X: Tensor, aggr: str = "sum") -> Tensor:
         mult = X[srcind]
     else:
         mult = val * X[srcind]
-    return scatter(mult, tarind, dim=0, dim_size=tarshape, reduce=aggr)
+    ret = torch_scatter_reduce(0, mult, tarind, tarshape, aggr)
+    return ret

@@ -1,10 +1,9 @@
 import torch
 from torch import LongTensor, Tensor
 from typing import Optional, Callable
-from torch_scatter import scatter
 from .SpTensor import SparseTensor, indicehash, decodehash
 import warnings
-
+from .utils import torch_scatter_reduce
 
 def ptr2batch(ptr: LongTensor, dim_size: int) -> LongTensor:
     '''
@@ -172,11 +171,7 @@ def spspmm(A: SparseTensor,
             mult = A.values[acd[1]]
         else:
             mult = A.values[acd[1]] * B.values[acd[2]]
-        retval = scatter(mult,
-                         acd[0],
-                         dim=0,
-                         dim_size=tar_ind.shape[1],
-                         reduce=aggr)
+        retval = torch_scatter_reduce(0, mult, acd[0], tar_ind.shape[1], aggr)
         return SparseTensor(tar_ind,
                             retval,
                             shape=A.sparseshape[:dim1] +
@@ -213,11 +208,7 @@ def spspmpnn(A: SparseTensor,
                         None if B.values is None else B.values[acd[2]],
                         None if C.values is None else C.values[acd[0]], acd[0])
     tar_ind = C.indices
-    retval = scatter(mult,
-                     acd[0],
-                     dim=0,
-                     dim_size=tar_ind.shape[1],
-                     reduce=aggr)
+    retval = torch_scatter_reduce(0, mult, acd[0], tar_ind.shape[1], aggr)
     return SparseTensor(tar_ind,
                         retval,
                         shape=A.sparseshape[:dim1] + A.sparseshape[dim1 + 1:] +

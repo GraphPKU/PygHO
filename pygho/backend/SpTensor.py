@@ -1,10 +1,10 @@
 import torch
 from typing import List, Optional, Tuple, Callable
 from torch import LongTensor, Tensor
-from torch_scatter import scatter
 from typing import Iterable, Union
 import numpy as np
-
+from .utils import torch_scatter_reduce
+from typing import Final
 
 def indicehash(indice: LongTensor) -> LongTensor:
     assert indice.ndim == 2
@@ -73,7 +73,6 @@ def decodehash_tight(indhash: LongTensor, dimsize: LongTensor) -> LongTensor:
 
 def coalesce(edge_index: LongTensor,
              edge_attr: Optional[Tensor] = None,
-             num_nodes: Optional[int] = None,
              reduce: str = 'add') -> Tuple[Tensor, Optional[Tensor]]:
     """Row-wise sorts :obj:`edge_index` and removes its duplicated entries.
     Duplicate entries in :obj:`edge_attr` are merged by scattering them
@@ -98,16 +97,11 @@ def coalesce(edge_index: LongTensor,
     if edge_attr is None:
         return edge_index, None
     else:
-        edge_attr = scatter(edge_attr,
-                            idx,
-                            dim=0,
-                            dim_size=eihash.shape[0],
-                            reduce=reduce)
+        edge_attr = torch_scatter_reduce(0, edge_attr, idx, eihash.shape[0], reduce)
         return edge_index, edge_attr
 
 
 class SparseTensor:
-
     def __init__(self,
                  indices: LongTensor,
                  values: Optional[Tensor] = None,
@@ -129,12 +123,11 @@ class SparseTensor:
                 list(map(lambda x: x + 1,
                          torch.max(indices, dim=1).tolist())) +
                 list(values.shape[1:]))
-        self.__maxsparsesize = max(self.shape[:self.sparse_dim])
         if is_coalesced:
             self.__indices, self.__values = indices, values
         else:
             self.__indices, self.__values = coalesce(
-                indices, values, num_nodes=self.__maxsparsesize)
+                indices, values)
         self.__nnz = self.indices.shape[1]
 
     def is_coalesced(self):
@@ -156,10 +149,6 @@ class SparseTensor:
     @property
     def sparse_dim(self):
         return self.__sparse_dim
-
-    @property
-    def maxsparsesize(self):
-        return self.__maxsparsesize
 
     @property
     def nnz(self):
@@ -250,19 +239,17 @@ class SparseTensor:
         assert np.all(np.array(dim) >= 0), "do not support negative dim"
         idx = [i for i in range(self.sparse_dim) if i not in list(dim)]
         other_ind = self.indices[idx]
-        other_shape = [self.shape[i] for i in idx]
+        other_shape = tuple(self.shape[i] for i in idx)
         nsparse_shape = other_shape
-        nsparse_size = np.prod(nsparse_shape)
+        nsparse_size = 1
+        for _ in nsparse_shape:
+            nsparse_size *= _
 
         thash = indicehash_tight(
             other_ind,
             torch.LongTensor(nsparse_shape).to(other_ind.device))
-        ret = scatter(self.values,
-                      thash,
-                      dim=0,
-                      dim_size=nsparse_size,
-                      reduce=reduce)
-        ret = ret.unflatten(0, nsparse_shape)
+        ret = torch_scatter_reduce(0, self.values, thash, nsparse_size, reduce)
+        ret = ret.reshape(nsparse_shape+tuple(ret.shape[1:]))
         return ret
 
     def sum(self,
