@@ -15,7 +15,7 @@ class OpNodeMessagePassing(Module):
         super().__init__()
 
     def forward(self, A: MaskedTensor, X: MaskedTensor, tarX: MaskedTensor) -> Tensor:
-        return mamamm(A, 2, X, 1, tarX.__rawmask)
+        return mamamm(A, 2, X, 1, tarX.mask)
     
 class OpSpNodeMessagePassing(Module):
     def __init__(self, aggr: str="sum") -> None:
@@ -23,7 +23,7 @@ class OpSpNodeMessagePassing(Module):
         self.aggr = aggr
 
     def forward(self, A: SparseTensor, X: MaskedTensor, tarX: MaskedTensor) -> Tensor:
-        return spmamm(A, 2, X, 1, tarX.__rawmask, self.aggr)
+        return spmamm(A, 2, X, 1, tarX.mask, self.aggr)
 
 class OpMessagePassing(Module):
 
@@ -33,7 +33,8 @@ class OpMessagePassing(Module):
         self.dim2 = dim2
 
     def forward(self, A: MaskedTensor, B: MaskedTensor, tarX: MaskedTensor)->MaskedTensor:
-        return mamamm(A, self.dim1, B, self.dim2, tarX.__rawmask, True)
+        tarmask = tarX.mask
+        return mamamm(A, self.dim1, B, self.dim2, tarmask, True)
 
 class Op2FWL(OpMessagePassing):
     def __init__(self) -> None:
@@ -64,6 +65,7 @@ class OpMessagePassingOnSubg3D(OpMessagePassing):
         return super().forward(X, A, tarX)
     
 class OpMessagePassingCrossSubg2D(OpMessagePassing):
+
     def __init__(self) -> None:
         super().__init__(1, 1)
 
@@ -82,7 +84,7 @@ class OpSpMessagePassing(Module):
 
     def forward(self, A: SparseTensor, X: MaskedTensor, tarX: MaskedTensor)->MaskedTensor:
         assert A.sparse_dim == 3, "A should be bxnxn adjacency matrix "
-        return spmamm(A, self.dim1, X, self.dim2, tarX.__rawmask, self.aggr)
+        return spmamm(A, self.dim1, X, self.dim2, tarX.mask, self.aggr)
     
 class OpSpMessagePassingOnSubg2D(OpSpMessagePassing):
     def __init__(self, aggr: str = "sum") -> None:
@@ -134,7 +136,7 @@ class OpPooling(Module):
         self.pool = pool
 
     def forward(self, X: MaskedTensor)->MaskedTensor:
-        return getattr(X, self.pool)(dim=self.dims, keepdims=False)
+        return getattr(X, self.pool)(dims=self.dims, keepdim=False)
 
 class OpPoolingSubg2D(OpPooling):
     def __init__(self, pool: str = "sum") -> None:

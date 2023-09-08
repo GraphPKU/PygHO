@@ -1,13 +1,14 @@
 import torch
 from torch import Tensor
 from torch_geometric.datasets import ZINC
-from pygho.hodata import SubgDatasetClass, Mapretransform, MaDataloader
+from pygho.hodata import Mapretransform, MaDataloader, ParallelPreprocessDataset
 from pygho.hodata.MaTupleSampler import spdsampler
 from functools import partial
 import torch
 import torch.nn as nn
-from pygho.honn.Maconv import CrossSubgConv, NestedConv, Convs
-from pygho.honn.MaXOperator import pooling_tuple
+from pygho.honn.Conv import SSWLConv
+from pygho.honn.TensorOp import OpPoolingSubg2D
+from pygho.honn.MaXOperator import OpPooling
 from pygho.honn.utils import MLP
 from pygho import MaskedTensor
 import torch.nn.functional as F
@@ -20,13 +21,13 @@ class InputEncoder(nn.Module):
                  emb_dim: int) -> None:
         super().__init__()
         self.x_encoder = nn.Embedding(32, emb_dim)
-        self.ea_encoder = nn.Embedding(16, emb_dim)
+        self.ea_encoder = nn.Embedding(16, emb_dim, padding_idx=0)
         self.tuplefeat_encoder = nn.Embedding(16, emb_dim)
 
     def forward(self, datadict: dict) -> dict:
-        datadict["x"] = self.x_encoder(datadict["x"].squeeze(-1))
+        datadict["x"] = datadict["x"].tuplewiseapply(lambda x: self.x_encoder(x.squeeze(-1)))
         datadict["A"] = datadict["A"].tuplewiseapply(self.ea_encoder)
-        datadict["tuplefeat"] = self.tuplefeat_encoder(datadict["tuplefeat"])
+        datadict["X"] = datadict["X"].tuplewiseapply(self.tuplefeat_encoder)
         return datadict
 
 class SSWL(nn.Module):
@@ -53,14 +54,11 @@ class SSWL(nn.Module):
         self.lin_tupleinit = nn.Linear(emb_dim, emb_dim)
 
         ### GNN to generate node embeddings
-        self.subggnns = Convs(sum([[NestedConv(emb_dim, 2, "sum", mlp)] +
-                                   [CrossSubgConv(emb_dim, 2, "sum", mlp)]
-                                   for i in range(num_layer)],
-                                  start=[]),
-                              residual=residual)
+        self.subggnns = nn.ModuleList([SSWLConv(emb_dim, 2, mode="DD", mlp=mlp)])
+        self.residual = residual
         ### Pooling function to generate whole-graph embeddings
-        self.gpool = gpool
-        self.lpool = lpool
+        self.gpool = OpPooling(1, pool=gpool)
+        self.lpool = OpPoolingSubg2D("D", pool=lpool)
 
         self.data_encoder = InputEncoder(emb_dim)
 
@@ -72,8 +70,8 @@ class SSWL(nn.Module):
             nn.LayerNorm(num_tasks, elementwise_affine=False)
             if ln_out else nn.Identity())
 
-    def tupleinit(self, tuplefeat: Tensor, x: Tensor, tuplemask: Tensor)->MaskedTensor:
-        return MaskedTensor(x.unsqueeze(1) * self.lin_tupleinit(x).unsqueeze(2) * tuplefeat, mask=tuplemask)
+    def tupleinit(self, X: MaskedTensor, x: MaskedTensor)->MaskedTensor:
+        return X.tuplewiseapply(lambda val: x.fill_masked(0).unsqueeze(1) * self.lin_tupleinit(x.fill_masked(0)).unsqueeze(2) * val)
 
     def forward(self, datadict: dict):
         '''
@@ -81,11 +79,15 @@ class SSWL(nn.Module):
         '''
         datadict = self.data_encoder(datadict)
         A = datadict["A"]
-        X = self.tupleinit(datadict["tuplefeat"], datadict["x"], datadict["tuplemask"])
-        X = self.subggnns.forward(X, A)
-        x = pooling_tuple(X, dim=1, pool=self.lpool)
-        x = MaskedTensor(x, datadict["nodemask"])
-        h_graph = getattr(x, self.gpool)(dim=1)
+        X = self.tupleinit(datadict["X"], datadict["x"])
+        for conv in self.subggnns:
+            tX = conv.forward(A, X, datadict)
+            if self.residual:
+                X = X.add(tX, samesparse=True)
+            else:
+                X = tX
+        x = self.lpool(X)
+        h_graph = self.gpool.forward(x).fill_masked(0)
         return self.pred_lin(h_graph)
 
 
@@ -96,18 +98,21 @@ model = SSWL(mlp={
             "normparam": 0.1
         })
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-5)
-trn_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
+trn_dataset = ZINC("dataset/ZINC",
                    subset=True,
-                   split="train",
-                   pre_transform=Mapretransform(partial(spdsampler, hop=4)))
-val_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
+                   split="train")
+trn_dataset = ParallelPreprocessDataset("dataset/ZINC_trn", trn_dataset,
+                   pre_transform=Mapretransform(None, partial(spdsampler, hop=4)), num_worker=16)
+val_dataset = ZINC("dataset/ZINC",
                    subset=True,
-                   split="val",
-                   pre_transform=Mapretransform(partial(spdsampler, hop=4)))
-tst_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
+                   split="val")
+val_dataset = ParallelPreprocessDataset("dataset/ZINC_val", val_dataset,
+                   pre_transform=Mapretransform(None, partial(spdsampler, hop=4)), num_worker=16)
+tst_dataset = ZINC("dataset/ZINC",
                    subset=True,
-                   split="test",
-                   pre_transform=Mapretransform(partial(spdsampler, hop=4)))
+                   split="test")
+tst_dataset = ParallelPreprocessDataset("dataset/ZINC_tst", tst_dataset,
+                   pre_transform=Mapretransform(None, partial(spdsampler, hop=4)), num_worker=16)
 device = torch.device("cuda")
 trn_dataloader = MaDataloader(trn_dataset, batch_size=256, device=device, shuffle=True, drop_last=True)
 val_dataloader = MaDataloader(val_dataset, batch_size=256, device=device)

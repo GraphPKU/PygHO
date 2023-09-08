@@ -3,6 +3,7 @@ from torch_geometric.data import InMemoryDataset, Data as PygData
 from typing import Callable, Optional
 from multiprocessing import Pool
 from pqdm.processes import pqdm
+from tqdm import tqdm
 from .Wrapper import _repr
 import os.path as osp
 
@@ -14,7 +15,7 @@ class ParallelPreprocessDataset(InMemoryDataset):
     num_worker: number of process. Can be the number of cpu.
     '''
     def __init__(self, root, data_list, pre_transform: Callable[[PygData], PygData], num_worker: int, processedname: Optional[str]=None):
-        self.tmp_data_list = data_list
+        self.tmp_data_list = list(data_list)
         self.num_worker = num_worker
         self.processedname = processedname
         super().__init__(root, pre_transform=pre_transform)
@@ -39,5 +40,8 @@ class ParallelPreprocessDataset(InMemoryDataset):
             )
 
     def process(self):
-        data_list = pqdm(self.tmp_data_list, self.pre_transform, n_jobs=self.num_worker)
+        if self.num_worker > 0:
+            data_list = pqdm(self.tmp_data_list, self.pre_transform, n_jobs=self.num_worker)
+        else:
+            data_list = [self.pre_transform(_) for _ in tqdm(self.tmp_data_list)]
         torch.save(self.collate(data_list), self.processed_paths[0])

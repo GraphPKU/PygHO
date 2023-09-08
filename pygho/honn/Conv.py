@@ -48,10 +48,10 @@ class SSWLConv(Module):
 
     def forward(self, A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor],
                 datadict: dict) -> Union[SparseTensor, MaskedTensor]:
-        tX = X.tuplewiseapply(self.lin)
+        tX = X
         X1 = self.aggr1.forward(A, tX, datadict, tX)
         X2 = self.aggr2.forward(A, tX, datadict, tX)
-        return X.catvalue([X1, X2]).tuplewiseapply(self.lin)
+        return X.catvalue([X1, X2], True).tuplewiseapply(self.lin)
 
 
 class I2Conv(Module):
@@ -99,7 +99,7 @@ class DSSGNNConv(Module):
                 datadict: dict) -> Union[SparseTensor, MaskedTensor]:
         X1 = self.unpooling2subg.forward(self.aggr_subg(self.pool2global.forward(X)), X)
         X2 = self.aggr_subg.forward(A, X, datadict, X)
-        return X2.catvalue(X1).tuplewiseapply(self.lin)
+        return X2.catvalue(X1, True).tuplewiseapply(self.lin)
 
 
 
@@ -150,9 +150,9 @@ class GNNAKConv(Module):
         X2 = self.unpool4subg.forward(self.pool2subg.forward(X), X)
         if self.ctx:
             X3 = self.unpool4rootnode.forward(self.pool2node.forward(X), X)
-            return X2.catvalue([X1,X3]).tuplewiseapply(self.lin)
+            return X2.catvalue([X1,X3], True).tuplewiseapply(self.lin)
         else:
-            return X2.catvalue(X1).tuplewiseapply(self.lin)
+            return X2.catvalue(X1, True).tuplewiseapply(self.lin)
     
 
 class SUNConv(Module):
@@ -183,6 +183,6 @@ class SUNConv(Module):
         X5 = self.unpool4rootnode(self.pool2node(X))
         X6 = self.unpool4subg(self.pool2subg(X))
         X7 = self.unpool4rootnode(self.pool2node(X4))
-        X = X1.catvalue([X2, X3, X4, X5, X6, X7])
+        X = X1.catvalue([X2, X3, X4, X5, X6, X7], True)
         X.diagonalapply(self.lin)
         return X

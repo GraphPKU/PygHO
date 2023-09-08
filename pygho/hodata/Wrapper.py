@@ -115,6 +115,7 @@ class MaDataloader(PygDataLoader):
                  follow_batch: List[str] | None = None,
                  exclude_keys: List[str] | None = None,
                  device = None,
+                 denseadj: bool = True,
                  **kwargs):
         if follow_batch is None:
             follow_batch = []
@@ -126,8 +127,9 @@ class MaDataloader(PygDataLoader):
         super().__init__(dataset, batch_size, shuffle, follow_batch,
                          exclude_keys, **kwargs)
         self.device = device
+        self.denseadj = denseadj
 
     def __iter__(self) -> _BaseDataLoaderIter:
         ret = super().__iter__()
-        return IterWrapper(ret, partial(batch2dense, keys=self.keys), self.device)
+        return IterWrapper(ret, partial(batch2dense, keys=self.keys, denseadj=self.denseadj), self.device)
         

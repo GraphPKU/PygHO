@@ -12,6 +12,7 @@ def batched_tensordot(A: Tensor, catdim1: int, dim1: int, B: Tensor, catdim2: in
     '''
     assert dim1 < catdim1, "contract the masked dim only"
     assert dim2 < catdim2, "contract the masked dim only"
+    # print(A.shape, catdim1, dim1, B.shape, catdim2, dim2)
     ndim1 = A.ndim
     densedim1 = ndim1 - catdim1
     ndim2 = B.ndim
@@ -20,11 +21,10 @@ def batched_tensordot(A: Tensor, catdim1: int, dim1: int, B: Tensor, catdim2: in
     
     A = torch.movedim(A, dim1, -1)
     B = torch.movedim(B, dim2, -1)
+    for _ in range(catdim2-1): A = A.unsqueeze(catdim1-1)
+    for _ in range(catdim1-1): B = B.unsqueeze(0)
 
-    for _ in range(catdim2-1): A.unsqueeze(catdim1-1)
-    for _ in range(catdim1-1): B.unsqueeze(0)
-
-    C = torch.inner(A, B)
+    C = torch.sum(torch.multiply(A, B), dim=-1)
     return C
 
 
@@ -53,7 +53,9 @@ def mamamm(A: MaskedTensor,
     tB = B.fill_masked(0)
     densedim1 = A.dense_dim
     densedim2 = B.dense_dim
-    tA, tB = broadcast_denseshape(tA, tB)
+
+    tA, tB = broadcast_denseshape(tA, densedim1, tB, densedim2)
+    
     densedim = max(densedim1, densedim2)
 
     if broadcast_denseshape:

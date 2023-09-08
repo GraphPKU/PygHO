@@ -139,9 +139,9 @@ class SparseTensor:
     def is_coalesced(self):
         return True
 
-    def to(self, device: torch.DeviceObjType):
-        self.__indices = self.__indices.to(device)
-        self.__values = self.__values.to(device)
+    def to(self, device: torch.DeviceObjType, non_blocking: bool=False):
+        self.__indices = self.__indices.to(device, non_blocking=non_blocking)
+        self.__values = self.__values.to(device, non_blocking=non_blocking)
         return self
 
     @property

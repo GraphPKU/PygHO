@@ -33,7 +33,7 @@ def spmamm(A: SparseTensor,
         raise NotImplementedError
     Aval = A.values
     tB = torch.movedim(B.data, dim2, 1)
-    tBmask = torch.movedim(B.__rawmask, dim2, 1)
+    tBmask = torch.movedim(B.mask, dim2, 1)
     if Aval is not None:
         mult = Aval.unsqueeze(1) * tB[bij[0], bij[1]]
     else:

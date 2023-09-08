@@ -25,12 +25,11 @@ class MaskedTensor:
         assert data.shape[:mask.
                           ndim] == mask.shape, "data and mask's first dimensions should match"
         self.__data = data
-        self.__rawmask = mask
+        self.__mask = mask
         self.__masked_dim = mask.ndim
         while mask.ndim < data.ndim:
             mask = mask.unsqueeze(-1)
-        mask = mask.expand_as(data)
-        self.__mask = mask
+        self.__fullmask = mask
         if not is_filled:
             self.__padvalue = torch.inf if padvalue != torch.inf else -torch.inf
             self.fill_masked_(padvalue)
@@ -44,8 +43,7 @@ class MaskedTensor:
         if self.padvalue == val:
             return
         self.__padvalue = val
-        self.__data = self.__data.masked_fill(torch.logical_not(self.__mask),
-                                              val)
+        self.__data = torch.where(self.fullmask, self.data, val)
 
     def fill_masked(self, val: float = 0) -> Tensor:
         '''
@@ -53,11 +51,12 @@ class MaskedTensor:
         '''
         if self.__padvalue == val:
             return self.data
-        return torch.where(self.mask, self.data, val)
+        return torch.where(self.fullmask, self.data, val)
 
-    def to(self, device: torch.DeviceObjType):
-        self.__data = self.__data.to(device)
-        self.__mask = self.__mask.to(device)
+    def to(self, device: torch.DeviceObjType, non_blocking: bool=True):
+        self.__data = self.__data.to(device, non_blocking=non_blocking)
+        self.__mask = self.__mask.to(device, non_blocking=non_blocking)
+        self.__fullmask = self.__fullmask.to(device, non_blocking=non_blocking)
         return self
 
     @property
@@ -71,6 +70,10 @@ class MaskedTensor:
     @property
     def mask(self) -> BoolTensor:
         return self.__mask
+
+    @property
+    def fullmask(self) -> BoolTensor:
+        return self.__fullmask
 
     @property
     def shape(self) -> torch.Size:
@@ -96,22 +99,23 @@ class MaskedTensor:
         '''
         mask true elements
         '''
-        return MaskedTensor(torch.sum(self.fill_masked(0), dim=dims, keepdim=keepdim), torch.amax(self.__rawmask, dims, keepdim=keepdim), padvalue=0, is_filled=True)
+        return MaskedTensor(torch.sum(self.fill_masked(0), dim=dims, keepdim=keepdim), torch.amax(self.mask, dims, keepdim=keepdim), padvalue=0, is_filled=True)
 
     def mean(self, dims: Union[Iterable[int], int], keepdim: bool = False):
         '''
         mask true elements
         '''
-        return MaskedTensor(self.sum(dims, keepdim) / torch.clamp_min_(
-                torch.sum(self.mask, dim=dims, keepdim=keepdim), 1), torch.amax(self.__rawmask, dims, keepdim=keepdim), padvalue=0, is_filled=True)
+        count = torch.clamp_min_(torch.sum(self.fullmask, dim=dims, keepdim=keepdim), 1)
+        valsum = self.sum(dims, keepdim)
+        return  MaskedTensor(valsum.data/count , valsum.mask, padvalue=valsum.padvalue, is_filled=True)
 
     def max(self, dims: Union[Iterable[int], int], keepdim: bool = False):
         tmp = self.fill_masked(-torch.inf)
-        return  MaskedTensor(filterinf(torch.amax(tmp, dim=dims, keepdim=keepdim), 0), torch.amax(self.__rawmask, dims, keepdim=keepdim), padvalue=0, is_filled=True)
+        return  MaskedTensor(filterinf(torch.amax(tmp, dim=dims, keepdim=keepdim), 0), torch.amax(self.mask, dims, keepdim=keepdim), padvalue=0, is_filled=True)
 
     def min(self, dims: Union[Iterable[int], int], keepdim: bool = False):
         tmp = self.fill_masked(torch.inf)
-        return  MaskedTensor(filterinf(torch.amax(tmp, dim=dims, keepdim=keepdim), 0), torch.amax(self.__rawmask, dims, keepdim=keepdim), padvalue=0, is_filled=True)
+        return  MaskedTensor(filterinf(torch.amax(tmp, dim=dims, keepdim=keepdim), 0), torch.amax(self.mask, dims, keepdim=keepdim), padvalue=0, is_filled=True)
 
     def diag(self, dim: Iterable[int]):
         '''
@@ -120,7 +124,7 @@ class MaskedTensor:
         assert len(dim) >= 2, "must diag several dims"
         dim = sorted(list(dim))
         tdata = self.data
-        tmask = self.__rawmask
+        tmask = self.mask
         tdata = torch.diagonal(tdata, 0, dim[0], dim[1])
         tmask = torch.diagonal(tmask, 0, dim[0], dim[1])
         for i in range(2, len(dim)):
@@ -138,26 +142,26 @@ class MaskedTensor:
         for _ in dim:
             tdata.unsqueeze(_)
         tdata = tdata.expand(*(-1 if i not in dim else tarX.shape[i] for i in range(dim[-1]+1)))
-        return MaskedTensor(tdata, tarX.__rawmask, self.padvalue, False)
+        return MaskedTensor(tdata, tarX.mask, self.padvalue, False)
 
 
     def tuplewiseapply(self, func: Callable[[Tensor], Tensor]):
         # it may cause nan in gradient and makes amp unable to update
         ndata = func(self.fill_masked(0))
-        return MaskedTensor(ndata, self.__rawmask)
+        return MaskedTensor(ndata, self.mask)
     
     def diagonalapply(self, func: Callable[[Tensor, LongTensor], Tensor]):
         assert self.masked_dim == 3, "only implemented for 3D"
         diagonaltype = torch.eye(self.shape[1], self.shape[2], dtype=torch.long, device=self.data.device)
-        diagonaltype = diagonaltype.unsqueeze(0).expand_as(self.__rawmask)
+        diagonaltype = diagonaltype.unsqueeze(0).expand_as(self.mask)
         ndata = func(self.data, diagonaltype)
-        return MaskedTensor(ndata, self.__rawmask)
+        return MaskedTensor(ndata, self.mask)
     
     def add(self, tarX, samesparse: bool):
         if samesparse:
-            return MaskedTensor(tarX.data+self.data, self.__rawmask, self.padvalue, is_filled=self.padvalue==tarX.padvalue)
+            return MaskedTensor(tarX.data+self.data, self.mask, self.padvalue, is_filled=self.padvalue==tarX.padvalue)
         else:
-            return MaskedTensor(tarX.fill_masked(0)+self.fill_masked(0), torch.logical_or(self.__rawmask, tarX.__rawmask), 0, True)
+            return MaskedTensor(tarX.fill_masked(0)+self.fill_masked(0), torch.logical_or(self.mask, tarX.mask), 0, True)
 
     def catvalue(self, tarX, samesparse: bool):
         assert samesparse == True, "must have the same sparcity to concat value"

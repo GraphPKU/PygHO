@@ -1,18 +1,22 @@
 import torch
 from torch_geometric.datasets import ZINC
-from pygho.hodata import SpDataloader, Sppretransform, SubgDatasetClass
+from pygho.hodata import SpDataloader, Sppretransform, ParallelPreprocessDataset
 from pygho.hodata.SpTupleSampler import I2Sampler
 from functools import partial
 import torch
 from torch_geometric.nn.aggr import SumAggregation, MeanAggregation, MaxAggregation
-from pygho.honn.Spconv import Convs, I2Conv
-from pygho.honn.SpXOperator import pooling2nodes, pooling2tuple
+from pygho.honn.Conv import I2Conv
+from pygho.honn.SpXOperator import parse_precomputekey
+from pygho.honn.TensorOp import OpPoolingSubg2D, OpPoolingSubg3D
 import torch.nn as nn
 from pygho import SparseTensor
 from pygho.honn.utils import MLP
 import torch.nn.functional as F
 import numpy as np
 
+'''
+model definition
+'''
 
 class InputEncoder(nn.Module):
 
@@ -20,14 +24,20 @@ class InputEncoder(nn.Module):
         super().__init__()
         self.x_encoder = nn.Embedding(32, emb_dim)
         self.ea_encoder = nn.Embedding(16, emb_dim)
-        self.tuplefeat_encoder = nn.Embedding(16, emb_dim // 2)
+        self.tuplefeat_encoder = nn.Embedding(16, emb_dim//2)
 
     def forward(self, datadict: dict) -> dict:
-        # print(datadict["x"].shape, datadict["edge_attr"].shape, datadict["tuplefeat"].shape)
         datadict["x"] = self.x_encoder(datadict["x"].flatten())
-        datadict["edge_attr"] = self.ea_encoder(datadict["edge_attr"])
-        datadict["tuplefeat"] = self.tuplefeat_encoder(datadict["tuplefeat"]).flatten(-2, -1)
+        datadict["A"] = datadict["A"].tuplewiseapply(self.ea_encoder)
+        datadict["X"] = datadict["X"].tuplewiseapply(lambda val: self.tuplefeat_encoder(val).flatten(-2, -1))
         return datadict
+
+
+pool_dict = {
+    "sum": SumAggregation,
+    "mean": MeanAggregation,
+    "max": MaxAggregation
+}
 
 
 class I2GNN(nn.Module):
@@ -36,15 +46,19 @@ class I2GNN(nn.Module):
                  num_tasks=1,
                  num_layer=5,
                  emb_dim=256,
+                 aggr="sum",
                  npool="sum",
-                 epool="sum",
                  lpool="max",
                  residual=True,
                  outlayer: int = 1,
                  ln_out: bool = False,
                  mlp: dict = {}):
         '''
-            num_tasks (int): number of labels to be predicted
+            num_tasks (int): number of output dimensions
+            npool: node level pooling
+            lpool: subgraph pooling
+            aggr: aggregation scheme in MPNN on each subgraph
+            ln_out: use layernorm in output, a normalization method for classification problem
         '''
 
         super().__init__()
@@ -52,20 +66,23 @@ class I2GNN(nn.Module):
         self.emb_dim = emb_dim
         self.num_tasks = num_tasks
 
-        self.lin_tupleinit = nn.Linear(emb_dim, emb_dim)
+        self.lin_tupleinit0 = nn.Linear(emb_dim, emb_dim)
+        self.lin_tupleinit1 = nn.Linear(emb_dim, emb_dim)
+        self.lin_tupleinit2 = nn.Linear(emb_dim, emb_dim)
 
+
+        self.residual = residual
         ### GNN to generate node embeddings
-        self.subggnns = Convs(
-            [I2Conv(emb_dim, 1, "sum", mlp) for i in range(num_layer)],
-            residual=residual)
+        self.subggnns = nn.ModuleList(
+            [I2Conv(emb_dim, 1, aggr, "SS", mlp) for _ in range(num_layer)])
         ### Pooling function to generate whole-graph embeddings
         self.npool = {
             "sum": SumAggregation,
             "mean": MeanAggregation,
             "max": MaxAggregation
         }[npool]()
-        self.lpool = lpool
-        self.epool = epool
+        self.lpool1 = OpPoolingSubg3D("S", lpool)
+        self.lpool2 = OpPoolingSubg2D("S", lpool)
         self.data_encoder = InputEncoder(emb_dim)
 
         outdim = self.emb_dim
@@ -76,55 +93,59 @@ class I2GNN(nn.Module):
             nn.LayerNorm(num_tasks, elementwise_affine=False)
             if ln_out else nn.Identity())
 
-    def tupleinit(self, tupleid, tuplefeat, x):
-        return x[tupleid[0]] * self.lin_tupleinit(x)[tupleid[1]] * tuplefeat
+    def tupleinit(self, X: SparseTensor, x):
+        return X.tuplewiseapply(lambda tpx: self.lin_tupleinit0(x)[X.indices[0]] * self.lin_tupleinit1(x)[X.indices[1]] * self.lin_tupleinit2(x)[X.indices[2]] * tpx)
 
     def forward(self, datadict: dict):
         datadict = self.data_encoder(datadict)
-        A = SparseTensor(datadict["edge_index"],
-                         datadict["edge_attr"],
-                         shape=[datadict["num_nodes"], datadict["num_nodes"]] +
-                         list(datadict["edge_attr"].shape[1:]),
-                         is_coalesced=True)
-        X = SparseTensor(datadict["tupleid"],
-                         self.tupleinit(datadict["tupleid"],
-                                        datadict["tuplefeat"], datadict["x"]),
-                         shape=[datadict["num_nodes"], datadict["num_nodes"], datadict["num_nodes"]] +
-                         list(datadict["edge_attr"].shape[1:]),
-                         is_coalesced=True)
-        X = self.subggnns.forward(X, A, datadict)
-        X = pooling2tuple(X, dims=[2], pool=self.lpool)
-        x = pooling2nodes(X, dims=[1], pool=self.epool)
+        A = datadict["A"]
+        X = datadict["X"]
+        x = datadict["x"]
+        X = self.tupleinit(X, x)
+        #print(X.sparse_dim, X.shape)
+        for conv in self.subggnns:
+            tX = conv.forward(A, X, datadict)
+            #print(tX.sparse_dim, tX.shape)
+            if self.residual:
+                X = X.add(tX, True)
+            else:
+                X = tX
+        X = self.lpool1(X)
+        x = self.lpool2(X)
         h_graph = self.npool(x, datadict["batch"], dim=0)
         return self.pred_lin(h_graph)
 
-
 model = I2GNN(mlp={
-            "dp": 0,
-            "norm": "ln",
-            "act": "relu",
-            "normparam": 0.1
-        })
+    "dp": 0,
+    "norm": "ln",
+    "act": "relu",
+    "normparam": 0.1
+})
+
+keys = parse_precomputekey(model)
+
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
-trn_dataset =  SubgDatasetClass(ZINC)("dataset/ZINC",
+trn_dataset = ZINC("dataset/ZINC",
                    subset=True,
-                   split="train",
-                   pre_transform=Sppretransform(partial(I2Sampler, hop=3), ["X_2_A_0_acd"]))
-val_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
+                   split="train")
+
+trn_dataset = ParallelPreprocessDataset("dataset/ZINC_trn", trn_dataset, Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 16)
+val_dataset = ZINC("dataset/ZINC",
                    subset=True,
-                   split="val",
-                   pre_transform=Sppretransform(partial(I2Sampler, hop=3), ["X_2_A_0_acd"]))
-tst_dataset = SubgDatasetClass(ZINC)("dataset/ZINC",
+                   split="val")
+val_dataset = ParallelPreprocessDataset("dataset/ZINC_val", val_dataset, Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 16)
+tst_dataset = ZINC("dataset/ZINC",
                    subset=True,
-                   split="test",
-                   pre_transform=Sppretransform(partial(I2Sampler, hop=3), ["X_2_A_0_acd"]))
-trn_dataloader = SpDataloader(trn_dataset, batch_size=32, shuffle=True, drop_last=True)
-val_dataloader = SpDataloader(val_dataset, batch_size=32)
-tst_dataloader = SpDataloader(tst_dataset, batch_size=32)
+                   split="test")
+tst_dataset = ParallelPreprocessDataset("dataset/ZINC_tst", tst_dataset, Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 16)
+trn_dataloader = SpDataloader(trn_dataset, batch_size=256, shuffle=True, drop_last=True)
+val_dataloader = SpDataloader(val_dataset, batch_size=256)
+tst_dataloader = SpDataloader(tst_dataset, batch_size=256)
+
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=40*len(trn_dataloader))
+
 device = torch.device("cuda")
 model = model.to(device)
-
-
 def train(dataloader):
     model.train()
     losss = []
@@ -132,10 +153,13 @@ def train(dataloader):
         batch = batch.to(device, non_blocking=True)
         optimizer.zero_grad()
         datadict = batch.to_dict()
+        datadict["A"] = datadict["A"].to(device)
+        datadict["X"] = datadict["X"].to(device)
         pred = model(datadict)
         loss = F.l1_loss(datadict["y"].unsqueeze(-1), pred, reduction="mean")
         loss.backward()
         optimizer.step()
+        scheduler.step()
         losss.append(loss)
     losss = np.average(list(map(lambda x: x.item(), losss)))
     return losss

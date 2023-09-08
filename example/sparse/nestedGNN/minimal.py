@@ -5,7 +5,7 @@ from pygho.hodata.SpTupleSampler import KhopSampler
 from functools import partial
 import torch
 from torch_geometric.nn.aggr import SumAggregation, MeanAggregation, MaxAggregation
-from pygho.honn.Conv import NGNNConv
+from pygho.honn.Conv import NGNNConv, GNNAKConv, DSSGNNConv, SSWLConv, SUNConv
 from pygho.honn.SpXOperator import parse_precomputekey
 from pygho.honn.TensorOp import OpPoolingSubg2D
 import torch.nn as nn
@@ -72,7 +72,7 @@ class NestedGNN(nn.Module):
         self.residual = residual
         ### GNN to generate node embeddings
         self.subggnns = nn.ModuleList(
-            [NGNNConv(emb_dim, 1, aggr, "SS", mlp) for _ in range(num_layer)])
+            [SSWLConv(emb_dim, 1, aggr, "SS", mlp) for _ in range(num_layer)])
         ### Pooling function to generate whole-graph embeddings
         self.npool = {
             "sum": SumAggregation,
@@ -99,10 +99,12 @@ class NestedGNN(nn.Module):
         X = datadict["X"]
         x = datadict["x"]
         X = self.tupleinit(X, x)
+        #print(X.sparse_dim, X.shape)
         for conv in self.subggnns:
-            tX = conv.forward(X, A, datadict)
+            tX = conv.forward(A, X, datadict)
+            #print(tX.sparse_dim, tX.shape)
             if self.residual:
-                X.add(tX, True)
+                X = X.add(tX, True)
             else:
                 X = tX
         x = self.lpool(X)
@@ -126,15 +128,16 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
 trn_dataset = ZINC("dataset/ZINC",
                    subset=True,
                    split="train")
-trn_dataset = ParallelPreprocessDataset("dataset/ZINC", trn_dataset, Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 16, "KP3")
+
+trn_dataset = ParallelPreprocessDataset("dataset/ZINC_trn", trn_dataset, Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 0)
 val_dataset = ZINC("dataset/ZINC",
                    subset=True,
                    split="val")
-val_dataset = ParallelPreprocessDataset("dataset/ZINC", val_dataset, Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 16, "KP3")
+val_dataset = ParallelPreprocessDataset("dataset/ZINC_val", val_dataset, Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 0)
 tst_dataset = ZINC("dataset/ZINC",
                    subset=True,
                    split="test")
-tst_dataset = ParallelPreprocessDataset("dataset/ZINC", tst_dataset, Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 16, "KP3")
+tst_dataset = ParallelPreprocessDataset("dataset/ZINC_tst", tst_dataset, Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 0)
 trn_dataloader = SpDataloader(trn_dataset, batch_size=256, shuffle=True, drop_last=True)
 val_dataloader = SpDataloader(val_dataset, batch_size=256)
 tst_dataloader = SpDataloader(tst_dataset, batch_size=256)
@@ -150,7 +153,8 @@ def train(dataloader):
         batch = batch.to(device, non_blocking=True)
         optimizer.zero_grad()
         datadict = batch.to_dict()
-        print(datadict)
+        datadict["A"] = datadict["A"].to(device)
+        datadict["X"] = datadict["X"].to(device)
         pred = model(datadict)
         loss = F.l1_loss(datadict["y"].unsqueeze(-1), pred, reduction="mean")
         loss.backward()

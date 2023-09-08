@@ -14,7 +14,7 @@ def parse_precomputekey(model: Module) -> List[str]:
     for mod in model.modules():
         if isinstance(mod, OpMessagePassing):
             ret.append(mod.precomputekey)
-    return list(set(ret))  
+    return sorted(list(set(ret)))
 
 class OpNodeMessagePassing(Module):
     def __init__(self, aggr: str="sum") -> None:

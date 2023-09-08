@@ -100,7 +100,7 @@ def to_dense_x(nodeX: Tensor,
                       device=nodeX.device)
     mask[torch.arange(batch_size, device=nodeX.device),
          torch.diff(Xptr)] = False
-    mask = mask.cummin(dim=-1)[0]
+    mask = mask.cummin(dim=-1)[0][:, :-1]
     return MaskedTensor(ret, mask, filled_value, False)
 
 
@@ -114,26 +114,29 @@ def to_dense_tuplefeat(tuplefeat: Tensor,
         batch_size = tupleshape.shape[0]
 
     if max_tupleshape is None:
-        max_tupleshape = torch.max(tupleshape, dim=0)
+        max_tupleshape = torch.amax(tupleshape, dim=0)
 
     ndim = max_tupleshape.shape[0]
     fullidx = tuplefeatptr[:-1].reshape([-1]+[1]*ndim)
-    cumshape = 1
+    cumshape = torch.ones_like(tupleshape[:, [0]])
+    # print(cumshape.shape)
     for i in range(ndim):
-        fullidx += (torch.arange(max_tupleshape[-i-1], device=tuplefeat.device) * cumshape).reshape([1]*(ndim-i)+[-1]+[1]*i)
-        cumshape = cumshape * tupleshape[:, -i-1]
+        tidx = (torch.arange(max_tupleshape[-i-1], device=tuplefeat.device) * cumshape).reshape([batch_size]+[1]*(ndim-i-1)+[-1]+[1]*i)
+        # print(fullidx.shape, tidx.shape, max_tupleshape, ndim)
+        fullidx = fullidx + tidx
+        cumshape = cumshape * tupleshape[:, [-i-1]]
     fullidx.clamp_max_(tuplefeat.shape[0] - 1)
-    ret = tuplefeat[fullidx].unflatten(0, [batch_size] + max_tupleshape.tolist())
-
+    ret = tuplefeat[fullidx]
     if feat2mask is not None:
         mask = feat2mask(ret)
     else:
         mask = torch.ones([batch_size] + max_tupleshape.tolist(), device=ret.device, dtype=torch.bool)
     
     for i in range(ndim):
-        tmask = torch.ones([batch_size]+[max_tupleshape[i]]+[1]*(ndim-1), dtype=torch.bool, device=ret.device)
+        tmask = torch.ones([batch_size]+[max_tupleshape[i]+1]+[1]*(ndim-1), dtype=torch.bool, device=ret.device)
         tmask[torch.arange(batch_size, device=ret.device), tupleshape[:, i]] = False
         tmask = torch.cummin(tmask, dim=1)[0]
+        tmask = tmask[:, :-1]
         tmask = torch.movedim(tmask, 1, i+1)
         mask.logical_and_(tmask)
     return MaskedTensor(ret, mask, 0, False)
@@ -144,7 +147,6 @@ def batch2dense(batch: PygBatch,
                 max_num_nodes: int = None,
                 denseadj: bool = False,
                 keys: List[str]=[""])->PygBatch:
-
     batch.x = to_dense_x(batch.x, batch.ptr, max_num_nodes,
                              batch_size)
     batch_size, max_num_nodes = batch.x.shape[0], batch.x.shape[1]
@@ -163,7 +165,7 @@ def batch2dense(batch: PygBatch,
         tupleshape = getattr(batch, f"tupleshape{key}")
         tuplefeat_ptr = getattr(batch, f"tuplefeat{key}_ptr")
         X = to_dense_tuplefeat(tuplefeat, tupleshape, tuplefeat_ptr, None, batch_size, None)
-        setattr(X, f"X{key}")
+        setattr(batch, f"X{key}", X)
     return batch
 
 

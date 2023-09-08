@@ -52,12 +52,12 @@ class SpHoData(PygData):
 def batch2sparse(batch: PygBatch, keys: List[str]=[""])->PygBatch:
     batch.A = SparseTensor(batch.edge_index, batch.edge_attr, [batch.num_nodes, batch.num_nodes] if batch.edge_attr is None else [batch.num_nodes, batch.num_nodes]+list(batch.edge_attr.shape[1:]), is_coalesced=True)
     for key in keys:
+        # print("key=", key)
         totaltupleshape = getattr(batch, f"tupleshape{key}").sum(dim=0).tolist()
-        print(getattr(batch, f"tupleshape{key}"))
         tupleid = getattr(batch, f"tupleid{key}")
         tuplefeat = getattr(batch, f"tuplefeat{key}")
         X = SparseTensor(tupleid, tuplefeat, shape=totaltupleshape if tuplefeat is None else totaltupleshape + list(tuplefeat.shape[1:]), is_coalesced=True)
-        setattr(X, f"X{key}", X)
+        setattr(batch, f"X{key}", X)
     return batch
 
 def sp_datapreprocess(data: PygData, tuplesamplers: Union[Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]], List[Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]]]],
