@@ -125,7 +125,7 @@ class PPGNConv(Module):
         self.lin1 = MLP(indim, outdim, **mlp)
         self.lin2 = MLP(indim, outdim, **mlp)
 
-    def forward(self, X: Union[SparseTensor, MaskedTensor],
+    def forward(self, A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor],
                 datadict: dict) -> Union[SparseTensor, MaskedTensor]:
         return self.op.forward(X.tuplewiseapply(self.lin1),
                                X.tuplewiseapply(self.lin2), datadict, X)

@@ -73,7 +73,7 @@ def decodehash_tight(indhash: LongTensor, dimsize: LongTensor) -> LongTensor:
 
 def coalesce(edge_index: LongTensor,
              edge_attr: Optional[Tensor] = None,
-             reduce: str = 'add') -> Tuple[Tensor, Optional[Tensor]]:
+             reduce: str = 'sum') -> Tuple[Tensor, Optional[Tensor]]:
     """Row-wise sorts :obj:`edge_index` and removes its duplicated entries.
     Duplicate entries in :obj:`edge_attr` are merged by scattering them
     together according to the given :obj:`reduce` option.
@@ -87,8 +87,8 @@ def coalesce(edge_index: LongTensor,
         num_nodes (int, optional): The number of nodes, *i.e.*
             :obj:`max_val + 1` of :attr:`edge_index`. (default: :obj:`None`)
         reduce (str, optional): The reduce operation to use for merging edge
-            features (:obj:`"add"`, :obj:`"mean"`, :obj:`"min"`, :obj:`"max"`,
-            :obj:`"mul"`, :obj:`"any"`). (default: :obj:`"add"`)
+            features (:obj:`"mean"`, :obj:`"min"`, :obj:`"max"`,
+            :obj:`"mul"`, :obj:`"any"`).
     """
     sparsedim = edge_index.shape[0]
     eihash = indicehash(edge_index)
@@ -238,19 +238,26 @@ class SparseTensor:
                       ), "please use tuplewiseapply for operation on dense dim"
         assert np.all(np.array(dim) >= 0), "do not support negative dim"
         idx = [i for i in range(self.sparse_dim) if i not in list(dim)]
-        other_ind = self.indices[idx]
-        other_shape = tuple(self.shape[i] for i in idx)
-        nsparse_shape = other_shape
-        nsparse_size = 1
-        for _ in nsparse_shape:
-            nsparse_size *= _
+        if len(idx) == 1:
+            idx = idx[0]
+            other_ind = self.indices[idx]
+            nsparse_size = self.shape[idx]
+            ret = torch_scatter_reduce(0, self.values, other_ind, nsparse_size, reduce)
+            return ret
+        else:
+            other_ind = self.indices[idx]
+            other_shape = tuple(self.shape[i] for i in idx)
+            nsparse_shape = other_shape
+            nsparse_size = 1
+            for _ in nsparse_shape:
+                nsparse_size *= _
 
-        thash = indicehash_tight(
-            other_ind,
-            torch.LongTensor(nsparse_shape).to(other_ind.device))
-        ret = torch_scatter_reduce(0, self.values, thash, nsparse_size, reduce)
-        ret = ret.reshape(nsparse_shape+tuple(ret.shape[1:]))
-        return ret
+            thash = indicehash_tight(
+                other_ind,
+                torch.LongTensor(nsparse_shape).to(other_ind.device))
+            ret = torch_scatter_reduce(0, self.values, thash, nsparse_size, reduce)
+            ret = ret.reshape(nsparse_shape+tuple(ret.shape[1:]))
+            return ret
 
     def sum(self,
             dim: Union[int, Optional[Iterable[int]]],
@@ -352,7 +359,7 @@ class SparseTensor:
         if not samesparse:
             return SparseTensor(
                 torch.concat((self.indices, tarX.indices), dim=1),
-                torch.concat((self.values, tarX.values), dim=1), self.shape,
+                torch.concat((self.values, tarX.values), dim=0), self.shape,
                 False)
         else:
             return self.tuplewiseapply(lambda x: x + tarX.values)

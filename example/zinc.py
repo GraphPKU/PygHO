@@ -17,7 +17,7 @@ from pygho.hodata.MaTupleSampler import spdsampler
 from pygho.honn.SpXOperator import parse_precomputekey
 
 from pygho.backend.utils import torch_scatter_reduce
-from pygho.honn.Conv import NGNNConv, GNNAKConv, DSSGNNConv, SSWLConv, SUNConv
+from pygho.honn.Conv import NGNNConv, GNNAKConv, DSSGNNConv, SSWLConv, SUNConv, PPGNConv
 from pygho.honn.TensorOp import OpPoolingSubg2D
 from pygho.honn.MaXOperator import OpPooling
 from pygho.honn.utils import MLP
@@ -28,7 +28,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--sparse", action="store_true")
 parser.add_argument("--aggr", choices=["sum", "mean", "max"])
 parser.add_argument("--conv",
-                    choices=["NGNN", "GNNAK", "DSSGNN", "SSWL", "SUN"])
+                    choices=["NGNN", "GNNAK", "DSSGNN", "SSWL", "SUN", "PPGN"])
 parser.add_argument("--npool", choices=["mean", "sum", "max"])
 parser.add_argument("--lpool", choices=["mean", "sum", "max"])
 parser.add_argument("--cpool", choices=["mean", "sum", "max"])
@@ -50,6 +50,8 @@ class InputEncoderMa(nn.Module):
         datadict["A"] = datadict["A"].tuplewiseapply(self.ea_encoder)
         datadict["X"] = MaskedTensor(datadict["X"].data, torch.logical_and(datadict["X"].mask, datadict["X"].data<4).squeeze(), 0, False)
         datadict["X"] = datadict["X"].tuplewiseapply(self.tuplefeat_encoder)
+        if args.conv == "PPGN":
+            datadict["X"] = datadict["X"].add(datadict["A"], False)
         return datadict
 
 
@@ -65,6 +67,8 @@ class InputEncoderSp(nn.Module):
         datadict["x"] = self.x_encoder(datadict["x"].flatten())
         datadict["A"] = datadict["A"].tuplewiseapply(self.ea_encoder)
         datadict["X"] = datadict["X"].tuplewiseapply(self.tuplefeat_encoder)
+        if args.conv == "PPGN":
+            datadict["X"] = datadict["X"].add(datadict["A"], False)
         return datadict
 
 
@@ -89,7 +93,9 @@ spconvdict = {
     lambda dim, mlp: SUNConv(dim, dim, args.aggr, args.cpool, "SS",
                              transfermlpparam(mlp), transfermlpparam(mlp)),
     "NGNN":
-    lambda dim, mlp: NGNNConv(dim, dim, args.aggr, "SS", transfermlpparam(mlp))
+    lambda dim, mlp: NGNNConv(dim, dim, args.aggr, "SS", transfermlpparam(mlp)),
+    "PPGN":
+    lambda dim, mlp: PPGNConv(dim, dim, args.aggr, "SS", transfermlpparam(mlp)),
 }
 
 maconvdict = {
@@ -106,7 +112,9 @@ maconvdict = {
     lambda dim, mlp: SUNConv(dim, dim, args.aggr, args.cpool, "DD",
                              transfermlpparam(mlp), transfermlpparam(mlp)),
     "NGNN":
-    lambda dim, mlp: NGNNConv(dim, dim, args.aggr, "DD", transfermlpparam(mlp))
+    lambda dim, mlp: NGNNConv(dim, dim, args.aggr, "DD", transfermlpparam(mlp)),
+    "PPGN":
+    lambda dim, mlp: PPGNConv(dim, dim, args.aggr, "DD", transfermlpparam(mlp))
 }
 
 
@@ -280,9 +288,9 @@ if args.sparse:
     trn_dataloader = SpDataloader(trn_dataset,
                                   batch_size=128,
                                   shuffle=True,
-                                  drop_last=True)
-    val_dataloader = SpDataloader(val_dataset, batch_size=128)
-    tst_dataloader = SpDataloader(tst_dataset, batch_size=128)
+                                  drop_last=True, device=device)
+    val_dataloader = SpDataloader(val_dataset, batch_size=128, device=device)
+    tst_dataloader = SpDataloader(tst_dataset, batch_size=128, device=device)
 else:
     trn_dataset = ParallelPreprocessDataset("dataset/ZINC_trn",
                                             trn_dataset,
@@ -307,15 +315,16 @@ else:
     trn_dataloader = MaDataloader(trn_dataset,
                                   batch_size=128,
                                   shuffle=True,
-                                  drop_last=True)
-    val_dataloader = MaDataloader(val_dataset, batch_size=128)
-    tst_dataloader = MaDataloader(tst_dataset, batch_size=128)
+                                  drop_last=True, device=device)
+    val_dataloader = MaDataloader(val_dataset, batch_size=128, device=device)
+    tst_dataloader = MaDataloader(tst_dataset, batch_size=128, device=device)
 
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,
                                                        T_max=40 *
                                                        len(trn_dataloader))
 
 model = model.to(device)
+
 
 
 def train(dataloader):

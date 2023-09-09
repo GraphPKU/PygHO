@@ -20,15 +20,28 @@ def batched_tensordot(A: Tensor, catdim1: int, dim1: int, B: Tensor,
     densedim2 = ndim2 - catdim2
     assert densedim1 == densedim2, "must of the same dense shape"
 
-    A = torch.movedim(A, dim1, -1)
-    B = torch.movedim(B, dim2, -1)
-    for _ in range(catdim2 - 1):
-        A = A.unsqueeze(catdim1 - 1)
-    for _ in range(catdim1 - 1):
-        B = B.unsqueeze(0)
+    if catdim1 == 2 and catdim2 == 2:
+        if dim1 == 0:
+            A = A.transpose(0, 1)
+        if dim2 == 1:
+            B = B.transpose(0, 1)
+        A = torch.movedim(torch.movedim(A, 0, -1), 0, -1)
+        B = torch.movedim(torch.movedim(B, 0, -1), 0, -1)
+        C = A@B
+        C = torch.movedim(torch.movedim(C, -1, 0), -1, 0)
+        return C
+    # TODO more special case to apply bmm for acceleration?
+    else:
+        A = torch.movedim(A, dim1, -1)
+        B = torch.movedim(B, dim2, -1)
+        for _ in range(catdim2 - 1):
+            A = A.unsqueeze(catdim1 - 1)
+        for _ in range(catdim1 - 1):
+            B = B.unsqueeze(0)
 
-    C = torch.sum(torch.multiply(A, B), dim=-1)
-    return C
+        C = torch.sum(torch.multiply(A, B), dim=-1)
+        return C
+    
 
 
 def broadcast_denseshape(A: Tensor, densedim1: int, B: Tensor,
