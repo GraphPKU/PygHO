@@ -1,3 +1,5 @@
+import numpy as np
+
 from functools import partial
 import time
 from typing import Callable
@@ -5,21 +7,22 @@ from typing import Callable
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 
 from torch_geometric.datasets import ZINC
+
+from lr_scheduler import CosineAnnealingWarmRestarts
 
 from pygho import SparseTensor, MaskedTensor
 from pygho.hodata import SpDataloader, Sppretransform, Mapretransform, MaDataloader, ParallelPreprocessDataset
 from pygho.hodata.SpTupleSampler import KhopSampler
 from pygho.hodata.MaTupleSampler import spdsampler
 
-from pygho.honn.SpXOperator import parse_precomputekey
+from pygho.honn.SpOperator import parse_precomputekey
 
 from pygho.backend.utils import torch_scatter_reduce
 from pygho.honn.Conv import NGNNConv, GNNAKConv, DSSGNNConv, SSWLConv, SUNConv, PPGNConv
 from pygho.honn.TensorOp import OpPoolingSubg2D
-from pygho.honn.MaXOperator import OpPooling
+from pygho.honn.MaOperator import OpPooling
 from pygho.honn.utils import MLP
 
 import argparse
@@ -32,7 +35,19 @@ parser.add_argument("--conv",
 parser.add_argument("--npool", choices=["mean", "sum", "max"])
 parser.add_argument("--lpool", choices=["mean", "sum", "max"])
 parser.add_argument("--cpool", choices=["mean", "sum", "max"])
-
+parser.add_argument("--mlplayer", type=int)
+parser.add_argument("--outlayer", type=int)
+parser.add_argument("--norm", choices=["ln", "bn", "none"])
+parser.add_argument("--lr", type=float)
+parser.add_argument("--minlr", type=float)
+parser.add_argument("--wd", type=float)
+parser.add_argument("--dp", type=float)
+parser.add_argument("--normparam", type=float, default=0.1)
+parser.add_argument("--cosT", type=int)
+parser.add_argument("--K", type=float, default=0)
+parser.add_argument("--K2", type=float, default=0)
+parser.add_argument("--repeat", type=int, default=1)
+parser.add_argument("--epochs", type=int, default=100)
 args = parser.parse_args()
 
 
@@ -48,7 +63,10 @@ class InputEncoderMa(nn.Module):
         datadict["x"] = datadict["x"].tuplewiseapply(
             lambda x: self.x_encoder(x.squeeze(-1)))
         datadict["A"] = datadict["A"].tuplewiseapply(self.ea_encoder)
-        datadict["X"] = MaskedTensor(datadict["X"].data, torch.logical_and(datadict["X"].mask, datadict["X"].data<4).squeeze(), 0, False)
+        datadict["X"] = MaskedTensor(
+            datadict["X"].data,
+            torch.logical_and(datadict["X"].mask, datadict["X"].data
+                              < 4).squeeze(), 0, False)
         datadict["X"] = datadict["X"].tuplewiseapply(self.tuplefeat_encoder)
         if args.conv == "PPGN":
             datadict["X"] = datadict["X"].add(datadict["A"], False)
@@ -72,10 +90,9 @@ class InputEncoderSp(nn.Module):
         return datadict
 
 
-
 def transfermlpparam(mlp: dict):
     mlp = mlp.copy()
-    mlp.update({"tailact": True, "numlayer": 1})
+    mlp.update({"tailact": True, "numlayer": args.mlplayer})
     return mlp
 
 
@@ -93,9 +110,11 @@ spconvdict = {
     lambda dim, mlp: SUNConv(dim, dim, args.aggr, args.cpool, "SS",
                              transfermlpparam(mlp), transfermlpparam(mlp)),
     "NGNN":
-    lambda dim, mlp: NGNNConv(dim, dim, args.aggr, "SS", transfermlpparam(mlp)),
+    lambda dim, mlp: NGNNConv(dim, dim, args.aggr, "SS", transfermlpparam(mlp)
+                              ),
     "PPGN":
-    lambda dim, mlp: PPGNConv(dim, dim, args.aggr, "SS", transfermlpparam(mlp)),
+    lambda dim, mlp: PPGNConv(dim, dim, args.aggr, "SS", transfermlpparam(mlp)
+                              ),
 }
 
 maconvdict = {
@@ -112,7 +131,8 @@ maconvdict = {
     lambda dim, mlp: SUNConv(dim, dim, args.aggr, args.cpool, "DD",
                              transfermlpparam(mlp), transfermlpparam(mlp)),
     "NGNN":
-    lambda dim, mlp: NGNNConv(dim, dim, args.aggr, "DD", transfermlpparam(mlp)),
+    lambda dim, mlp: NGNNConv(dim, dim, args.aggr, "DD", transfermlpparam(mlp)
+                              ),
     "PPGN":
     lambda dim, mlp: PPGNConv(dim, dim, args.aggr, "DD", transfermlpparam(mlp))
 }
@@ -123,7 +143,7 @@ class MaModel(nn.Module):
     def __init__(self,
                  convfn: Callable,
                  num_tasks=1,
-                 num_layer=5,
+                 num_layer=6,
                  hiddim=128,
                  npool="mean",
                  lpool="max",
@@ -148,6 +168,7 @@ class MaModel(nn.Module):
 
         self.npool = OpPooling(1, pool=npool)
         self.lpool = OpPoolingSubg2D("D", pool=lpool)
+        self.poolmlp = MLP(hiddim, hiddim, args.mlplayer, tailact=True, **mlp)
         self.data_encoder = InputEncoderMa(hiddim)
 
         outdim = self.hiddim
@@ -179,6 +200,7 @@ class MaModel(nn.Module):
             else:
                 X = tX
         x = self.lpool(X)
+        x = x.tuplewiseapply(self.poolmlp)
         h_graph = self.npool.forward(x).fill_masked(0)
         return self.pred_lin(h_graph)
 
@@ -188,7 +210,7 @@ class SpModel(nn.Module):
     def __init__(self,
                  convfn: Callable,
                  num_tasks=1,
-                 num_layer=5,
+                 num_layer=6,
                  hiddim=128,
                  npool="mean",
                  lpool="max",
@@ -217,8 +239,9 @@ class SpModel(nn.Module):
         self.subggnns = nn.ModuleList(
             [convfn(hiddim, mlp) for _ in range(num_layer)])
 
-        self.npool = npool
+        self.npool = npool       
         self.lpool = OpPoolingSubg2D("S", lpool)
+        self.poolmlp = MLP(hiddim, hiddim, args.mlplayer, tailact=True, **mlp)
         self.data_encoder = InputEncoderSp(hiddim)
 
         outdim = self.hiddim
@@ -246,28 +269,17 @@ class SpModel(nn.Module):
             else:
                 X = tX
         x = self.lpool(X)
-        h_graph = torch_scatter_reduce(0, x, datadict["batch"], datadict["num_graphs"], self.npool)
+        x = self.poolmlp(x)
+        h_graph = torch_scatter_reduce(0, x, datadict["batch"],
+                                       datadict["num_graphs"], self.npool)
         return self.pred_lin(h_graph)
 
 
+mlpdict = {"dp": args.dp, "norm": args.norm, "act": "silu", "normparam": args.normparam}
 if args.sparse:
-    model = SpModel(spconvdict[args.conv],
-                    mlp={
-                        "dp": 0,
-                        "norm": "ln",
-                        "act": "relu",
-                        "normparam": 0.1
-                    })
+    model = SpModel(spconvdict[args.conv], npool=args.npool, lpool=args.lpool, outlayer=args.outlayer, mlp=mlpdict)
 else:
-    model = MaModel(maconvdict[args.conv],
-                    mlp={
-                        "dp": 0,
-                        "norm": "ln",
-                        "act": "silu",
-                        "normparam": 0.1
-                    })
-
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
+    model = MaModel(maconvdict[args.conv], npool=args.npool, lpool=args.lpool, outlayer=args.outlayer, mlp=mlpdict)
 
 device = torch.device("cuda")
 
@@ -288,7 +300,8 @@ if args.sparse:
     trn_dataloader = SpDataloader(trn_dataset,
                                   batch_size=128,
                                   shuffle=True,
-                                  drop_last=True, device=device)
+                                  drop_last=True,
+                                  device=device)
     val_dataloader = SpDataloader(val_dataset, batch_size=128, device=device)
     tst_dataloader = SpDataloader(tst_dataset, batch_size=128, device=device)
 else:
@@ -315,16 +328,14 @@ else:
     trn_dataloader = MaDataloader(trn_dataset,
                                   batch_size=128,
                                   shuffle=True,
-                                  drop_last=True, device=device)
+                                  drop_last=True,
+                                  device=device)
     val_dataloader = MaDataloader(val_dataset, batch_size=128, device=device)
     tst_dataloader = MaDataloader(tst_dataset, batch_size=128, device=device)
-
+optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.wd)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,
-                                                       T_max=40 *
-                                                       len(trn_dataloader))
-
+                                                       T_max=args.cosT * len(trn_dataloader), eta_min=args.minlr)
 model = model.to(device)
-
 
 
 def train(dataloader):
@@ -357,21 +368,37 @@ def eval(dataloader):
         pred = model(datadict)
         loss += F.l1_loss(datadict["y"].unsqueeze(-1), pred, reduction="sum")
         size += pred.shape[0]
-    return loss / size
+    return (loss / size).item()
 
+out = []
+for i in range(args.repeat):
+    print(f"runs {i}")
+    if args.sparse:
+        model = SpModel(spconvdict[args.conv], npool=args.npool, lpool=args.lpool, outlayer=args.outlayer, mlp=mlpdict)
+    else:
+        model = MaModel(maconvdict[args.conv], npool=args.npool, lpool=args.lpool, outlayer=args.outlayer, mlp=mlpdict)
+    model = model.to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.wd)
+    scheduler = CosineAnnealingWarmRestarts(optimizer=optimizer,
+                                                        T_0=args.cosT * len(trn_dataloader), eta_min=args.minlr, K=args.K, K2=args.K2)
 
-best_val = float("inf")
-tst_score = float("inf")
+    best_val = float("inf")
+    tst_score = float("inf")
 
-for epoch in range(1, 1001):
-    t1 = time.time()
-    losss = train(trn_dataloader)
-    t2 = time.time()
-    val_score = eval(val_dataloader)
-    if val_score < best_val:
-        best_val = val_score
-        tst_score = eval(tst_dataloader)
-    t3 = time.time()
-    print(
-        f"epoch {epoch} trn time {t2-t1:.2f} val time {t3-t2:.2f}  l1loss {losss:.4f} val MAE {val_score:.4f} tst MAE {tst_score:.4f}"
-    )
+    for epoch in range(1, args.epochs + 1):
+        t1 = time.time()
+        losss = train(trn_dataloader)
+        t2 = time.time()
+        val_score = eval(val_dataloader)
+        if val_score < best_val:
+            best_val = val_score
+            tst_score = eval(tst_dataloader)
+        t3 = time.time()
+        print(
+            f"epoch {epoch} trn time {t2-t1:.2f} val time {t3-t2:.2f}  l1loss {losss:.4f} val MAE {val_score:.4f} tst MAE {tst_score:.4f}"
+        )
+        if np.isnan(losss) or np.isnan(val_score):
+            break
+    out.append(tst_score)
+
+print(f"All {np.average(tst_score)} {np.std(tst_score)}")

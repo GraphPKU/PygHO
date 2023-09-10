@@ -24,7 +24,7 @@ class OpNodeMessagePassing(Module):
         super().__init__()
         self.aggr = aggr
 
-    def forward(self, A: SparseTensor, X: Tensor) -> Tensor:
+    def forward(self, A: SparseTensor, X: Tensor, tarX: Tensor) -> Tensor:
         assert A.sparse_dim == 2, "A is adjacency matrix of the whole graph of shape nxn"
         return spmm(A, 1, X, self.aggr)
 

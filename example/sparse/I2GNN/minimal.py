@@ -6,7 +6,7 @@ from functools import partial
 import torch
 from torch_geometric.nn.aggr import SumAggregation, MeanAggregation, MaxAggregation
 from pygho.honn.Conv import I2Conv
-from pygho.honn.SpXOperator import parse_precomputekey
+from pygho.honn.SpOperator import parse_precomputekey
 from pygho.honn.TensorOp import OpPoolingSubg2D, OpPoolingSubg3D
 import torch.nn as nn
 from pygho import SparseTensor

@@ -2,8 +2,8 @@ from torch import Tensor
 from ..backend.SpTensor import SparseTensor
 from ..backend.MaTensor import MaskedTensor
 from typing import Union, Tuple, List, Iterable, Literal, Dict, Optional
-from . import SpXOperator
-from . import MaXOperator
+from . import SpOperator
+from . import MaOperator
 from torch.nn import Module
 
 
@@ -14,12 +14,12 @@ class OpNodeMessagePassing(Module):
                  aggr: str = "sum") -> None:
         super().__init__()
         if mode == "SS":
-            self.mod = SpXOperator.OpNodeMessagePassing(aggr)
+            self.mod = SpOperator.OpNodeMessagePassing(aggr)
         elif mode == "SD":
-            self.mod = MaXOperator.OpSpNodeMessagePassing(aggr)
+            self.mod = MaOperator.OpSpNodeMessagePassing(aggr)
         elif mode == "DD":
             assert aggr == "sum", f"aggr {aggr} is not implemented for DD"
-            self.mod = MaXOperator.OpNodeMessagePassing()
+            self.mod = MaOperator.OpNodeMessagePassing()
 
     def forward(self, A: Union[SparseTensor, MaskedTensor],
                 X: Union[Tensor, MaskedTensor]) -> Union[Tensor, MaskedTensor]:
@@ -33,10 +33,10 @@ class Op2FWL(Module):
                  aggr: Literal["sum", "mean", "max"] = "sum") -> None:
         super().__init__()
         if mode == "SS":
-            self.mod = SpXOperator.Op2FWL(aggr)
+            self.mod = SpOperator.Op2FWL(aggr)
         elif mode == "DD":
             assert aggr == "sum", "only sum aggragation implemented for Dense adjacency"
-            self.mod = MaXOperator.Op2FWL()
+            self.mod = MaOperator.Op2FWL()
         else:
             raise NotImplementedError
 
@@ -57,12 +57,12 @@ class OpMessagePassingOnSubg2D(Module):
                  aggr: Literal["sum", "mean", "max"] = "sum") -> None:
         super().__init__()
         if mode == "SS":
-            self.mod = SpXOperator.OpMessagePassingOnSubg2D(aggr)
+            self.mod = SpOperator.OpMessagePassingOnSubg2D(aggr)
         elif mode == "SD":
-            self.mod = MaXOperator.OpSpMessagePassingOnSubg2D(aggr)
+            self.mod = MaOperator.OpSpMessagePassingOnSubg2D(aggr)
         elif mode == "DD":
             assert aggr == "sum", "only sum aggragation implemented for Dense adjacency"
-            self.mod = MaXOperator.OpMessagePassingOnSubg2D()
+            self.mod = MaOperator.OpMessagePassingOnSubg2D()
         else:
             raise NotImplementedError
 
@@ -83,12 +83,12 @@ class OpMessagePassingOnSubg3D(Module):
                  aggr: Literal["sum", "mean", "max"] = "sum") -> None:
         super().__init__()
         if mode == "SS":
-            self.mod = SpXOperator.OpMessagePassingOnSubg3D(aggr)
+            self.mod = SpOperator.OpMessagePassingOnSubg3D(aggr)
         elif mode == "SD":
-            self.mod = MaXOperator.OpSpMessagePassingOnSubg3D(aggr)
+            self.mod = MaOperator.OpSpMessagePassingOnSubg3D(aggr)
         elif mode == "DD":
             assert aggr == "sum", "only sum aggragation implemented for Dense adjacency"
-            self.mod = MaXOperator.OpMessagePassingOnSubg3D()
+            self.mod = MaOperator.OpMessagePassingOnSubg3D()
         else:
             raise NotImplementedError
 
@@ -109,12 +109,12 @@ class OpMessagePassingCrossSubg2D(Module):
                  aggr: Literal["sum", "mean", "max"] = "sum") -> None:
         super().__init__()
         if mode == "SS":
-            self.mod = SpXOperator.OpMessagePassingCrossSubg2D(aggr)
+            self.mod = SpOperator.OpMessagePassingCrossSubg2D(aggr)
         elif mode == "SD":
-            self.mod = MaXOperator.OpMessagePassingCrossSubg2D(aggr)
+            self.mod = MaOperator.OpMessagePassingCrossSubg2D(aggr)
         elif mode == "DD":
             assert aggr == "sum", "only sum aggragation implemented for Dense adjacency"
-            self.mod = MaXOperator.OpMessagePassingCrossSubg2D()
+            self.mod = MaOperator.OpMessagePassingCrossSubg2D()
         else:
             raise NotImplementedError
 
@@ -133,9 +133,9 @@ class OpDiag2D(Module):
     def __init__(self, mode: Literal["D", "S"] = "S") -> None:
         super().__init__()
         if mode == "S":
-            self.mod = SpXOperator.OpDiag2D()
+            self.mod = SpOperator.OpDiag2D()
         elif mode == "D":
-            self.mod = MaXOperator.OpDiag2D()
+            self.mod = MaOperator.OpDiag2D()
         else:
             raise NotImplementedError
 
@@ -152,9 +152,9 @@ class OpPoolingSubg2D(Module):
                  pool: str = "sum") -> None:
         super().__init__()
         if mode == "S":
-            self.mod = SpXOperator.OpPoolingSubg2D(pool)
+            self.mod = SpOperator.OpPoolingSubg2D(pool)
         elif mode == "D":
-            self.mod = MaXOperator.OpPoolingSubg2D(pool)
+            self.mod = MaOperator.OpPoolingSubg2D(pool)
         else:
             raise NotImplementedError
 
@@ -171,9 +171,9 @@ class OpPoolingSubg3D(Module):
                  pool: str = "sum") -> None:
         super().__init__()
         if mode == "S":
-            self.mod = SpXOperator.OpPoolingSubg3D(pool)
+            self.mod = SpOperator.OpPoolingSubg3D(pool)
         elif mode == "D":
-            self.mod = MaXOperator.OpPoolingSubg3D(pool)
+            self.mod = MaOperator.OpPoolingSubg3D(pool)
         else:
             raise NotImplementedError
 
@@ -190,9 +190,9 @@ class OpPoolingCrossSubg2D(Module):
                  pool: str = "sum") -> None:
         super().__init__()
         if mode == "S":
-            self.mod = SpXOperator.OpPoolingCrossSubg2D(pool)
+            self.mod = SpOperator.OpPoolingCrossSubg2D(pool)
         elif mode == "D":
-            self.mod = MaXOperator.OpPoolingCrossSubg2D(pool)
+            self.mod = MaOperator.OpPoolingCrossSubg2D(pool)
         else:
             raise NotImplementedError
 
@@ -207,9 +207,9 @@ class OpUnpoolingSubgNodes2D(Module):
     def __init__(self, mode: Literal["S", "D"] = "S") -> None:
         super().__init__()
         if mode == "S":
-            self.mod = SpXOperator.OpUnpoolingSubgNodes2D()
+            self.mod = SpOperator.OpUnpoolingSubgNodes2D()
         elif mode == "D":
-            self.mod = MaXOperator.OpUnpoolingSubgNodes2D()
+            self.mod = MaOperator.OpUnpoolingSubgNodes2D()
 
     def forward(
         self, X: Union[Tensor, MaskedTensor], tarX: Union[SparseTensor,
@@ -223,9 +223,9 @@ class OpUnpoolingRootNodes2D(Module):
     def __init__(self, mode: Literal["S", "D"] = "S") -> None:
         super().__init__()
         if mode == "S":
-            self.mod = SpXOperator.OpUnpoolingRootNodes2D()
+            self.mod = SpOperator.OpUnpoolingRootNodes2D()
         elif mode == "D":
-            self.mod = MaXOperator.OpUnpoolingRootNodes2D()
+            self.mod = MaOperator.OpUnpoolingRootNodes2D()
 
     def forward(
         self, X: Union[Tensor, MaskedTensor], tarX: Union[SparseTensor,

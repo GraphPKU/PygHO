@@ -7,7 +7,7 @@ from typing import Any, List, Callable, Union, Tuple, Iterable
 from torch import Tensor
 from ..backend.Spspmm import spspmm_ind, filterind
 from ..backend.SpTensor import SparseTensor
-from ..honn.SpXOperator import KEYSEP
+from ..honn.SpOperator import KEYSEP
 from torch_geometric.utils import coalesce
 
 
