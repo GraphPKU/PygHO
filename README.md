@@ -1,4 +1,3 @@
-TODO: fix spmamm and mamamm (for min, max, min aggregation)
 # PygHO
 
 A library for high-order GNN based on torch_geometric.
