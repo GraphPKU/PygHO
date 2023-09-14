@@ -14,14 +14,14 @@ from lr_scheduler import CosineAnnealingWarmRestarts
 
 from pygho import SparseTensor, MaskedTensor
 from pygho.hodata import SpDataloader, Sppretransform, Mapretransform, MaDataloader, ParallelPreprocessDataset
-from pygho.hodata.SpTupleSampler import KhopSampler
+from pygho.hodata.SpTupleSampler import KhopSampler, I2Sampler
 from pygho.hodata.MaTupleSampler import spdsampler
 
 from pygho.honn.SpOperator import parse_precomputekey
 
 from pygho.backend.utils import torch_scatter_reduce
-from pygho.honn.Conv import NGNNConv, GNNAKConv, DSSGNNConv, SSWLConv, SUNConv, PPGNConv
-from pygho.honn.TensorOp import OpPoolingSubg2D
+from pygho.honn.Conv import NGNNConv, GNNAKConv, DSSGNNConv, SSWLConv, SUNConv, PPGNConv, I2Conv
+from pygho.honn.TensorOp import OpPoolingSubg2D, OpPoolingSubg3D
 from pygho.honn.MaOperator import OpPooling
 from pygho.honn.utils import MLP
 
@@ -31,7 +31,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--sparse", action="store_true")
 parser.add_argument("--aggr", choices=["sum", "mean", "max"])
 parser.add_argument("--conv",
-                    choices=["NGNN", "GNNAK", "DSSGNN", "SSWL", "SUN", "PPGN"])
+                    choices=["NGNN", "GNNAK", "DSSGNN", "SSWL", "SUN", "PPGN", "I2GNN"])
 parser.add_argument("--npool", choices=["mean", "sum", "max"])
 parser.add_argument("--lpool", choices=["mean", "sum", "max"])
 parser.add_argument("--cpool", choices=["mean", "sum", "max"])
@@ -63,10 +63,6 @@ class InputEncoderMa(nn.Module):
         datadict["x"] = datadict["x"].tuplewiseapply(
             lambda x: self.x_encoder(x.squeeze(-1)))
         datadict["A"] = datadict["A"].tuplewiseapply(self.ea_encoder)
-        datadict["X"] = MaskedTensor(
-            datadict["X"].data,
-            torch.logical_and(datadict["X"].mask, datadict["X"].data
-                              < 4).squeeze(), 0, False)
         datadict["X"] = datadict["X"].tuplewiseapply(self.tuplefeat_encoder)
         if args.conv == "PPGN":
             datadict["X"] = datadict["X"].add(datadict["A"], False)
@@ -89,6 +85,21 @@ class InputEncoderSp(nn.Module):
             datadict["X"] = datadict["X"].add(datadict["A"], False)
         return datadict
 
+
+class InputEncoderI2(nn.Module):
+
+    def __init__(self, hiddim: int) -> None:
+        super().__init__()
+        self.x_encoder = nn.Embedding(32, hiddim)
+        self.ea_encoder = nn.Embedding(16, hiddim)
+        self.tuplefeat_encoder1 = nn.Embedding(16, hiddim)
+        self.tuplefeat_encoder2 = nn.Embedding(16, hiddim)
+
+    def forward(self, datadict: dict) -> dict:
+        datadict["x"] = self.x_encoder(datadict["x"].flatten())
+        datadict["A"] = datadict["A"].tuplewiseapply(self.ea_encoder)
+        datadict["X"] = datadict["X"].tuplewiseapply(lambda x: self.tuplefeat_encoder1(x[:, 0]) + self.tuplefeat_encoder2(x[:, 1]))
+        return datadict
 
 def transfermlpparam(mlp: dict):
     mlp = mlp.copy()
@@ -115,6 +126,8 @@ spconvdict = {
     "PPGN":
     lambda dim, mlp: PPGNConv(dim, dim, args.aggr, "SS", transfermlpparam(mlp)
                               ),
+    "I2GNN":
+    lambda dim, mlp: I2Conv(dim, dim, args.aggr, "SS", transfermlpparam(mlp))
 }
 
 maconvdict = {
@@ -134,7 +147,9 @@ maconvdict = {
     lambda dim, mlp: NGNNConv(dim, dim, args.aggr, "DD", transfermlpparam(mlp)
                               ),
     "PPGN":
-    lambda dim, mlp: PPGNConv(dim, dim, args.aggr, "DD", transfermlpparam(mlp))
+    lambda dim, mlp: PPGNConv(dim, dim, args.aggr, "DD", transfermlpparam(mlp)),
+    "I2GNN":
+    lambda dim, mlp: I2Conv(dim, dim, args.aggr, "DD", transfermlpparam(mlp))
 }
 
 
@@ -234,15 +249,16 @@ class SpModel(nn.Module):
 
         self.lin_tupleinit0 = nn.Linear(hiddim, hiddim)
         self.lin_tupleinit1 = nn.Linear(hiddim, hiddim)
+        self.lin_tupleinit2 = nn.Linear(hiddim, hiddim)
 
         self.residual = residual
         self.subggnns = nn.ModuleList(
             [convfn(hiddim, mlp) for _ in range(num_layer)])
 
         self.npool = npool       
-        self.lpool = OpPoolingSubg2D("S", lpool)
+        self.lpool =  nn.Sequential(OpPoolingSubg3D("S", lpool), OpPoolingSubg2D("S", lpool)) if args.conv in ["I2GNN"] else OpPoolingSubg2D("S", lpool)
         self.poolmlp = MLP(hiddim, hiddim, args.mlplayer, tailact=True, **mlp)
-        self.data_encoder = InputEncoderSp(hiddim)
+        self.data_encoder = InputEncoderI2(hiddim) if args.conv in ["I2GNN"] else  InputEncoderSp(hiddim) 
 
         outdim = self.hiddim
         if ln_out:
@@ -253,8 +269,12 @@ class SpModel(nn.Module):
             if ln_out else nn.Identity())
 
     def tupleinit(self, X: SparseTensor, x):
-        return X.tuplewiseapply(lambda val: self.lin_tupleinit0(x)[X.indices[
-            0]] * self.lin_tupleinit1(x)[X.indices[1]] * val)
+        if args.conv in ["I2GNN"]:
+            return X.tuplewiseapply(lambda val: self.lin_tupleinit0(x)[X.indices[
+                0]] * self.lin_tupleinit1(x)[X.indices[1]] * self.lin_tupleinit2(x)[X.indices[1]] * val)
+        else:
+            return X.tuplewiseapply(lambda val: self.lin_tupleinit0(x)[X.indices[
+                0]] * self.lin_tupleinit1(x)[X.indices[1]] * val)
 
     def forward(self, datadict: dict):
         datadict = self.data_encoder(datadict)
@@ -288,15 +308,26 @@ val_dataset = ZINC("dataset/ZINC", subset=True, split="val")
 tst_dataset = ZINC("dataset/ZINC", subset=True, split="test")
 if args.sparse:
     keys = parse_precomputekey(model)
-    trn_dataset = ParallelPreprocessDataset(
-        "dataset/ZINC_trn", trn_dataset,
-        Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 0)
-    val_dataset = ParallelPreprocessDataset(
-        "dataset/ZINC_val", val_dataset,
-        Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 0)
-    tst_dataset = ParallelPreprocessDataset(
-        "dataset/ZINC_tst", tst_dataset,
-        Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 0)
+    if args.conv in ["I2GNN"]:
+        trn_dataset = ParallelPreprocessDataset(
+            "dataset/ZINC_trn", trn_dataset,
+            Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 0)
+        val_dataset = ParallelPreprocessDataset(
+            "dataset/ZINC_val", val_dataset,
+            Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 0)
+        tst_dataset = ParallelPreprocessDataset(
+            "dataset/ZINC_tst", tst_dataset,
+            Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 0)
+    else:
+        trn_dataset = ParallelPreprocessDataset(
+            "dataset/ZINC_trn", trn_dataset,
+            Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 0)
+        val_dataset = ParallelPreprocessDataset(
+            "dataset/ZINC_val", val_dataset,
+            Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 0)
+        tst_dataset = ParallelPreprocessDataset(
+            "dataset/ZINC_tst", tst_dataset,
+            Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 0)
     trn_dataloader = SpDataloader(trn_dataset,
                                   batch_size=128,
                                   shuffle=True,
@@ -395,7 +426,7 @@ for i in range(args.repeat):
             tst_score = eval(tst_dataloader)
         t3 = time.time()
         print(
-            f"epoch {epoch} trn time {t2-t1:.2f} val time {t3-t2:.2f}  l1loss {losss:.4f} val MAE {val_score:.4f} tst MAE {tst_score:.4f}"
+            f"epoch {epoch} trn time {t2-t1:.2f} val time {t3-t2:.2f} memory {torch.cuda.max_memory_allocated()/1024**3:.2f} GB  l1loss {losss:.4f} val MAE {val_score:.4f} tst MAE {tst_score:.4f}"
         )
         if np.isnan(losss) or np.isnan(val_score):
             break

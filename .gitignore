@@ -19,3 +19,12 @@ opt/*
 pygho.egg-info
 *toml
 SWL
+subgraphcount
+ESAN
+I2GNN
+GNNAsKernel
+NestedGNN
+ProvablyPowerfulGraphNetworks_torch
+experiments
+SUN
+*.py
