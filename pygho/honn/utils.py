@@ -71,8 +71,10 @@ class LayerNorm(nn.Module):
     def forward(self, x: Tensor):
         return self.norm(x)
 
-
+# Define a dictionary for normalization layers
 normdict = {"bn": BatchNorm, "ln": LayerNorm, "none": NoneNorm}
+
+# a dictionary for activation functions
 act_dict = {
     "relu": nn.ReLU(inplace=True),
     "ELU": nn.ELU(inplace=True),
@@ -81,7 +83,27 @@ act_dict = {
 
 
 class MLP(nn.Module):
+    """
+    Multi-Layer Perceptron (MLP) module with customizable layers and activation functions.
 
+    Args:
+    - hiddim (int): Number of hidden units in each layer.
+    - outdim (int): Number of output units.
+    - numlayer (int): Number of hidden layers in the MLP.
+    - tailact (bool): Whether to apply the activation function after the final layer.
+    - dp (float): Dropout probability, if greater than 0, dropout layers are added.
+    - norm (str): Normalization method to apply between layers (e.g., "bn" for BatchNorm).
+    - act (str): Activation function to apply between layers (e.g., "relu").
+    - tailbias (bool): Whether to include a bias term in the final linear layer.
+    - normparam (float): Parameter for normalization (e.g., momentum for BatchNorm).
+
+    Methods:
+    - forward(x: Tensor) -> Tensor:
+      Forward pass of the MLP.
+
+    Notes:
+    - This class defines a multi-layer perceptron with customizable layers, activation functions, normalization, and dropout.
+    """
     def __init__(self,
                  hiddim: int,
                  outdim: int,
@@ -112,5 +134,6 @@ class MLP(nn.Module):
                 lin0.insert(0, nn.Linear(hiddim, hiddim))
             self.lins = lin0
 
-    def forward(self, x: Tensor, batch: Tensor = None):
+    def forward(self, x: Tensor):
+        # Forward pass through the MLP
         return self.lins(x)
