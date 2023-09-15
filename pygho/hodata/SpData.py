@@ -1,5 +1,5 @@
 '''
-transform for sparse data
+utilities for sparse high order data
 '''
 from torch_geometric.data import Data as PygData, Batch as PygBatch
 import torch
@@ -12,6 +12,15 @@ from torch_geometric.utils import coalesce
 
 
 def parseop(op: str):
+    '''
+    Get the increment for a tensor when combining graphs.
+
+    Args:
+        op (str): The operator string.
+
+    Returns:
+        str or NotImplementedError: The increment information or NotImplementedError if the operator is not implemented.
+    '''
     if op[0] == "X":
         return f"num_tuples{op[1:]}"
     elif op == "A":
@@ -21,6 +30,15 @@ def parseop(op: str):
 
 
 def parsekey(key: str) -> Tuple[str, str, int, str, int]:
+    '''
+    Parse the operators in precomputation keys.
+
+    Args:
+        key (str): The precomputation key.
+
+    Returns:
+        Tuple[str, str, int, str, int]: A tuple containing parsed operators and dimensions.
+    '''
     assert len(key.split(KEYSEP)) == 5, "key format not match"
     op0, op1, dim1, op2, dim2 = key.split(KEYSEP)
     dim1 = int(dim1)
@@ -32,7 +50,9 @@ def parsekey(key: str) -> Tuple[str, str, int, str, int]:
 
 
 class SpHoData(PygData):
-
+    '''
+    A data class for sparse high order graph data.
+    '''
     def __inc__(self, key: str, value: Any, *args, **kwargs):
         if key.startswith('tupleid'):
             return getattr(self,
@@ -54,6 +74,16 @@ class SpHoData(PygData):
 
 
 def batch2sparse(batch: PygBatch, keys: List[str] = [""]) -> PygBatch:
+    '''
+    A main wrapper for converting data in a batch object to SparseTensor.
+
+    Args:
+        batch (PygBatch): The batch object containing graph data.
+        keys (List[str]): The list of keys to convert to SparseTensor.
+
+    Returns:
+        PygBatch: The batch object with converted data.
+    '''
     batch.A = SparseTensor(
         batch.edge_index,
         batch.edge_attr,
@@ -87,6 +117,18 @@ def sp_datapreprocess(data: PygData,
                                                                      int]]]]],
                       annotate: List[str] = [""],
                       keys: List[str] = [""]) -> SpHoData:
+    '''
+    A wrapper for preprocessing dense data for sparse high order graphs.
+
+    Args:
+        data (PygData): The input dense data in PyG Data format.
+        tuplesamplers (Union[Callable, List[Callable]]): A single or list of tuple sampling functions.
+        annotate (List[str]): A list of annotation strings for tuple sampling.
+        keys (List[str]): A list of precomputation keys.
+
+    Returns:
+        SpHoData: The preprocessed sparse high order data in SpHoData format.
+    '''
     data.edge_index, data.edge_attr = coalesce(data.edge_index,
                                                data.edge_attr,
                                                num_nodes=data.num_nodes)

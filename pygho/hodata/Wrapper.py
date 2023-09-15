@@ -13,19 +13,6 @@ from .MaData import ma_datapreprocess, batch2dense
 from torch_geometric.transforms import Compose
 
 
-def _repr(obj: Any) -> str:
-    if obj is None:
-        return 'None'
-    ret = re.sub('at 0x[0-9a-fA-F]+', "", str(obj))
-    ret = ret.replace("\n", " ")
-    ret = ret.replace("functools.partial", " ")
-    ret = ret.replace("function", " ")
-    ret = ret.replace("<", " ")
-    ret = ret.replace(">", " ")
-    ret = ret.replace(" ", "")
-    return ret
-
-
 def Sppretransform(pre_transform: Optional[Callable],
                    tuplesamplers: Union[Callable[[PygData],
                                                  Tuple[Tensor, Tensor,
@@ -36,6 +23,18 @@ def Sppretransform(pre_transform: Optional[Callable],
                                                                   int]]]]],
                    annotate: List[str] = [""],
                    keys: List[str] = [""]):
+    """
+    Create a data pre-transformation function for sparse data.
+
+    Args:
+        pre_transform (Optional[Callable]): An optional pre-transformation function.
+        tuplesamplers (Union[Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]], List[Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]]]]): A tuple sampler or a list of tuple samplers.
+        annotate (List[str], optional): A list of annotations. Defaults to [""].
+        keys (List[str], optional): A list of keys. Defaults to [""].
+
+    Returns:
+        Callable: A data pre-transformation function.
+    """
     hopre_transform = partial(sp_datapreprocess,
                               tuplesamplers=tuplesamplers,
                               annotate=annotate,
@@ -53,6 +52,17 @@ def Mapretransform(pre_transform: Optional[Callable],
                                                       Tuple[Tensor,
                                                             List[int]]]]],
                    annotate: List[str] = [""]):
+    """
+    Create a data pre-transformation function for dense data.
+
+    Args:
+        pre_transform (Optional[Callable]): An optional pre-transformation function.
+        tuplesamplers (Union[Callable[[PygData], Tuple[Tensor, List[int]]], List[Callable[[PygData], Tuple[Tensor, List[int]]]]]): A tuple sampler or a list of tuple samplers.
+        annotate (List[str], optional): A list of annotations. Defaults to [""].
+
+    Returns:
+        Callable: A data pre-transformation function.
+    """
     hopre_transform = partial(ma_datapreprocess,
                               tuplesamplers=tuplesamplers,
                               annotate=annotate)
@@ -62,27 +72,10 @@ def Mapretransform(pre_transform: Optional[Callable],
         return hopre_transform
 
 
-def HoDatasetClass(datasetclass, processname: str = None):
-
-    @property
-    def processed_dir(self) -> str:
-        if processname is None:
-            return osp.join(
-                self.root,
-                f'processed__{_repr(self.pre_transform)}__{_repr(self.pre_filter)}'
-            )
-        else:
-            return osp.join(self.root, f'processed__{processname}')
-
-    setattr(datasetclass, "processed_dir", processed_dir)
-    return datasetclass
-
-
-SpDataloader = PygDataLoader
-
-
 class IterWrapper:
-
+    """
+    A wrapper for the iterator of a data loader.
+    """
     def __init__(self, iterator: Iterable, batch_transform: Callable,
                  device) -> None:
         self.iterator = iterator
@@ -101,7 +94,14 @@ class IterWrapper:
 
 
 class SpDataloader(PygDataLoader):
+    """
+    A data loader for sparse data that converts the inner data format to SparseTensor.
 
+    Args:
+        dataset (Dataset | Sequence[BaseData] | DatasetAdapter): The input dataset or data sequence.
+        device (optional): The device to place the data on. Defaults to None.
+        **kwargs: Additional keyword arguments for DataLoader. Same as Pyg Dataloader.
+    """
     def __init__(self,
                  dataset: Dataset | Sequence[BaseData] | DatasetAdapter,
                  batch_size: int = 1,
@@ -126,7 +126,16 @@ class SpDataloader(PygDataLoader):
 
 
 class MaDataloader(PygDataLoader):
+    """
+    A data loader for sparse data that converts the inner data format to MaskedTensor.
 
+    Args:
+        dataset (Dataset | Sequence[BaseData] | DatasetAdapter): The input dataset or data sequence.
+        device (optional): The device to place the data on. Defaults to None.
+        denseadj (bool, optional): Whether to use dense adjacency. Defaults to True.
+        other kwargs: Additional keyword arguments for DataLoader. Same as Pyg dataloader
+
+    """
     def __init__(self,
                  dataset: Dataset | Sequence[BaseData] | DatasetAdapter,
                  batch_size: int = 1,

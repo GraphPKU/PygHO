@@ -18,11 +18,27 @@ def k_hop_subgraph(
     num_nodes: Optional[int] = None,
     flow: str = 'source_to_target',
     directed: bool = False,
-) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-    r"""
-    from pyg
+) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
     """
+    Compute the k-hop subgraph around a set of nodes in an edge list.
 
+    Args:
+        node_idx (Union[int, List[int], LongTensor]): The root node(s) for the subgraph.
+        num_hops (int): The number of hops for the subgraph.
+        edge_index (LongTensor): The edge indices of the graph.
+        relabel_nodes (bool, optional): Whether to relabel node indices. Defaults to False.
+        num_nodes (Optional[int], optional): The total number of nodes. Defaults to None.
+        flow (str, optional): The direction of traversal ('source_to_target' or 'target_to_source'). Defaults to 'source_to_target'.
+        directed (bool, optional): Whether the graph is directed. Defaults to False.
+
+    Returns:
+        Tuple[Tensor, Tensor, Tensor, Tensor]: A tuple containing:
+            - subset (Tensor): The node indices in the subgraph.
+            - edge_index (Tensor): The edge indices of the subgraph.
+            - inv (Tensor): The inverse mapping of node indices in the original graph to the subgraph.
+            - edge_mask (Tensor): A mask indicating which edges are part of the subgraph.
+            - dist (Tensor): A distance of each node to the root node.
+    """
     num_nodes = maybe_num_nodes(edge_index, num_nodes)
 
     assert flow in ['source_to_target', 'target_to_source']
@@ -111,6 +127,19 @@ def CycleCenteredKhopSampler(
 def KhopSampler(
         data: PygData,
         hop: int = 2) -> Tuple[LongTensor, LongTensor, Tuple[int, int]]:
+    """
+    sample k-hop subgraph on a given PyG graph.
+
+    Args:
+        data (PygData): The input PyG dataset.
+        hop (int, optional): The number of hops for subgraph sampling. Defaults to 2.
+
+    Returns:
+        Tuple[LongTensor, LongTensor, Tuple[int, int]]: A tuple containing:
+            - tupleid (LongTensor): The tensor containing subgraph node indices.
+            - tuplefeat (LongTensor): The tensor containing distances from the starting node.
+            - Tuple[int, int]: A tuple representing the shape of the resulting tensors.
+    """
 
     subgraphs = []
 
@@ -138,6 +167,19 @@ def KhopSampler(
 def I2Sampler(
         data: PygData,
         hop: int = 3) -> Tuple[LongTensor, LongTensor, Tuple[int, int, int]]:
+    """
+    Perform subgraph sampling on a given graph for I2GNN.
+
+    Args:
+        data (PygData): The input PyG dataset.
+        hop (int, optional): The number of hops for subgraph sampling. Defaults to 3.
+
+    Returns:
+        Tuple[LongTensor, LongTensor, Tuple[int, int, int]]: A tuple containing:
+            - tupleid (LongTensor): The tensor containing subgraph node indices.
+            - tuplefeat (LongTensor): The tensor containing shortest distances between node pairs.
+            - Tuple[int, int, int]: A tuple representing the shape of the resulting tensors.
+    """
     subgraphs = []
     spadj = to_scipy_sparse_matrix(data.edge_index, num_nodes=data.num_nodes)
     dist_matrix = torch.from_numpy(

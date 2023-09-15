@@ -10,14 +10,17 @@ import os.path as osp
 
 class ParallelPreprocessDataset(InMemoryDataset):
     '''
-    Parallelly transform a pyg dataset/
+    Parallelly transform a PyG dataset.
+
+    This dataset class allows parallel preprocessing of a list of PyGData or PyGDataset instances.
+
     Args:
-        root: position to save processed data
-        data_list: list of PygData or PygDataset. 
-        pre_transform: a function maps PygData to PygData. Run only once for all data. Usually be tuple sampler. 
-        num_worker: number of processes for preprocessing. Can be the number of cpu.
-        processedname: name to save processed data. If none, the name will be a hash of pre_transform function
-        transform: dynamically transform data during data loading.
+        root (str): The directory to save processed data.
+        data_list (Iterable[PygData]): A list of PygData or PygDataset instances.
+        pre_transform (Callable[[PygData], PygData]): A function that maps PygData to PygData. It is executed only once for all data and is typically a tuple sampler.
+        num_worker (int): The number of processes for parallel preprocessing. It can be set to the number of available CPU cores.
+        processedname (Optional[str]): The name to save the processed data. If None, the name will be a hash of the pre_transform function.
+        transform (Optional[Callable[[PygData], PygData]]): A function to dynamically transform data during data loading.
     '''
 
     def __init__(self,

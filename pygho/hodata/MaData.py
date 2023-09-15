@@ -1,5 +1,5 @@
 '''
-transform for dense data
+utilities for dense high order data
 '''
 from torch_geometric.data import Data as PygData, Batch as PygBatch
 import torch
@@ -12,7 +12,9 @@ import torch
 
 
 class MaHoData(PygData):
-
+    '''
+    a data class for dense high order graph data.
+    '''
     def __inc__(self, key: str, value: Any, *args, **kwargs):
         if key == 'edge_index':
             return 0
@@ -26,9 +28,19 @@ def to_dense_adj(edge_index: LongTensor,
                  batch_size: Optional[int] = None,
                  filled_value: float = 0) -> MaskedTensor:
     '''
-    edge_index: coalesced, (2, nnz)
-    edge_batch: (nnz)
-    edge_attr: (nnz, *)
+    Convert sparse adjacency to dense matrix.
+
+    Args:
+        edge_index (LongTensor): Coalesced edge indices of shape (2, nnz).
+        edge_batch (LongTensor): Batch assignments of shape (nnz).
+        edge_attr (Optional[Tensor]): Edge attributes of shape (nnz, *).
+        max_num_nodes (Optional[int]): Maximum number of nodes in the graph.
+        batch_size (Optional[int]): Batch size.
+        filled_value (float): Value to fill in the dense matrix.
+
+    Returns:
+        MaskedTensor: A masked dense tensor.
+
     '''
     idx0 = edge_batch
     idx1 = edge_index[0]
@@ -61,9 +73,18 @@ def to_sparse_adj(edge_index: LongTensor,
                   max_num_nodes: Optional[int] = None,
                   batch_size: Optional[int] = None) -> SparseTensor:
     '''
-    edge_index: coalesced, (2, nnz)
-    edge_batch: (nnz)
-    edge_attr: (nnz, *)
+    Convert sparse edge_index and edge_attr to a SparseTensor.
+
+    Args:
+        edge_index (LongTensor): Coalesced edge indices of shape (2, nnz).
+        edge_batch (LongTensor): Batch assignments of shape (nnz).
+        edge_attr (Optional[Tensor]): Edge attributes of shape (nnz, *).
+        max_num_nodes (Optional[int]): Maximum number of nodes in the graph.
+        batch_size (Optional[int]): Batch size.
+
+    Returns:
+        SparseTensor: A sparse tensor representation.
+
     '''
     if max_num_nodes is None:
         max_num_nodes = edge_index.max().item() + 1
@@ -85,7 +106,27 @@ def to_dense_x(nodeX: Tensor,
                max_num_nodes: Optional[int] = None,
                batch_size: Optional[int] = None,
                filled_value: float = 0) -> MaskedTensor:
+    '''
+    convert node feature of different subgraphs () to a dense matrix
+    ret whose ret[i] is of subgraph i. n is the maximum size of subgraph in the batch.
+    to align graph of different size, we pad them to the largest size. 
+    '''
+    '''
+    Convert node features of different subgraphs to a dense matrix.
 
+    Args:
+        nodeX (Tensor): Node features. of shape (sum of number of nodes in a batch, *denseshape).
+        Xptr (LongTensor): Pointer to subgraphs. nodeX[Xptr[i]:Xptr[i+1]] represents the node feature for subgraph i
+        max_num_nodes (Optional[int]): Maximum number of nodes in a subgraph.
+        batch_size (Optional[int]): Batch size.
+        filled_value (float): Value to fill in the dense matrix.
+
+    Returns:
+        MaskedTensor: A masked dense tensor.  of shape (b, n, *denseshape).
+
+    To align graphs of different sizes, padding is applied.
+
+    '''
     if batch_size is None:
         batch_size = Xptr.shape[0] - 1
 
@@ -113,6 +154,23 @@ def to_dense_tuplefeat(
         max_tupleshape: Optional[LongTensor] = None,
         batch_size: Optional[int] = None,
         feat2mask: Callable[[Tensor], BoolTensor] = None) -> MaskedTensor:
+    '''
+    Convert tuple features of different subgraphs to a dense matrix.
+
+    Args:
+        tuplefeat (Tensor): Tuple features. (total number of tuples in batch, *denseshape)
+        tupleshape (LongTensor): Shape of tuple features.
+        tuplefeatptr (LongTensor): Pointer to tuple features. tuplefeat[tuplefeatptr[i]:tuplefeatptr[i+1]] represents the tuple feature for subgraph i
+        max_tupleshape (Optional[LongTensor]): Maximum shape of tuple features.
+        batch_size (Optional[int]): Batch size.
+        feat2mask (Callable[[Tensor], BoolTensor]): Function to generate masks for tuple features.
+
+    Returns:
+        MaskedTensor: A masked dense tensor. of shape (b, n1, n2,.., *denseshape), whose ret[i] is of subgraph i. (n1, n2,...) is the maximum sizes of the tuplefeat of subgraphs.
+
+    To align tuple features of different sizes, padding is applied.
+
+    '''
     if batch_size is None:
         batch_size = tupleshape.shape[0]
 
@@ -158,6 +216,21 @@ def batch2dense(batch: PygBatch,
                 max_num_nodes: int = None,
                 denseadj: bool = False,
                 keys: List[str] = [""]) -> PygBatch:
+    '''
+    A main wrapper for converting and padding data in a batch object to dense forms.
+
+    Args:
+        batch (PygBatch): The input batch object.
+        batch_size (int): Batch size.
+        max_num_nodes (int): Maximum number of nodes in the graph.
+        denseadj (bool): Whether to convert adjacency to dense or sparse.
+        keys (List[str]): List of keys for additional attributes.
+
+    Returns:
+        PygBatch: The processed batch object.
+
+    '''
+
     batch.x = to_dense_x(batch.x, batch.ptr, max_num_nodes, batch_size)
     batch_size, max_num_nodes = batch.x.shape[0], batch.x.shape[1]
     if denseadj:
@@ -183,6 +256,18 @@ def ma_datapreprocess(data: PygData,
                                                          Tuple[Tensor,
                                                                List[int]]]]],
                       annotate: List[str] = [""]) -> MaHoData:
+    '''
+    A wrapper for preprocessing dense data.
+
+    Args:
+        data (PygData): Input data object.
+        tuplesamplers (Union[Callable[[PygData], Tuple[Tensor, List[int]]], List[Callable[[PygData], Tuple[Tensor, List[int]]]]]): Tuple samplers for extracting data.
+        annotate (List[str]): List of annotation strings.
+
+    Returns:
+        MaHoData: Preprocessed data object.
+
+    '''
     if not isinstance(tuplesamplers, Iterable):
         tuplesamplers = [tuplesamplers]
     assert len(tuplesamplers) == len(
