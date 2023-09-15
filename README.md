@@ -253,7 +253,7 @@ In the matrix multiplication step, batching is applied to the last dimension of 
 
 * Optimization for induced subgraph input: In the original equation, the sum is over neighbors in the subgraph. However, the matrix multiplication version includes neighbors in the whole graph as well. Importantly, our implementation optimizes for induced subgraph cases, where neighbors outside the subgraph are automatically handled by setting their values to zero.
 * Optimization for sparse output: The operation $X'A^T$ can produce non-zero elements for pairs $(i,j)$ that do not exist in the subgraph. For sparse input tensors $X$ and $A$, we optimize the multiplication to avoid computing such non-existent elements.
-\end{itemize}
+
 While we've illustrated the implementation of GIN as an example, our library supports the implementation of various Message Passing Neural Networks (MPNNs) on subgraphs, including GAT, GraphSage, and GCN. Message passing can also occur across subgraphs by simply transposing $X$.
 
 Pooling processes can also be considered as a reduction of $X$. For instance:
