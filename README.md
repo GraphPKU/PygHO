@@ -23,15 +23,15 @@ In constrast, higher-order GNNs use node tuples as the message passing unit and 
 
 Taking NGNN (with GIN base)~\citep{NGNN} as an example, NGNN first samples a subgraph for each node $i$ and then runs GIN on all subgraphs simultaneously. It produces a 2-D representation $H\in \mathbb{R}^{n\times n\times d}$, where $H_{ij}$ represents the representation of node $j$ in the subgraph rooted at node $i$. The message passing within all subgraphs can be expressed as:
 
-\begin{equation}
+$$
     h_{ij}^{t+1} \leftarrow \sum_{k\in N_i(j)} \text{MLP}(h^t_{ik}),
-\end{equation}
+$$
 
 where $N_i(j)$ represents the set of neighbors of node $j$ in the subgraph rooted at $i$. After several layers of message passing, tuple representations $H$ are pooled to generate the final graph representation:
 
-\begin{equation}
+$$
     h_i = \text{P}_2\left(\big\{h_{ij} | j\in V_i\big\}\right), \quad h_{G} = \text{P}_1\left(\big\{h_i | i\in V\big\}\right),
-\end{equation}
+$$
 
 Thus, a set of operators on high-order tensors is required for HOGNN, which is the focus of our work. 
 
@@ -126,7 +126,7 @@ Since the dataset preprocessing routine is closely related to data structures, w
 Enabling batch training in HOGNNs requires handling graphs of varying sizes, which is not a trivial task. Different strategies are employed for Sparse and Masked Tensor data structures.
 
 For Sparse Tensor data, the solution is relatively straightforward. We can concatenate the tensors of each graph along the diagonal of a larger tensor: For instance, in a batch of $B$ graphs with adjacency matrices $A_i\in \mathbb{R}^{n_i\times n_i}$, node features $x\in \mathbb{R}^{n_i\times d}$, and tuple features $X\in \mathbb{R}^{n_i\times n_i\times d'}$ for $i=1,2,\ldots,B$, the features for the entire batch are represented as $A\in \mathbb{R}^{n\times n}$, $x\in \mathbb{R}^{n\times d}$, and $X\in \mathbb{R}^{n\times n\times d'}$, where $n=\sum_{i=1}^B n_i$. The concatenation is as follows,
-\begin{equation}
+$$
     A=\begin{bmatrix}
         A_1&0&0&\cdots &0\\
         0&A_2&0&\cdots &0\\
@@ -148,7 +148,7 @@ For Sparse Tensor data, the solution is relatively straightforward. We can conca
         \vdots&\vdots&\vdots&\vdots&\vdots\\
         0&0&0&\cdots&X_B
     \end{bmatrix}
-\end{equation} 
+$$ 
 This arrangement allows tensors in batched data have the same number of dimension as those of a single graph and thus share common operators. We provides PygHO's own dataloader. It has the compatible parameters to PyTorch's DataLoader and further combines sparse tensors for different graphs.
 ```
 from pygho.subgdata import SpDataloader
@@ -156,7 +156,7 @@ trn_dataloader = SpDataloader(trn_dataset, batch_size=32, shuffle=True, drop_las
 ```
 
 As concatenation along the diagonal leads to a lot of non-existing elements, handling Masked Tensor data involves a different strategy for saving space. In this case, tensors are padded to the same shape and stacked along a new axis. For example, in a batch of $B$ graphs with adjacency matrices $A_i\in \mathbb{R}^{n_i\times n_i}$, node features $x\in \mathbb{R}^{n_i\times d}$, and tuple features $X\in \mathbb{R}^{n_i\times n_i\times d'}$ for $i=1,2,\ldots,B$, the features for the entire batch are represented as $A\in \mathbb{R}^{B\times \tilde{n}\times \tilde{n}}$, $x\in \mathbb{R}^{B\times \tilde{n}\times d}$, and $X\in \mathbb{R}^{B\times \tilde{n}\times \tilde{n}\times d'}$, where $\tilde{n}=\max\{n_i|i=1,2,\ldots,B\}$. 
-\begin{equation}
+$$
     A=\begin{bmatrix}
          \begin{pmatrix}
              A_1&0_{n_1,\tilde n-n_1}\\
@@ -202,7 +202,7 @@ As concatenation along the diagonal leads to a lot of non-existing elements, han
              0_{\tilde n-n_B, n_B}&0_{n_B,n_B}\\
          \end{pmatrix}\\
     \end{bmatrix}
-\end{equation}
+$$
 
 This padding and stacking strategy ensures consistent shapes across tensors, allowing for efficient processing of dense data. We also provide the dataloader to implement it conveniently.
 ```
@@ -236,19 +236,19 @@ Layer 3 offers numerous ready-to-use methods, and with Layer 2, users can design
 #### Usage
 To illustrate how these operators work, we will use NGNN as an example. Although our operators can be applied to batched data, for simplicity, we will focus on the single-graph case. Let $H\in \mathbb{R}^{n\times n\times d}$ represent the representation matrix, and $A\in \mathbb{R}^{n\times n}$ denote the adjacency matrix. The GIN operation on all subgraphs, defined as:
 
-\begin{equation}
+$$
     h_{ij}\leftarrow \sum_{k\in N_i(j)} \text{MLP}(h_{ik})
-\end{equation}
+$$
 
 can be represented as the following two operations:
 
-\begin{equation}
+$$
     X' = X.\text{tuplewiseapply}(\text{MLP})
-\end{equation}
+$$
 This operation applies the MLP function to each tuple's representation. The matrix multiplication then sums over neighbors:
-\begin{equation}
+$$
     X\leftarrow X'A^T
-\end{equation}
+$$
 In the matrix multiplication step, batching is applied to the last dimension of $X$. While this conversion may seem trivial, several key points are worth noting:
 
 * Optimization for induced subgraph input: In the original equation, the sum is over neighbors in the subgraph. However, the matrix multiplication version includes neighbors in the whole graph as well. Importantly, our implementation optimizes for induced subgraph cases, where neighbors outside the subgraph are automatically handled by setting their values to zero.
@@ -258,9 +258,9 @@ While we've illustrated the implementation of GIN as an example, our library sup
 
 Pooling processes can also be considered as a reduction of $X$. For instance:
 
-\begin{equation}
+$$
 h_i=\sum_{j\in V_i}\text{MLP}_2(h_{ij})
-\end{equation}
+$$
 
 can be implemented as follows:
 
