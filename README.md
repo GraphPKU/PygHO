@@ -30,7 +30,7 @@ $$
 where $N_i(j)$ represents the set of neighbors of node $j$ in the subgraph rooted at $i$. After several layers of message passing, tuple representations $H$ are pooled to generate the node representations:
 
 $$
-    h_i = \text{P}_2\left(\big\{h_{ij} | j\in V_i\big\}\right). 
+    h_i = P(\{h_{ij} | j\in V_i\}). 
 $$
 
 Thus, a set of operators on high-order tensors is required for HOGNN, which is the focus of our work. 
@@ -58,6 +58,7 @@ While basic deep learning libraries typically support the high-order tensors dir
 A MaskedTensor consists of two components: `data`, with shape $(\text{masked shape}, \text{dense shape})$, and `mask`, with shape $(\text{masked shape})$. The `mask` tensor contains Boolean values, indicating whether the corresponding element in `data` exists within the tensor. For example, in the context of NGNN's representation $H\in \mathbb{R}^{n\times n\times d}$, `data` resides in $\mathbb{R}^{n\times n\times d}$, and `mask` is in $\{0,1\}^{n\times n}$. The element $(i,j)$ in `mask` is $1$ if the tuple $(i,j)$ exists in the tensor. The unused elements will not affect the output of the operators in this library. For example, the summation over a Maskedtensor will consider the non-existing elements as $0$ and thus ignore them.
 
 For example, the following matrix 
+
 $$
 \begin{bmatrix}
 0&1&0\\
@@ -65,7 +66,9 @@ $$
 3&0&0
 \end{bmatrix}
 $$
+
 can be built as 
+
 ```
 from pygho import MaskedTensor
 n, m, nnz, d = 5, 7, 17, 7
@@ -73,7 +76,9 @@ data = torch.tensor([[4, 1, 4], [4,4,2], [3,4,4]])
 mask = torch.tensor([[0, 1, 0], [0,0,1], [1,0,0]], dtype=torch.bool)
 A = MaskedTensor(data, mask)
 ```
+
 Here the non-existing elements in data can be set arbitrarily
+
 #### SparseTensor
 
 In contrast, SparseTensor stores only existing elements while ignoring non-existing ones. This approach proves to be more efficient when a small ratio of valid elements is present.  A SparseTensor, with shape (sparse\_shape, dense\_shape), comprises two tensors: `indices` (an Integer Tensor with shape (sparse\_dim, nnz)) and `values` (with shape (nnz, dense\_shape)). Here, sparse\_dim represents the number of dimensions in the sparse shape, and nnz stands for the count of existing elements. The columns of `indices` and rows of `values` correspond to the non-zero elements, making it straightforward to retrieve and manipulate the required information.
