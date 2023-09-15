@@ -81,6 +81,7 @@ In contrast, SparseTensor stores only existing elements while ignoring non-exist
 For example, in NGNN's representation $H\in \mathbb{R}^{n\times n\times d}$, assuming the total number nodes in subgraphs is $m$, $H$ can be represented as `indices` $a\in \mathbb{N}^{2\times m}$ and `values` $v\in \mathbb{R}^{m\times d}$. Specifically, for $i=1,2,\ldots,n$, $H_{a_{1,i},a_{2,i}}=v_i$.
 
 For example, the following matrix 
+
 $$
 \begin{bmatrix}
 0&1&0\\
@@ -88,7 +89,9 @@ $$
 3&0&0
 \end{bmatrix}
 $$
+
 can be built as 
+
 ```
 from pygho import SparseTensor
 n, m, nnz, d = 5, 7, 17, 7
@@ -126,6 +129,7 @@ Since the dataset preprocessing routine is closely related to data structures, w
 Enabling batch training in HOGNNs requires handling graphs of varying sizes, which is not a trivial task. Different strategies are employed for Sparse and Masked Tensor data structures.
 
 For Sparse Tensor data, the solution is relatively straightforward. We can concatenate the tensors of each graph along the diagonal of a larger tensor: For instance, in a batch of $B$ graphs with adjacency matrices $A_i\in \mathbb{R}^{n_i\times n_i}$, node features $x\in \mathbb{R}^{n_i\times d}$, and tuple features $X\in \mathbb{R}^{n_i\times n_i\times d'}$ for $i=1,2,\ldots,B$, the features for the entire batch are represented as $A\in \mathbb{R}^{n\times n}$, $x\in \mathbb{R}^{n\times d}$, and $X\in \mathbb{R}^{n\times n\times d'}$, where $n=\sum_{i=1}^B n_i$. The concatenation is as follows,
+
 $$
     A=\begin{bmatrix}
         A_1&0&0&\cdots &0\\
@@ -149,13 +153,16 @@ $$
         0&0&0&\cdots&X_B
     \end{bmatrix}
 $$ 
+
 This arrangement allows tensors in batched data have the same number of dimension as those of a single graph and thus share common operators. We provides PygHO's own dataloader. It has the compatible parameters to PyTorch's DataLoader and further combines sparse tensors for different graphs.
+
 ```
 from pygho.subgdata import SpDataloader
 trn_dataloader = SpDataloader(trn_dataset, batch_size=32, shuffle=True, drop_last=True)
 ```
 
 As concatenation along the diagonal leads to a lot of non-existing elements, handling Masked Tensor data involves a different strategy for saving space. In this case, tensors are padded to the same shape and stacked along a new axis. For example, in a batch of $B$ graphs with adjacency matrices $A_i\in \mathbb{R}^{n_i\times n_i}$, node features $x\in \mathbb{R}^{n_i\times d}$, and tuple features $X\in \mathbb{R}^{n_i\times n_i\times d'}$ for $i=1,2,\ldots,B$, the features for the entire batch are represented as $A\in \mathbb{R}^{B\times \tilde{n}\times \tilde{n}}$, $x\in \mathbb{R}^{B\times \tilde{n}\times d}$, and $X\in \mathbb{R}^{B\times \tilde{n}\times \tilde{n}\times d'}$, where $\tilde{n}=\max\{n_i|i=1,2,\ldots,B\}$. 
+
 $$
     A=\begin{bmatrix}
          \begin{pmatrix}
@@ -205,6 +212,7 @@ $$
 $$
 
 This padding and stacking strategy ensures consistent shapes across tensors, allowing for efficient processing of dense data. We also provide the dataloader to implement it conveniently.
+
 ```
 from pygho.subgdata import MaDataloader
 trn_dataloader = MaDataloader(trn_dataset, batch_size=256, device=device, shuffle=True, drop_last=True)
@@ -245,10 +253,13 @@ can be represented as the following two operations:
 $$
     X' = X.\text{tuplewiseapply}(\text{MLP})
 $$
+
 This operation applies the MLP function to each tuple's representation. The matrix multiplication then sums over neighbors:
+
 $$
     X\leftarrow X'A^T
 $$
+
 In the matrix multiplication step, batching is applied to the last dimension of $X$. While this conversion may seem trivial, several key points are worth noting:
 
 * Optimization for induced subgraph input: In the original equation, the sum is over neighbors in the subgraph. However, the matrix multiplication version includes neighbors in the whole graph as well. Importantly, our implementation optimizes for induced subgraph cases, where neighbors outside the subgraph are automatically handled by setting their values to zero.
@@ -264,9 +275,9 @@ $$
 
 can be implemented as follows:
 
-\begin{python}
+```
 Xn = X.tuplewiseapply(MLP_1).sum(dim=1)
-\end{python}
+```
 
 These examples demonstrate how our library's operators can be used to efficiently implement various MPNNs on subgraphs, providing flexibility and ease of use for HOGNNs.
 
