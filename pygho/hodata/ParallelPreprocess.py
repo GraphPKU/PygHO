@@ -1,6 +1,6 @@
 import torch
 from torch_geometric.data import InMemoryDataset, Data as PygData
-from typing import Callable, Optional
+from typing import Callable, Optional, Iterable
 from multiprocessing import Pool
 from pqdm.processes import pqdm
 from tqdm import tqdm
@@ -10,22 +10,29 @@ import os.path as osp
 
 class ParallelPreprocessDataset(InMemoryDataset):
     '''
-    root: position to save processed data
-    data_list: list of PygData. 
-    pre_transform: a function maps PygData to PygData
-    num_worker: number of process. Can be the number of cpu.
+    Parallelly transform a pyg dataset/
+    Args:
+        root: position to save processed data
+        data_list: list of PygData or PygDataset. 
+        pre_transform: a function maps PygData to PygData. Run only once for all data. Usually be tuple sampler. 
+        num_worker: number of processes for preprocessing. Can be the number of cpu.
+        processedname: name to save processed data. If none, the name will be a hash of pre_transform function
+        transform: dynamically transform data during data loading.
     '''
 
     def __init__(self,
-                 root,
-                 data_list,
+                 root: str,
+                 data_list: Iterable[PygData],
                  pre_transform: Callable[[PygData], PygData],
                  num_worker: int,
-                 processedname: Optional[str] = None):
+                 processedname: Optional[str] = None,
+                 transform: Optional[Callable[[PygData], PygData]] = None):
         self.tmp_data_list = list(data_list)
         self.num_worker = num_worker
         self.processedname = processedname
-        super().__init__(root, pre_transform=pre_transform)
+        super().__init__(root,
+                         pre_transform=pre_transform,
+                         transform=transform)
         self.data, self.slices = torch.load(self.processed_paths[0])
 
     @property

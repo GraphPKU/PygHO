@@ -11,8 +11,9 @@ setup(
     python_requires=">=3.10",
     packages=find_packages(include=["pygho", "pygho.*"]),
     install_requires=[
-        "torch",
-        "torch_scatter",
-        "torch_geometric"
+        "torch>=2.0",
+        "torch_geometric>=2.3",
+        "tqdm",
+        "pqdm"
     ],
 )

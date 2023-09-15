@@ -72,7 +72,7 @@ def k_hop_subgraph(
 
 
 def CycleCenteredKhopSampler(data: PygData,
-                             hop: int = 2) -> Tuple[LongTensor, LongTensor]:
+                             hop: int = 2) -> Tuple[LongTensor, LongTensor, Tuple[int, int]]:
     ng = to_networkx(PygData(edge_index=data.edge_index), to_undirected=True)
     cynodes = set(sum(nx.cycle_basis(ng), start=[]))
 
@@ -105,7 +105,7 @@ def CycleCenteredKhopSampler(data: PygData,
     return subgbatch.subg_nodeidx.t(), subgbatch.x, [data.num_nodes, data.num_nodes]
 
 
-def KhopSampler(data: PygData, hop: int = 2) -> Tuple[LongTensor, LongTensor]:
+def KhopSampler(data: PygData, hop: int = 2) -> Tuple[LongTensor, LongTensor, Tuple[int, int]]:
 
     subgraphs = []
 
@@ -133,7 +133,7 @@ def KhopSampler(data: PygData, hop: int = 2) -> Tuple[LongTensor, LongTensor]:
     return tupleid, tuplefeat, [data.num_nodes, data.num_nodes]
 
 
-def I2Sampler(data: PygData, hop: int = 3) -> Tuple[LongTensor, LongTensor]:
+def I2Sampler(data: PygData, hop: int = 3) -> Tuple[LongTensor, LongTensor, Tuple[int, int, int]]:
     subgraphs = []
     spadj = to_scipy_sparse_matrix(data.edge_index, num_nodes=data.num_nodes)
     dist_matrix = torch.from_numpy(
