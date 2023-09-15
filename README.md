@@ -18,7 +18,7 @@ torchmetrics==0.11.4
 ```
 First clone our repo
 ```
-
+git clone https://github.com/GraphPKU/PygHO.git
 ```
 Then install it locally
 ```
