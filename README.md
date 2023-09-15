@@ -27,10 +27,10 @@ $$
     h_{ij}^{t+1} \leftarrow \sum_{k\in N_i(j)} \text{MLP}(h^t_{ik}),
 $$
 
-where $N_i(j)$ represents the set of neighbors of node $j$ in the subgraph rooted at $i$. After several layers of message passing, tuple representations $H$ are pooled to generate the final graph representation:
+where $N_i(j)$ represents the set of neighbors of node $j$ in the subgraph rooted at $i$. After several layers of message passing, tuple representations $H$ are pooled to generate the node representations:
 
 $$
-    h_i = \text{P}_2\left(\big\{h_{ij} | j\in V_i\big\}\right), \quad h_{G} = \text{P}_1\left(\big\{h_i | i\in V\big\}\right),
+    h_i = \text{P}_2\left(\big\{h_{ij} | j\in V_i\big\}\right). 
 $$
 
 Thus, a set of operators on high-order tensors is required for HOGNN, which is the focus of our work. 
