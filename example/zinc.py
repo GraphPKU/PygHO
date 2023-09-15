@@ -42,6 +42,7 @@ parser.add_argument("--lr", type=float)
 parser.add_argument("--minlr", type=float)
 parser.add_argument("--wd", type=float)
 parser.add_argument("--dp", type=float)
+parser.add_argument("--bs", type=int, default=128)
 parser.add_argument("--normparam", type=float, default=0.1)
 parser.add_argument("--cosT", type=int)
 parser.add_argument("--K", type=float, default=0)
@@ -329,12 +330,12 @@ if args.sparse:
             "dataset/ZINC_tst", tst_dataset,
             Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 0)
     trn_dataloader = SpDataloader(trn_dataset,
-                                  batch_size=128,
+                                  batch_size=args.bs,
                                   shuffle=True,
                                   drop_last=True,
                                   device=device)
-    val_dataloader = SpDataloader(val_dataset, batch_size=128, device=device)
-    tst_dataloader = SpDataloader(tst_dataset, batch_size=128, device=device)
+    val_dataloader = SpDataloader(val_dataset, batch_size=args.bs, device=device)
+    tst_dataloader = SpDataloader(tst_dataset, batch_size=args.bs, device=device)
 else:
     trn_dataset = ParallelPreprocessDataset("dataset/ZINC_trn",
                                             trn_dataset,
@@ -357,15 +358,17 @@ else:
                                             num_worker=0)
 
     trn_dataloader = MaDataloader(trn_dataset,
-                                  batch_size=128,
+                                  batch_size=args.bs,
                                   shuffle=True,
                                   drop_last=True,
                                   device=device)
-    val_dataloader = MaDataloader(val_dataset, batch_size=128, device=device)
-    tst_dataloader = MaDataloader(tst_dataset, batch_size=128, device=device)
+    val_dataloader = MaDataloader(val_dataset, batch_size=args.bs, device=device)
+    tst_dataloader = MaDataloader(tst_dataset, batch_size=args.bs, device=device)
 optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.wd)
+
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,
                                                        T_max=args.cosT * len(trn_dataloader), eta_min=args.minlr)
+
 model = model.to(device)
 
 
