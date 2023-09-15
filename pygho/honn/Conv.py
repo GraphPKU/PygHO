@@ -1,3 +1,10 @@
+"""
+Representative GNN layers built upon message passing operations.
+For all module, A means adjacency matrix, X means tuple representation 
+mode SS means sparse adjacency and sparse X, SD means sparse adjacency and dense X, DD means dense adjacency and dense X.
+datadict contains precomputation results.
+"""
+
 from torch import Tensor
 from ..backend.SpTensor import SparseTensor
 from ..backend.MaTensor import MaskedTensor
@@ -8,11 +15,23 @@ from . import TensorOp
 from torch_geometric.nn import HeteroLinear
 import torch.nn as nn
 
-
+# NGNNConv: Nested Graph Neural Network Convolution Layer
 class NGNNConv(Module):
-    '''
-    message passing within each subgraph
-    '''
+    """
+    Implementation of the NGNNConv layer based on the paper "Nested Graph Neural Networks" by Muhan Zhang and Pan Li, NeurIPS 2021.
+    This layer performs message passing on 2D subgraph representations.
+
+    Args:
+    - indim (int): Input feature dimension.
+    - outdim (int): Output feature dimension.
+    - aggr (str): Aggregation method for message passing (e.g., "sum").
+    - mode (str): Mode for specifying tensor types (e.g., "SS" for sparse adjacency and sparse X).
+    - mlp (dict): Parameters for the MLP layer.
+
+    Methods:
+    - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
+      Forward pass of the NGNNConv layer.
+    """
 
     def __init__(self,
                  indim: int,
@@ -31,10 +50,23 @@ class NGNNConv(Module):
         ret = self.aggr.forward(A, tX, datadict, tX)
         return ret
 
-
+# SSWLConv: Subgraph Weisfeiler-Lehman Convolution Layer
 class SSWLConv(Module):
     '''
-    message passing within each subgraph
+    Implementation of the SSWLConv layer based on the paper "A complete expressiveness hierarchy for subgraph GNNs via subgraph Weisfeiler-Lehman tests" by Bohang Zhang et al., ICML 2023.
+    This layer performs message passing on 2D subgraph representations and cross-subgraph pooling.
+
+    Args:
+    - indim (int): Input feature dimension.
+    - outdim (int): Output feature dimension.
+    - aggr (str): Aggregation method for message passing (e.g., "sum").
+    - mode (str): Mode for specifying tensor types (e.g., "SS" for sparse adjacency and sparse X).
+    - mlp (dict): Parameters for the MLP layer.
+
+    Methods:
+    - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
+      Forward pass of the SSWLConv layer.
+
     '''
 
     def __init__(self,
@@ -56,11 +88,26 @@ class SSWLConv(Module):
         X2 = self.aggr2.forward(A, tX, datadict, tX)
         return X.catvalue([X1, X2], True).tuplewiseapply(self.lin)
 
-
+# I2Conv: I2-GNN Convolution Layer
 class I2Conv(Module):
-    '''
-    message passing within each subgraph
-    '''
+    """
+    Implementation of the I2Conv layer based on the paper "Boosting the cycle counting power of graph neural networks with I2-GNNs" by Yinan Huang et al., ICLR 2023.
+    This layer performs message passing on 3D subgraph representations.
+
+    Args:
+    - indim (int): Input feature dimension.
+    - outdim (int): Output feature dimension.
+    - aggr (str): Aggregation method for message passing (e.g., "sum").
+    - mode (str): Mode for specifying tensor types (e.g., "SS" for sparse adjacency and sparse X).
+    - mlp (dict): Parameters for the MLP layer.
+
+    Methods:
+    - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
+      Forward pass of the I2Conv layer.
+
+    Notes:
+    - This layer is based on the I2-GNN paper and performs message passing on 3D subgraph representations.
+    """
 
     def __init__(self,
                  indim: int,
@@ -79,11 +126,25 @@ class I2Conv(Module):
         ret = self.aggr.forward(A, tX, datadict, tX)
         return ret
 
-
+# DSSGNNConv: Equivariant Subgraph Aggregation Networks Convolution Layer
 class DSSGNNConv(Module):
-    '''
-    message passing within each subgraph
-    '''
+    """
+    Implementation of the DSSGNNConv layer based on the paper "Equivariant subgraph aggregation networks" by Beatrice Bevilacqua et al., ICLR 2022.
+    This layer performs message passing on 2D subgraph representations with subgraph pooling.
+
+    Args:
+    - indim (int): Input feature dimension.
+    - outdim (int): Output feature dimension.
+    - aggr_subg (str): Aggregation method for message passing within subgraphs (e.g., "sum").
+    - aggr_global (str): Aggregation method for message passing in the global context (e.g., "sum").
+    - pool (str): Pooling method (e.g., "mean").
+    - mode (str): Mode for specifying tensor types (e.g., "SS" for sparse adjacency and sparse X).
+    - mlp (dict): Parameters for the MLP layer.
+
+    Methods:
+    - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
+      Forward pass of the DSSGNNConv layer.
+    """
 
     def __init__(self,
                  indim: int,
@@ -108,11 +169,24 @@ class DSSGNNConv(Module):
         X2 = self.aggr_subg.forward(A, X, datadict, X)
         return X2.catvalue(X1, True).tuplewiseapply(self.lin)
 
-
+# PPGNConv: Provably Powerful Graph Networks Convolution Layer
 class PPGNConv(Module):
-    '''
-    message passing within each subgraph
-    '''
+    """
+    Implementation of the PPGNConv layer based on the paper "Provably powerful graph networks" by Haggai Maron et al., NeurIPS 2019.
+    This layer performs message passing with power-sum pooling on 2D subgraph representations.
+
+    Args:
+    - indim (int): Input feature dimension.
+    - outdim (int): Output feature dimension.
+    - aggr (str): Aggregation method for message passing (e.g., "sum").
+    - mode (str): Mode for specifying tensor types (e.g., "SS" for sparse adjacency and sparse X).
+    - mlp (dict): Parameters for the MLP layers.
+
+    Methods:
+    - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
+      Forward pass of the PPGNConv layer.
+
+    """
 
     def __init__(self,
                  indim: int,
@@ -130,9 +204,27 @@ class PPGNConv(Module):
         return self.op.forward(X.tuplewiseapply(self.lin1),
                                X.tuplewiseapply(self.lin2), datadict, X)
 
-
+# GNNAKConv: Graph Neural Networks As Kernel Convolution layer
 class GNNAKConv(Module):
+    """
+    Implementation of the GNNAKConv layer based on the paper "From stars to subgraphs: Uplifting any GNN with local structure awareness" by Lingxiao Zhao et al., ICLR 2022.
+    This layer performs message passing on 2D subgraph representations with subgraph pooling and cross-subgraph pooling.
 
+    Args:
+    - indim (int): Input feature dimension.
+    - outdim (int): Output feature dimension.
+    - aggr (str): Aggregation method for message passing (e.g., "sum").
+    - pool (str): Pooling method (e.g., "mean").
+    - mode (str): Mode for specifying tensor types (e.g., "SS" for sparse adjacency and sparse X).
+    - mlp0 (dict): Parameters for the first MLP layer.
+    - mlp1 (dict): Parameters for the second MLP layer.
+    - ctx (bool): Whether to include context information.
+
+    Methods:
+    - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
+      Forward pass of the GNNAKConv layer.
+
+    """
     def __init__(self,
                  indim: int,
                  outdim: int,
@@ -166,9 +258,28 @@ class GNNAKConv(Module):
         else:
             return X2.catvalue(X1, True).tuplewiseapply(self.lin)
 
-
+# SUNConv: Subgraph Union Network Convolution Layer
 class SUNConv(Module):
+    """
+    Implementation of the SUNConv layer based on the paper "Understanding and extending subgraph GNNs by rethinking their symmetries" by Fabrizio Frasca et al., NeurIPS 2022.
+    This layer performs message passing on 2D subgraph representations with subgraph and cross-subgraph pooling.
 
+    Args:
+    - indim (int): Input feature dimension.
+    - outdim (int): Output feature dimension.
+    - aggr (str): Aggregation method for message passing (e.g., "sum").
+    - pool (str): Pooling method (e.g., "mean").
+    - mode (str): Mode for specifying tensor types (e.g., "SS" for sparse adjacency and sparse X).
+    - mlp0 (dict): Parameters for the first MLP layer.
+    - mlp1 (dict): Parameters for the second MLP layer.
+
+    Methods:
+    - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
+      Forward pass of the SUNConv layer.
+
+    Notes:
+    - This layer is based on Symmetry Understanding Networks (SUN) and performs message passing on 2D subgraph representations with subgraph and cross-subgraph pooling.
+    """
     def __init__(self,
                  indim: int,
                  outdim: int,

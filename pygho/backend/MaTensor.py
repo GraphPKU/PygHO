@@ -6,12 +6,83 @@ from typing import Union
 
 
 def filterinf(X: Tensor, filled_value: float = 0):
+    """
+    Replaces positive and negative infinity values in a tensor with a specified value.
+
+    Args:
+    - X (Tensor): The input tensor.
+    - filled_value (float, optional): The value to replace positive and negative
+      infinity values with (default: 0).
+
+    Returns:
+    - Tensor: A tensor with positive and negative infinity values replaced by the
+      specified `filled_value`.
+
+    Example:
+    ```python
+    input_tensor = torch.tensor([1.0, 2.0, torch.inf, -torch.inf, 3.0])
+    result = filterinf(input_tensor, filled_value=999.0)
+    ```
+    """
     return torch.where(torch.logical_or(X == torch.inf, X == -torch.inf),
                        filled_value, X)
 
 
 class MaskedTensor:
+    """
+    Represents a masked tensor with optional padding values.
 
+    This class allows you to work with tensors that have a mask indicating valid and
+    invalid values. You can perform various operations on the masked tensor, such as
+    filling masked values, computing sums, means, maximums, minimums, and more.
+
+    Parameters:
+    - data (Tensor): The underlying data tensor of shape (*maskedshape, *denseshape)
+    - mask (BoolTensor): The mask tensor of shape (*maskedshape) 
+      where `True` represents valid values, and False` represents invalid values.
+    - padvalue (float, optional): The value to use for padding. Defaults to 0.
+    - is_filled (bool, optional): Indicates whether the invalid values have already
+      been filled to the padvalue. Defaults to False.
+
+    Attributes:
+    - data (Tensor): The underlying data tensor.
+    - mask (BoolTensor): The mask tensor.
+    - fullmask (BoolTensor): The mask tensor after broadcasting to match the data's
+      dimensions.
+    - padvalue (float): The padding value.
+    - shape (torch.Size): The shape of the data tensor.
+    - masked_dim (int): The number of dimensions in maskedshape.
+    - dense_dim (int): The number of dimensions in denseshape.
+    - maskedshape (torch.Size): The shape of the tensor up to the masked dimensions.
+    - denseshape (torch.Size): The shape of the tensor after the masked dimensions.
+
+    Methods:
+    - fill_masked_(self, val: float = 0) -> None: In-place fill of masked values.
+    - fill_masked(self, val: float = 0) -> Tensor: Return a tensor with masked values
+      filled with the specified value.
+    - to(self, device: torch.DeviceObjType, non_blocking: bool = True): Move the
+      tensor to the specified device.
+    - sum(self, dims: Union[Iterable[int], int], keepdim: bool = False): Compute the
+      sum of masked values along specified dimensions.
+    - mean(self, dims: Union[Iterable[int], int], keepdim: bool = False): Compute
+      the mean of masked values along specified dimensions.
+    - max(self, dims: Union[Iterable[int], int], keepdim: bool = False): Compute the
+      maximum of masked values along specified dimensions.
+    - min(self, dims: Union[Iterable[int], int], keepdim: bool = False): Compute the
+      minimum of masked values along specified dimensions.
+    - diag(self, dims: Iterable[int]): Extract diagonals from the tensor. 
+      The dimensions in dims will be take diagonal and put at dims[0]
+    - unpooling(self, dims: Union[int, Iterable[int]], tarX): Perform unpooling
+      operation along specified dimensions.
+    - tuplewiseapply(self, func: Callable[[Tensor], Tensor]): Apply a function to
+      each element of the masked tensor.
+    - diagonalapply(self, func: Callable[[Tensor, LongTensor], Tensor]): Apply a
+      function to diagonal elements of the masked tensor.
+    - add(self, tarX, samesparse: bool): Add two masked tensors together.
+    - catvalue(self, tarX, samesparse: bool): Concatenate values of two masked
+      tensors.
+
+    """
     def __init__(self,
                  data: Tensor,
                  mask: BoolTensor,
@@ -87,7 +158,7 @@ class MaskedTensor:
         return len(self.denseshape)
 
     @property
-    def sparseshape(self):
+    def maskedshape(self):
         return self.shape[:self.masked_dim]
 
     @property
@@ -133,31 +204,31 @@ class MaskedTensor:
                             padvalue=0,
                             is_filled=True)
 
-    def diag(self, dim: Iterable[int]):
+    def diag(self, dims: Iterable[int]):
         '''
         put the output dim to dim[0]
         '''
-        assert len(dim) >= 2, "must diag several dims"
-        dim = sorted(list(dim))
+        assert len(dims) >= 2, "must diag several dims"
+        dims = sorted(list(dims))
         tdata = self.data
         tmask = self.mask
-        tdata = torch.diagonal(tdata, 0, dim[0], dim[1])
-        tmask = torch.diagonal(tmask, 0, dim[0], dim[1])
-        for i in range(2, len(dim)):
-            tdata = torch.diagonal(tdata, 0, dim[i], -1)
-            tmask = torch.diagonal(tmask, 0, dim[i], -1)
-        tdata = torch.movedim(tdata, -1, dim[0])
-        tmask = torch.movedim(tmask, -1, dim[0])
+        tdata = torch.diagonal(tdata, 0, dims[0], dims[1])
+        tmask = torch.diagonal(tmask, 0, dims[0], dims[1])
+        for i in range(2, len(dims)):
+            tdata = torch.diagonal(tdata, 0, dims[i], -1)
+            tmask = torch.diagonal(tmask, 0, dims[i], -1)
+        tdata = torch.movedim(tdata, -1, dims[0])
+        tmask = torch.movedim(tmask, -1, dims[0])
         return MaskedTensor(tdata, tmask, self.padvalue, True)
 
-    def unpooling(self, dim: Union[int, Iterable[int]], tarX):
-        if isinstance(dim, int):
-            dim = [dim]
-        dim = sorted(list(dim))
+    def unpooling(self, dims: Union[int, Iterable[int]], tarX):
+        if isinstance(dims, int):
+            dims = [dims]
+        dims = sorted(list(dims))
         tdata = self.data
-        for _ in dim:
+        for _ in dims:
             tdata = tdata.unsqueeze(_)
-        tdata = tdata.expand(*(-1 if i not in dim else tarX.shape[i]
+        tdata = tdata.expand(*(-1 if i not in dims else tarX.shape[i]
                                for i in range(tdata.ndim)))
         return MaskedTensor(tdata, tarX.mask, self.padvalue, False)
 
