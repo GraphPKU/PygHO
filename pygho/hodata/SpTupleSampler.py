@@ -71,8 +71,9 @@ def k_hop_subgraph(
     return subset, edge_index, inv, edge_mask, dist
 
 
-def CycleCenteredKhopSampler(data: PygData,
-                             hop: int = 2) -> Tuple[LongTensor, LongTensor, Tuple[int, int]]:
+def CycleCenteredKhopSampler(
+        data: PygData,
+        hop: int = 2) -> Tuple[LongTensor, LongTensor, Tuple[int, int]]:
     ng = to_networkx(PygData(edge_index=data.edge_index), to_undirected=True)
     cynodes = set(sum(nx.cycle_basis(ng), start=[]))
 
@@ -102,38 +103,41 @@ def CycleCenteredKhopSampler(data: PygData,
                     num_nodes=1,
                 ))
     subgbatch = PygBatch.from_data_list(subgraphs)
-    return subgbatch.subg_nodeidx.t(), subgbatch.x, [data.num_nodes, data.num_nodes]
+    return subgbatch.subg_nodeidx.t(), subgbatch.x, [
+        data.num_nodes, data.num_nodes
+    ]
 
 
-def KhopSampler(data: PygData, hop: int = 2) -> Tuple[LongTensor, LongTensor, Tuple[int, int]]:
+def KhopSampler(
+        data: PygData,
+        hop: int = 2) -> Tuple[LongTensor, LongTensor, Tuple[int, int]]:
 
     subgraphs = []
 
     for i in range(data.num_nodes):
-        if True:
-            subset, _, _, _, dist = k_hop_subgraph(i,
-                                                   hop,
-                                                   data.edge_index,
-                                                   relabel_nodes=True,
-                                                   num_nodes=data.num_nodes)
-            assert subset.shape[0] > 1, "empty subgraph!"
-            nodeidx1 = subset.clone()
-            nodeidx1.fill_(i)
-            subgraphs.append(
-                PygData(
-                    x=dist,
-                    subg_nodeidx=torch.stack((nodeidx1, subset), dim=-1),
-                    num_nodes=subset.shape[0],
-                ))
+        subset, _, _, _, dist = k_hop_subgraph(i,
+                                               hop,
+                                               data.edge_index,
+                                               relabel_nodes=True,
+                                               num_nodes=data.num_nodes)
+        assert subset.shape[0] > 1, "empty subgraph!"
+        nodeidx1 = subset.clone()
+        nodeidx1.fill_(i)
+        subgraphs.append(
+            PygData(
+                x=dist,
+                subg_nodeidx=torch.stack((nodeidx1, subset), dim=-1),
+                num_nodes=subset.shape[0],
+            ))
     subgbatch = PygBatch.from_data_list(subgraphs)
     tupleid, tuplefeat = subgbatch.subg_nodeidx.t(), subgbatch.x
-    tupleid, tuplefeat = coalesce(tupleid,
-                                  tuplefeat,
-                                  reduce="min")
+    tupleid, tuplefeat = coalesce(tupleid, tuplefeat, reduce="min")
     return tupleid, tuplefeat, [data.num_nodes, data.num_nodes]
 
 
-def I2Sampler(data: PygData, hop: int = 3) -> Tuple[LongTensor, LongTensor, Tuple[int, int, int]]:
+def I2Sampler(
+        data: PygData,
+        hop: int = 3) -> Tuple[LongTensor, LongTensor, Tuple[int, int, int]]:
     subgraphs = []
     spadj = to_scipy_sparse_matrix(data.edge_index, num_nodes=data.num_nodes)
     dist_matrix = torch.from_numpy(
@@ -144,29 +148,25 @@ def I2Sampler(data: PygData, hop: int = 3) -> Tuple[LongTensor, LongTensor, Tupl
     ei = data.edge_index
     for i in range(ei.shape[1]):
         nodepair = ei[:, i]
-        if True:
-            subset, _, _, _, _ = k_hop_subgraph(nodepair,
-                                                hop,
-                                                data.edge_index,
-                                                relabel_nodes=True,
-                                                num_nodes=data.num_nodes)
-            assert subset.shape[0] > 1, "empty subgraph!"
-            nodeidx1 = subset.clone()
-            nodeidx1.fill_(nodepair[0])
-            nodeidx2 = subset.clone()
-            nodeidx2.fill_(nodepair[1])
-            subgraphs.append(
-                PygData(
-                    x=torch.stack((dist_matrix[nodepair[0].item()][subset],
-                                   dist_matrix[nodepair[1].item()][subset]),
-                                  dim=-1),
-                    subg_nodeidx=torch.stack((nodeidx1, nodeidx2, subset),
-                                             dim=-1),
-                    num_nodes=subset.shape[0],
-                ))
+        subset, _, _, _, _ = k_hop_subgraph(nodepair,
+                                            hop,
+                                            data.edge_index,
+                                            relabel_nodes=True,
+                                            num_nodes=data.num_nodes)
+        assert subset.shape[0] > 1, "empty subgraph!"
+        nodeidx1 = subset.clone()
+        nodeidx1.fill_(nodepair[0])
+        nodeidx2 = subset.clone()
+        nodeidx2.fill_(nodepair[1])
+        subgraphs.append(
+            PygData(
+                x=torch.stack((dist_matrix[nodepair[0].item()][subset],
+                               dist_matrix[nodepair[1].item()][subset]),
+                              dim=-1),
+                subg_nodeidx=torch.stack((nodeidx1, nodeidx2, subset), dim=-1),
+                num_nodes=subset.shape[0],
+            ))
     subgbatch = PygBatch.from_data_list(subgraphs)
     tupleid, tuplefeat = subgbatch.subg_nodeidx.t(), subgbatch.x
-    tupleid, tuplefeat = coalesce(tupleid,
-                                  tuplefeat,
-                                  reduce="max")
+    tupleid, tuplefeat = coalesce(tupleid, tuplefeat, reduce="max")
     return tupleid, tuplefeat, [data.num_nodes, data.num_nodes, data.num_nodes]

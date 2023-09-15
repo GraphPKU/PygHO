@@ -24,7 +24,7 @@ In constrast, higher-order GNNs use node tuples as the message passing unit and 
 Taking NGNN (with GIN base)~\citep{NGNN} as an example, NGNN first samples a subgraph for each node $i$ and then runs GIN on all subgraphs simultaneously. It produces a 2-D representation $H\in \mathbb{R}^{n\times n\times d}$, where $H_{ij}$ represents the representation of node $j$ in the subgraph rooted at node $i$. The message passing within all subgraphs can be expressed as:
 
 \begin{equation}
-    h_{ij}^{t+1} \leftarrow \sum_{k\in N_i(j)\cup \{j\}} \text{MLP}(h^t_{ik}),
+    h_{ij}^{t+1} \leftarrow \sum_{k\in N_i(j)} \text{MLP}(h^t_{ik}),
 \end{equation}
 
 where $N_i(j)$ represents the set of neighbors of node $j$ in the subgraph rooted at $i$. After several layers of message passing, tuple representations $H$ are pooled to generate the final graph representation:
@@ -210,73 +210,66 @@ from pygho.subgdata import MaDataloader
 trn_dataloader = MaDataloader(trn_dataset, batch_size=256, device=device, shuffle=True, drop_last=True)
 ```
 
-### Learning Methods on Graph
-example/nestedGNN and example/SSWL are examples of sparse and dense subgraph GNNs, respectively. 
-#### Basic Message passing operation.
-Tuple representation $X\in \mathbb{R}^{n\times n\times d1}$, adjacency matrix $A\in \mathbb{R}^{n\times n\times d2}$. d1, d2 can be the same number or any broadcastable shape.
+### Learning Methods on Graphs
 
-* Message passing within subgraph, equivalent to $XA$. You can use 
-```
-subgnn.SpXoperator.messagepassing_tuple(X, A, "X_1_A_0", datadict, aggr)
-```
+The previous section introduced novel data structures for the representation of high-order Graph Neural Networks (HOGNNs) and a novel data processing routine. Consequently, the learning methods in HOGNNs can be decomposed into operations on these tensors.
 
-* Message passing across subgraph, equivalent to $AX$. You can use 
-```
-subgnn.SpXoperator.messagepassing_tuple(A, X, "A_1_X_0", datadict, aggr)
-```
+#### Code Architecture
 
-* 2FWL, equivalent to $XX$. You can use 
-```
-subgnn.SpXoperator.messagepassing_tuple(X1, X2, "X_1_X_0", datadict, aggr).
-```
+The overall code for these operations is organized into three layers:
+**Layer 1: Backend:** The `pygho.backend` layer contains basic data structures and operations on them. This layer focuses solely on tensor operations and lacks graph learning concepts. It includes:
+    * Matrix multiplication: This method provides general matrix multiplication capabilities, including operations on two SparseTensors, one sparse and one MaskedTensor, and two MaskedTensors. It also supports batched matrix multiplication. Additionally, it offers operations replacing the sum in ordinary matrix multiplication with max and mean.
+    * Two matrix addition: Operations for adding two sparse or two dense matrices.
+    * Reduce operations: These operations include sum, mean, max, and min, which reduce dimensions in tensors.
+    * Expand operation: This operation adds new dimensions to tensors.
+    * Tuplewiseapply(func): It applies a given function to each element in the tensor.
+    * Diagonalapply(func): This operation applies a function to diagonal elements of tensors.
+**Layer 2: Graph operations:** Built upon Layer 1, the `pygho.honn.SpOperator` and `pygho.honn.MaOperator` modules provide graph operations specifically tailored for Sparse and Masked Tensor structures. Additionally, the `pygho.honn.TensorOp` layer wraps these operators, abstracting away the differences between Sparse and Masked Tensor data structures. These operations encompass:
+    * General message passing between tuples: Facilitating message passing between tuples of nodes.
+    * Pooling: This operation reduces high-order tensors to lower-order ones by summing, taking the maximum, or computing the mean across specific dimensions.
+    * Diagonal: It reduces high-order tensors to lower-order ones by extracting diagonal elements.
+    * Unpooling: This operation extends low-order tensors to high-order ones.
+**Layer 3: Models:** Building on Layer 2, this layer provides a collection of representative high-order GNN layers, including NGNN, GNNAK, DSSGNN, SUN, SSWL, PPGN, and I2GNN.
 
-We also directly provide some out-of-box convolution layers in subgnn.Spconv.
+Layer 3 offers numerous ready-to-use methods, and with Layer 2, users can design additional models using general graph operations. Layer 1 allows for the development of novel operations, expanding the library's flexibility and utility.
 
-#### Pooling and Unpooling
-Pooling: tuple representation to dense node representation.
-```
-subgnn.SpXOperator.pooling2nodes(X: SparseTensor, dim=1, pool: str = "sum")
-subgnn.SpXOperator.pooling2tuples(X: SparseTensor, dim=1, pool: str = "sum")
-```
-Unpooling: 
-```
-subgnn.SpXOperator.unpooling4nodes(nodeX: Tensor, tarX: SparseTensor, dim=1)
-subgnn.SpXOperator.unpooling4tuples(srcX: SparseTensor, tarX: SparseTensor, dim=1)
-```
+#### Usage
+To illustrate how these operators work, we will use NGNN as an example. Although our operators can be applied to batched data, for simplicity, we will focus on the single-graph case. Let $H\in \mathbb{R}^{n\times n\times d}$ represent the representation matrix, and $A\in \mathbb{R}^{n\times n}$ denote the adjacency matrix. The GIN operation on all subgraphs, defined as:
 
-### Dense Representation
+\begin{equation}
+    h_{ij}\leftarrow \sum_{k\in N_i(j)} \text{MLP}(h_{ik})
+\end{equation}
 
-#### Tuple message passing
-Tuple representation $X\in \mathbb{R}^{B\times n\times n\times d1}$, adjacency matrix $A\in \mathbb{R}^{B\times n\times n\times d2}$ (sparse tensor with sparse dim=3). d1, d2 can be the same number or any broadcastable shape.
+can be represented as the following two operations:
 
-* Message passing within subgraph, equivalent to $XA$. You can use 
-```
-subgnn.MaXoperator.messagepassing_tuple(X, A, datadict, aggr)
-```
+\begin{equation}
+    X' = X.\text{tuplewiseapply}(\text{MLP})
+\end{equation}
+This operation applies the MLP function to each tuple's representation. The matrix multiplication then sums over neighbors:
+\begin{equation}
+    X\leftarrow X'A^T
+\end{equation}
+In the matrix multiplication step, batching is applied to the last dimension of $X$. While this conversion may seem trivial, several key points are worth noting:
 
-* Message passing across subgraph, equivalent to $AX$. You can use 
-```
-subgnn.MaXoperator.messagepassing_tuple(A, X, datadict, aggr)
-```
+\begin{itemize}
+    \item Optimization for induced subgraph input: In the original equation, the sum is over neighbors in the subgraph. However, the matrix multiplication version includes neighbors in the whole graph as well. Importantly, our implementation optimizes for induced subgraph cases, where neighbors outside the subgraph are automatically handled by setting their values to zero.
+    \item Optimization for sparse output: The operation $X'A^T$ can produce non-zero elements for pairs $(i,j)$ that do not exist in the subgraph. For sparse input tensors $X$ and $A$, we optimize the multiplication to avoid computing such non-existent elements.
+\end{itemize}
+While we've illustrated the implementation of GIN as an example, our library supports the implementation of various Message Passing Neural Networks (MPNNs) on subgraphs, including GAT, GraphSage, and GCN. Message passing can also occur across subgraphs by simply transposing $X$.
 
-* 2FWL, equivalent to $XX$. You can use 
-```
-subgnn.MaXoperator.messagepassing_tuple(X1, X2, datadict, aggr).
-```
+Pooling processes can also be considered as a reduction of $X$. For instance:
 
+\begin{equation}
+h_i=\sum_{j\in V_i}\text{MLP}_2(h_{ij})
+\end{equation}
 
-We also directly provide some out-of-box convolution layers in subgnn.Spconv.
+can be implemented as follows:
 
+\begin{python}
+Xn = X.tuplewiseapply(MLP_1).sum(dim=1)
+\end{python}
 
-#### Pooling and Unpooling
-Pooling: tuple representation to dense node representation.
-```
-subgnn.MaXOperator.pooling_tuple(X: Masked, dim=1, pool: str = "sum")
-```
-Unpooling: dense node representation to tuple representation as MaskedTensor. Output uses the same mask as tarX.
-```
-subgnn.MaXOperator.unpooling_node(nodeX: Tensor, tarX: Masked, dim=1)
-```
+These examples demonstrate how our library's operators can be used to efficiently implement various MPNNs on subgraphs, providing flexibility and ease of use for HOGNNs.
 
 ## Speed issue
 

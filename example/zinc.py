@@ -29,27 +29,29 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--sparse", action="store_true")
-parser.add_argument("--aggr", choices=["sum", "mean", "max"])
+parser.add_argument("--aggr", choices=["sum", "mean", "max"], default="sum")
 parser.add_argument("--conv",
-                    choices=["NGNN", "GNNAK", "DSSGNN", "SSWL", "SUN", "PPGN", "I2GNN"])
-parser.add_argument("--npool", choices=["mean", "sum", "max"])
-parser.add_argument("--lpool", choices=["mean", "sum", "max"])
-parser.add_argument("--cpool", choices=["mean", "sum", "max"])
-parser.add_argument("--mlplayer", type=int)
-parser.add_argument("--outlayer", type=int)
-parser.add_argument("--norm", choices=["ln", "bn", "none"])
-parser.add_argument("--lr", type=float)
-parser.add_argument("--minlr", type=float)
-parser.add_argument("--wd", type=float)
-parser.add_argument("--dp", type=float)
+                    choices=["NGNN", "GNNAK", "DSSGNN", "SSWL", "SUN", "PPGN", "I2GNN"], default="NGNN")
+parser.add_argument("--npool", choices=["mean", "sum", "max"], default="sum")
+parser.add_argument("--lpool", choices=["mean", "sum", "max"], default="mean")
+parser.add_argument("--cpool", choices=["mean", "sum", "max"], default="mean")
+parser.add_argument("--mlplayer", type=int, default=2)
+parser.add_argument("--outlayer", type=int, default=2)
+parser.add_argument("--norm", choices=["ln", "bn", "none"], default="bn")
+parser.add_argument("--lr", type=float, default=1e-3)
+parser.add_argument("--minlr", type=float, default=1e-3)
+parser.add_argument("--wd", type=float, default=0.0)
+parser.add_argument("--dp", type=float, default=0.0)
 parser.add_argument("--bs", type=int, default=128)
 parser.add_argument("--normparam", type=float, default=0.1)
-parser.add_argument("--cosT", type=int)
+parser.add_argument("--cosT", type=int, default=100)
 parser.add_argument("--K", type=float, default=0)
 parser.add_argument("--K2", type=float, default=0)
 parser.add_argument("--repeat", type=int, default=1)
 parser.add_argument("--epochs", type=int, default=100)
 args = parser.parse_args()
+
+# 1 Models Definition
 
 
 class InputEncoderMa(nn.Module):
@@ -106,7 +108,6 @@ def transfermlpparam(mlp: dict):
     mlp = mlp.copy()
     mlp.update({"tailact": True, "numlayer": args.mlplayer})
     return mlp
-
 
 spconvdict = {
     "SSWL":
@@ -295,6 +296,7 @@ class SpModel(nn.Module):
                                        datadict["num_graphs"], self.npool)
         return self.pred_lin(h_graph)
 
+# 2 build models
 
 mlpdict = {"dp": args.dp, "norm": args.norm, "act": "silu", "normparam": args.normparam}
 if args.sparse:
@@ -303,7 +305,7 @@ else:
     model = MaModel(maconvdict[args.conv], npool=args.npool, lpool=args.lpool, outlayer=args.outlayer, mlp=mlpdict)
 
 device = torch.device("cuda")
-
+# 3 data set preprocessing
 trn_dataset = ZINC("dataset/ZINC", subset=True, split="train")
 val_dataset = ZINC("dataset/ZINC", subset=True, split="val")
 tst_dataset = ZINC("dataset/ZINC", subset=True, split="test")
@@ -371,7 +373,7 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,
 
 model = model.to(device)
 
-
+# 4 training process
 def train(dataloader):
     model.train()
     losss = []
