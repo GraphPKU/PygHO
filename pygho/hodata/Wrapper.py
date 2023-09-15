@@ -12,6 +12,17 @@ from .SpData import sp_datapreprocess, batch2sparse
 from .MaData import ma_datapreprocess, batch2dense
 from torch_geometric.transforms import Compose
 
+def _repr(obj: Any) -> str:
+    if obj is None:
+        return 'None'
+    ret = re.sub('at 0x[0-9a-fA-F]+', "", str(obj))
+    ret = ret.replace("\n", " ")
+    ret = ret.replace("functools.partial", " ")
+    ret = ret.replace("function", " ")
+    ret = ret.replace("<", " ")
+    ret = ret.replace(">", " ")
+    ret = ret.replace(" ", "")
+    return ret
 
 def Sppretransform(pre_transform: Optional[Callable],
                    tuplesamplers: Union[Callable[[PygData],
