@@ -31,15 +31,17 @@ def to_dense_adj(edge_index: LongTensor,
     Convert sparse adjacency to dense matrix.
 
     Args:
-        edge_index (LongTensor): Coalesced edge indices of shape (2, nnz).
-        edge_batch (LongTensor): Batch assignments of shape (nnz).
-        edge_attr (Optional[Tensor]): Edge attributes of shape (nnz, *).
-        max_num_nodes (Optional[int]): Maximum number of nodes in the graph.
-        batch_size (Optional[int]): Batch size.
-        filled_value (float): Value to fill in the dense matrix.
+
+    - edge_index (LongTensor): Coalesced edge indices of shape (2, nnz).
+    - edge_batch (LongTensor): Batch assignments of shape (nnz).
+    - edge_attr (Optional[Tensor]): Edge attributes of shape (nnz, \*).
+    - max_num_nodes (Optional[int]): Maximum number of nodes in the graph.
+    - batch_size (Optional[int]): Batch size.
+    - filled_value (float): Value to fill in the dense matrix.
 
     Returns:
-        MaskedTensor: A masked dense tensor.
+
+    - MaskedTensor: A masked dense tensor.
 
     '''
     idx0 = edge_batch
@@ -76,14 +78,16 @@ def to_sparse_adj(edge_index: LongTensor,
     Convert sparse edge_index and edge_attr to a SparseTensor.
 
     Args:
-        edge_index (LongTensor): Coalesced edge indices of shape (2, nnz).
-        edge_batch (LongTensor): Batch assignments of shape (nnz).
-        edge_attr (Optional[Tensor]): Edge attributes of shape (nnz, *).
-        max_num_nodes (Optional[int]): Maximum number of nodes in the graph.
-        batch_size (Optional[int]): Batch size.
+
+    - edge_index (LongTensor): Coalesced edge indices of shape (2, nnz).
+    - edge_batch (LongTensor): Batch assignments of shape (nnz).
+    - edge_attr (Optional[Tensor]): Edge attributes of shape (nnz, \*).
+    - max_num_nodes (Optional[int]): Maximum number of nodes in the graph.
+    - batch_size (Optional[int]): Batch size.
 
     Returns:
-        SparseTensor: A sparse tensor representation.
+    
+    - SparseTensor: A sparse tensor representation.
 
     '''
     if max_num_nodes is None:
@@ -107,22 +111,19 @@ def to_dense_x(nodeX: Tensor,
                batch_size: Optional[int] = None,
                filled_value: float = 0) -> MaskedTensor:
     '''
-    convert node feature of different subgraphs () to a dense matrix
-    ret whose ret[i] is of subgraph i. n is the maximum size of subgraph in the batch.
-    to align graph of different size, we pad them to the largest size. 
-    '''
-    '''
     Convert node features of different subgraphs to a dense matrix.
 
     Args:
-        nodeX (Tensor): Node features. of shape (sum of number of nodes in a batch, *denseshape).
-        Xptr (LongTensor): Pointer to subgraphs. nodeX[Xptr[i]:Xptr[i+1]] represents the node feature for subgraph i
-        max_num_nodes (Optional[int]): Maximum number of nodes in a subgraph.
-        batch_size (Optional[int]): Batch size.
-        filled_value (float): Value to fill in the dense matrix.
+
+    - nodeX (Tensor): Node features. of shape (sum of number of nodes in a batch,\*denseshapeshape).
+    - Xptr (LongTensor): Pointer to subgraphs. nodeX[Xptr[i]:Xptr[i+1]] represents the node feature for subgraph i
+    - max_num_nodes (Optional[int]): Maximum number of nodes in a subgraph.
+    - batch_size (Optional[int]): Batch size.
+    - filled_value (float): Value to fill in the dense matrix.
 
     Returns:
-        MaskedTensor: A masked dense tensor.  of shape (b, n, *denseshape).
+
+    - MaskedTensor: A masked dense tensor.  of shape (b, n,\*denseshapeshape).
 
     To align graphs of different sizes, padding is applied.
 
@@ -158,15 +159,17 @@ def to_dense_tuplefeat(
     Convert tuple features of different subgraphs to a dense matrix.
 
     Args:
-        tuplefeat (Tensor): Tuple features. (total number of tuples in batch, *denseshape)
-        tupleshape (LongTensor): Shape of tuple features.
-        tuplefeatptr (LongTensor): Pointer to tuple features. tuplefeat[tuplefeatptr[i]:tuplefeatptr[i+1]] represents the tuple feature for subgraph i
-        max_tupleshape (Optional[LongTensor]): Maximum shape of tuple features.
-        batch_size (Optional[int]): Batch size.
-        feat2mask (Callable[[Tensor], BoolTensor]): Function to generate masks for tuple features.
+
+    - tuplefeat (Tensor): Tuple features. (total number of tuples in batch,\*denseshapeshape)
+    - tupleshape (LongTensor): Shape of tuple features.
+    - tuplefeatptr (LongTensor): Pointer to tuple features. tuplefeat[tuplefeatptr[i]:tuplefeatptr[i+1]] represents the tuple feature for subgraph i
+    - max_tupleshape (Optional[LongTensor]): Maximum shape of tuple features.
+    - batch_size (Optional[int]): Batch size.
+    - feat2mask (Callable[[Tensor], BoolTensor]): Function to generate masks for tuple features.
 
     Returns:
-        MaskedTensor: A masked dense tensor. of shape (b, n1, n2,.., *denseshape), whose ret[i] is of subgraph i. (n1, n2,...) is the maximum sizes of the tuplefeat of subgraphs.
+
+    - MaskedTensor: A masked dense tensor. of shape (b, n1, n2,..,\*denseshapeshape), whose ret[i] is of subgraph i. (n1, n2,...) is the maximum sizes of the tuplefeat of subgraphs.
 
     To align tuple features of different sizes, padding is applied.
 
@@ -220,14 +223,16 @@ def batch2dense(batch: PygBatch,
     A main wrapper for converting and padding data in a batch object to dense forms.
 
     Args:
-        batch (PygBatch): The input batch object.
-        batch_size (int): Batch size.
-        max_num_nodes (int): Maximum number of nodes in the graph.
-        denseadj (bool): Whether to convert adjacency to dense or sparse.
-        keys (List[str]): List of keys for additional attributes.
+
+    - batch (PygBatch): The input batch object.
+    - batch_size (int): Batch size.
+    - max_num_nodes (int): Maximum number of nodes in the graph.
+    - denseadj (bool): Whether to convert adjacency to dense or sparse.
+    - keys (List[str]): List of keys for additional attributes.
 
     Returns:
-        PygBatch: The processed batch object.
+  
+    - PygBatch: The processed batch object.
 
     '''
 
@@ -260,12 +265,14 @@ def ma_datapreprocess(data: PygData,
     A wrapper for preprocessing dense data.
 
     Args:
-        data (PygData): Input data object.
-        tuplesamplers (Union[Callable[[PygData], Tuple[Tensor, List[int]]], List[Callable[[PygData], Tuple[Tensor, List[int]]]]]): Tuple samplers for extracting data.
-        annotate (List[str]): List of annotation strings.
+
+    - data (PygData): Input data object.
+    - tuplesamplers (Union[Callable[[PygData], Tuple[Tensor, List[int]]], List[Callable[[PygData], Tuple[Tensor, List[int]]]]]): Tuple samplers for extracting data.
+    - annotate (List[str]): List of annotation strings.
 
     Returns:
-        MaHoData: Preprocessed data object.
+    
+    - MaHoData: Preprocessed data object.
 
     '''
     if not isinstance(tuplesamplers, Iterable):

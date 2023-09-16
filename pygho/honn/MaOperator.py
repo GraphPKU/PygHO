@@ -16,7 +16,8 @@ class OpNodeMessagePassing(Module):
     Perform node-level message passing with an adjacency matrix A of shape (b, n, n) and node features X of shape (b, n).
 
     Args:
-        None
+
+    - None
 
     """
     def __init__(self) -> None:
@@ -28,12 +29,14 @@ class OpNodeMessagePassing(Module):
         Perform forward pass of node-level message passing.
 
         Args:
-            A (MaskedTensor): Adjacency matrix of shape (b, n, n).
-            X (MaskedTensor): Node features of shape (b, n).
-            tarX (MaskedTensor): Target node features of shape (b, n).
+
+        - A (MaskedTensor): Adjacency matrix of shape (b, n, n).
+        - X (MaskedTensor): Node features of shape (b, n).
+        - tarX (MaskedTensor): Target node features of shape (b, n).
 
         Returns:
-            Tensor: The result of the message passing operation.
+
+        - Tensor: The result of the message passing operation.
 
         """
         return mamamm(A, 2, X, 1, tarX.mask)
@@ -44,9 +47,11 @@ class OpSpNodeMessagePassing(Module):
     Operator for node-level message passing.
 
     Args:
+
     - aggr (str, optional): The aggregation method for message passing (default: "sum").
 
     Attributes:
+    
     - aggr (str): The aggregation method used for message passing.
 
     Methods:
@@ -62,12 +67,14 @@ class OpSpNodeMessagePassing(Module):
         Perform forward pass of node-level message passing.
 
         Args:
-            A (SparseTensor): Adjacency matrix of shape (b, n, n).
-            X (MaskedTensor): Node features of shape (b, n).
-            tarX (MaskedTensor): Target node features of shape (b, n). 
+
+        - A (SparseTensor): Adjacency matrix of shape (b, n, n).
+        - X (MaskedTensor): Node features of shape (b, n).
+        - tarX (MaskedTensor): Target node features of shape (b, n). 
 
         Returns:
-            Tensor: The result of the message passing operation.
+        
+        - Tensor: The result of the message passing operation.
 
         """
         return spmamm(A, 2, X, 1, tarX.mask, self.aggr)
@@ -79,9 +86,10 @@ class OpMessagePassing(Module):
 
     This operator takes two input masked tensors 'A' and 'B' and performs message passing 
     between them to generate a new masked tensor 'tarX'. The resulting tensor has a shape of 
-    (b, *maskedshape1_dim1, *maskedshape2_dim2, *denseshape), where 'b' represents the batch size.
+    (b,\* maskedshape1_dim1,\* maskedshape2_dim2,\*denseshapeshape), where 'b' represents the batch size.
 
     Args:
+
     - dim1 (int): The dimension along which message passing is applied in 'A'.
     - dim2 (int): The dimension along which message passing is applied in 'B'.
     """
@@ -97,14 +105,17 @@ class OpMessagePassing(Module):
         Perform message passing between two masked tensors.
 
         Args:
+
         - A (MaskedTensor): The first input masked tensor.
         - B (MaskedTensor): The second input masked tensor.
         - tarX (MaskedTensor): The target masked tensor. The output will use its mask
 
         Returns:
+
         - MaskedTensor: The result of message passing, represented as a masked tensor.
 
         Notes:
+
         - This method applies message passing between 'A' and 'B' to generate 'tarX'.
         - It considers the specified dimensions for message passing.
         """
@@ -121,9 +132,11 @@ class Op2FWL(OpMessagePassing):
     target masked tensor 'tarX'.
 
     Args:
-       None
+    
+    - None
 
     See Also:
+    
     - OpMessagePassing: The base class for generalized message passing.
 
     """
@@ -136,8 +149,9 @@ class Op2FWL(OpMessagePassing):
         Simulate the 2-Folklore-Weisfeiler-Lehman (FWL) test by performing message passing.
 
         Args:
-        - X1 (MaskedTensor): The first input masked tensor of shape (b, n, n, *denseshape1).
-        - X2 (MaskedTensor): The second input masked tensor of shape (b, n, n, *denseshape2).
+        
+        - X1 (MaskedTensor): The first input masked tensor of shape (b, n, n,\*denseshapeshape1).
+        - X2 (MaskedTensor): The second input masked tensor of shape (b, n, n,\*denseshapeshape2).
         - datadict (Dict): A dictionary for caching intermediate data.
         - tarX (MaskedTensor): The target masked tensor.
         """
@@ -155,9 +169,11 @@ class OpMessagePassingOnSubg2D(OpMessagePassing):
     'A' (adjacency matrix) and 'X' (2D representations). The result is stored in the target masked tensor 'tarX'.
 
     Args:
+    
     - None
 
     See Also:
+    
     - OpMessagePassing: The base class for generalized message passing.
     """
 
@@ -170,12 +186,14 @@ class OpMessagePassingOnSubg2D(OpMessagePassing):
         Perform message passing on each subgraph for 2D subgraph Graph Neural Networks.
 
         Args:
-        - A (MaskedTensor): The input masked tensor representing the adjacency matrix of subgraphs, of shape (b, n, n, *denseshape1).
-        - X (MaskedTensor): The input masked tensor representing 2D representations of subgraph nodes, of shape (b, n, n, *denseshape2).
+
+        - A (MaskedTensor): The input masked tensor representing the adjacency matrix of subgraphs, of shape (b, n, n,\*denseshapeshape1).
+        - X (MaskedTensor): The input masked tensor representing 2D representations of subgraph nodes, of shape (b, n, n,\*denseshapeshape2).
         - datadict (Dict): A dictionary for caching intermediate data (not used in this method).
         - tarX (MaskedTensor): The target masked tensor to mask the result.
 
         Returns:
+
         - MaskedTensor: The result of message passing on each subgraph.
         """
         assert A.masked_dim == 3, "A should be bxnxn adjacency matrix "
@@ -188,9 +206,11 @@ class OpMessagePassingOnSubg3D(OpMessagePassing):
     Operator for performing message passing on each subgraph for 3D subgraph Graph Neural Networks.
 
     Args:
+
     - None
 
     See Also:
+
     - OpMessagePassing: The base class for generalized message passing.
     """
     def __init__(self, ) -> None:
@@ -202,12 +222,14 @@ class OpMessagePassingOnSubg3D(OpMessagePassing):
         Perform message passing on each subgraph for 3D subgraph Graph Neural Networks.
 
         Args:
-        - A (MaskedTensor): The input masked tensor representing the adjacency matrix of subgraphs, of shape (b, n, n, *denseshape1)
-        - X (MaskedTensor): The input masked tensor representing 3D representations of subgraph nodes, of shape (b, n, n, n, *denseshape2)
+
+        - A (MaskedTensor): The input masked tensor representing the adjacency matrix of subgraphs, of shape (b, n, n,\*denseshapeshape1)
+        - X (MaskedTensor): The input masked tensor representing 3D representations of subgraph nodes, of shape (b, n, n, n,\*denseshapeshape2)
         - datadict (Dict): A dictionary for caching intermediate data (not used in this method).
-        - tarX (MaskedTensor): The target masked tensor to mask the result,  of shape (b, n, n, n, *denseshape3).
+        - tarX (MaskedTensor): The target masked tensor to mask the result,  of shape (b, n, n, n,\*denseshapeshape3).
 
         Notes:
+
         - denseshape1, denseshape2 must be broadcastable.
         """
         assert A.masked_dim == 3, "A should be bxnxn adjacency matrix " 
@@ -220,12 +242,15 @@ class OpMessagePassingCrossSubg2D(OpMessagePassing):
     Perform message passing across subgraphs within the 2D subgraph Graph Neural Network (GNN).
 
     Args:
+
     - None
 
     See Also:
+
     - OpMessagePassing: The base class for generalized message passing.
 
     Notes:
+
     - It assumes that 'A' represents the adjacency matrix of subgraphs, and 'X' represents 2D representations 
       of subgraph nodes.
     """
@@ -238,12 +263,14 @@ class OpMessagePassingCrossSubg2D(OpMessagePassing):
         Perform message passing across subgraphs within the 2D subgraph Graph Neural Network.
 
         Args:
-        - A (MaskedTensor): The input masked tensor representing the adjacency matrix of subgraphs. of shape (b, n, n, *denseshape1).
-        - X (MaskedTensor): The input masked tensor representing 2D representations of subgraph nodes. of shape (b, n, n, *denseshape2).
+
+        - A (MaskedTensor): The input masked tensor representing the adjacency matrix of subgraphs. of shape (b, n, n,\*denseshapeshape1).
+        - X (MaskedTensor): The input masked tensor representing 2D representations of subgraph nodes. of shape (b, n, n,\*denseshapeshape2).
         - datadict (Dict): A dictionary for caching intermediate data (not used in this method).
-        - tarX (MaskedTensor): The target masked tensor to store the result. of  shape (b, n, n, *denseshape3).
+        - tarX (MaskedTensor): The target masked tensor to store the result. of  shape (b, n, n,\*denseshapeshape3).
 
         Returns:
+
         - MaskedTensor: The result of message passing that bridges subgraphs.
         """
         assert A.masked_dim == 3, "A should be bxnxn adjacency matrix "
@@ -311,6 +338,7 @@ class OpDiag(Module):
     Operator for extracting diagonal elements from a SparseTensor.
 
     Args:
+
     - dims (Iterable[int]): A list of dimensions along which to extract diagonal elements.
 
     """
@@ -323,9 +351,11 @@ class OpDiag(Module):
         forward function
 
         Args:
+
         - A (MaskedTensor): The input masked Tensor
 
         Returns:
+
         - MaskedTensor: The diagonal elements.
         """
         return A.diag(self.dims)
@@ -341,12 +371,15 @@ class OpDiag2D(OpDiag):
         Extract diagonal elements from the input masked.
 
         Args:
-        - A (MaskedTensor): The input MaskedTensor from which to extract diagonal elements. Be of shape (b, n, n, *denseshape)
+        
+        - A (MaskedTensor): The input MaskedTensor from which to extract diagonal elements. Be of shape (b, n, n,\*denseshapeshape)
 
         Returns:
-        - MaskedTensor: of shape (b, n, *denseshape)
+
+        - MaskedTensor: of shape (b, n,\*denseshapeshape)
 
         Returns:
+
         - Union[Tensor, SparseTensor]: The extracted diagonal elements as either a dense or sparse tensor.
         """
         assert X
@@ -383,10 +416,10 @@ class OpPoolingSubg2D(OpPooling):
     def forward(self, X: MaskedTensor) -> MaskedTensor:
         """
         Parameters:
-            - `X` (MaskedTensor): The input MaskedTensor of shape(b, n, n, *denseshape) representing 2D node representations.
+            - `X` (MaskedTensor): The input MaskedTensor of shape(b, n, n,\*denseshapeshape) representing 2D node representations.
 
         Returns:
-            - (Tensor): The pooled dense tensor. of shape (b, n, *denseshape)
+            - (Tensor): The pooled dense tensor. of shape (b, n,\*denseshapeshape)
 
         Raises:
             - AssertionError: If `X` is not 2D representations.
@@ -408,10 +441,10 @@ class OpPoolingSubg3D(OpPooling):
     def forward(self, X: MaskedTensor) -> MaskedTensor:
         """
         Parameters:
-            - `X` (MaskedTensor): The input MaskedTensor of shape(b, n, n, n, *denseshape) representing 2D node representations.
+            - `X` (MaskedTensor): The input MaskedTensor of shape(b, n, n, n,\*denseshapeshape) representing 2D node representations.
 
         Returns:
-            - (Tensor): The pooled dense tensor. of shape (b, n, n, *denseshape)
+            - (Tensor): The pooled dense tensor. of shape (b, n, n,\*denseshapeshape)
 
         Raises:
             - AssertionError: If `X` is not 2D representations.
@@ -433,10 +466,10 @@ class OpPoolingCrossSubg2D(OpPooling):
     def forward(self, X: MaskedTensor) -> MaskedTensor:
         """
         Parameters:
-            - `X` (MaskedTensor): The input MaskedTensor of shape(b, n, n, *denseshape) representing 2D node representations.
+            - `X` (MaskedTensor): The input MaskedTensor of shape(b, n, n,\*denseshapeshape) representing 2D node representations.
 
         Returns:
-            - (Tensor): The pooled dense tensor. of shape (b, n, *denseshape)
+            - (Tensor): The pooled dense tensor. of shape (b, n,\*denseshapeshape)
 
         Raises:
             - AssertionError: If `X` is not 2D representations.

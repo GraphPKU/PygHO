@@ -21,23 +21,17 @@ def spmamm(A: SparseTensor,
     This function performs multiplication between a SparseTensor `A` and a MaskedTensor `B`. The specified dimensions `dim1` and `dim2` are contracted during the multiplication, and the result is returned as a MaskedTensor.
 
     Args:
-    - A (SparseTensor): The SparseTensor with shape (B, n, m, *shape).
+
+    - A (SparseTensor): The SparseTensor with shape (B, n, m, \*shape).
     - dim1 (int): The dimension to contract in the SparseTensor `A`.
-    - B (MaskedTensor): The MaskedTensor with shape (B, m, *shape).
+    - B (MaskedTensor): The MaskedTensor with shape (B, m, \*shape).
     - dim2 (int): The dimension to contract in the MaskedTensor `B`.
     - mask (BoolTensor, optional): The mask to apply to the resulting MaskedTensor. Default is None.
     - aggr (str, optional): The aggregation method for reduction during multiplication (e.g., "sum", "max"). Default is "sum".
 
     Returns:
-    - MaskedTensor: A new MaskedTensor with shape (B, n, *denseshape) and the specified mask.
 
-    Example:
-    ```python
-    A = SparseTensor(...)  # Initialize A
-    B = MaskedTensor(...)  # Initialize B
-    mask = BoolTensor(...)  # Initialize mask
-    result = spmamm(A, dim1=1, B, dim2=2, mask=mask, aggr="sum")
-    ```
+    - MaskedTensor: A new MaskedTensor with shape (B, n,\*denseshapeshape) and the specified mask.
 
     Notes:
     - This function performs multiplication between a SparseTensor and a MaskedTensor, contracting the specified dimensions.

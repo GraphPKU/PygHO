@@ -22,6 +22,7 @@ class NGNNConv(Module):
     This layer performs message passing on 2D subgraph representations.
 
     Args:
+
     - indim (int): Input feature dimension.
     - outdim (int): Output feature dimension.
     - aggr (str): Aggregation method for message passing (e.g., "sum").
@@ -29,6 +30,7 @@ class NGNNConv(Module):
     - mlp (dict): Parameters for the MLP layer.
 
     Methods:
+
     - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
       Forward pass of the NGNNConv layer.
     """
@@ -57,6 +59,7 @@ class SSWLConv(Module):
     This layer performs message passing on 2D subgraph representations and cross-subgraph pooling.
 
     Args:
+
     - indim (int): Input feature dimension.
     - outdim (int): Output feature dimension.
     - aggr (str): Aggregation method for message passing (e.g., "sum").
@@ -64,6 +67,7 @@ class SSWLConv(Module):
     - mlp (dict): Parameters for the MLP layer.
 
     Methods:
+
     - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
       Forward pass of the SSWLConv layer.
 
@@ -95,6 +99,7 @@ class I2Conv(Module):
     This layer performs message passing on 3D subgraph representations.
 
     Args:
+
     - indim (int): Input feature dimension.
     - outdim (int): Output feature dimension.
     - aggr (str): Aggregation method for message passing (e.g., "sum").
@@ -102,6 +107,7 @@ class I2Conv(Module):
     - mlp (dict): Parameters for the MLP layer.
 
     Methods:
+
     - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
       Forward pass of the I2Conv layer.
 
@@ -133,6 +139,7 @@ class DSSGNNConv(Module):
     This layer performs message passing on 2D subgraph representations with subgraph pooling.
 
     Args:
+
     - indim (int): Input feature dimension.
     - outdim (int): Output feature dimension.
     - aggr_subg (str): Aggregation method for message passing within subgraphs (e.g., "sum").
@@ -142,6 +149,7 @@ class DSSGNNConv(Module):
     - mlp (dict): Parameters for the MLP layer.
 
     Methods:
+
     - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
       Forward pass of the DSSGNNConv layer.
     """
@@ -176,6 +184,7 @@ class PPGNConv(Module):
     This layer performs message passing with power-sum pooling on 2D subgraph representations.
 
     Args:
+
     - indim (int): Input feature dimension.
     - outdim (int): Output feature dimension.
     - aggr (str): Aggregation method for message passing (e.g., "sum").
@@ -183,6 +192,7 @@ class PPGNConv(Module):
     - mlp (dict): Parameters for the MLP layers.
 
     Methods:
+
     - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
       Forward pass of the PPGNConv layer.
 
@@ -211,6 +221,7 @@ class GNNAKConv(Module):
     This layer performs message passing on 2D subgraph representations with subgraph pooling and cross-subgraph pooling.
 
     Args:
+
     - indim (int): Input feature dimension.
     - outdim (int): Output feature dimension.
     - aggr (str): Aggregation method for message passing (e.g., "sum").
@@ -221,6 +232,7 @@ class GNNAKConv(Module):
     - ctx (bool): Whether to include context information.
 
     Methods:
+
     - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
       Forward pass of the GNNAKConv layer.
 
@@ -265,6 +277,7 @@ class SUNConv(Module):
     This layer performs message passing on 2D subgraph representations with subgraph and cross-subgraph pooling.
 
     Args:
+
     - indim (int): Input feature dimension.
     - outdim (int): Output feature dimension.
     - aggr (str): Aggregation method for message passing (e.g., "sum").
@@ -274,6 +287,7 @@ class SUNConv(Module):
     - mlp1 (dict): Parameters for the second MLP layer.
 
     Methods:
+    
     - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
       Forward pass of the SUNConv layer.
 

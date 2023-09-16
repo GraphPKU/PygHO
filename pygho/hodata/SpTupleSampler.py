@@ -23,15 +23,17 @@ def k_hop_subgraph(
     Compute the k-hop subgraph around a set of nodes in an edge list.
 
     Args:
-        node_idx (Union[int, List[int], LongTensor]): The root node(s) for the subgraph.
-        num_hops (int): The number of hops for the subgraph.
-        edge_index (LongTensor): The edge indices of the graph.
-        relabel_nodes (bool, optional): Whether to relabel node indices. Defaults to False.
-        num_nodes (Optional[int], optional): The total number of nodes. Defaults to None.
-        flow (str, optional): The direction of traversal ('source_to_target' or 'target_to_source'). Defaults to 'source_to_target'.
-        directed (bool, optional): Whether the graph is directed. Defaults to False.
+    
+    - node_idx (Union[int, List[int], LongTensor]): The root node(s) for the subgraph.
+    - num_hops (int): The number of hops for the subgraph.
+    - edge_index (LongTensor): The edge indices of the graph.
+    - relabel_nodes (bool, optional): Whether to relabel node indices. Defaults to False.
+    - num_nodes (Optional[int], optional): The total number of nodes. Defaults to None.
+    - flow (str, optional): The direction of traversal ('source_to_target' or 'target_to_source'). Defaults to 'source_to_target'.
+    - directed (bool, optional): Whether the graph is directed. Defaults to False.
 
     Returns:
+    
         Tuple[Tensor, Tensor, Tensor, Tensor]: A tuple containing:
             - subset (Tensor): The node indices in the subgraph.
             - edge_index (Tensor): The edge indices of the subgraph.
@@ -131,10 +133,12 @@ def KhopSampler(
     sample k-hop subgraph on a given PyG graph.
 
     Args:
-        data (PygData): The input PyG dataset.
-        hop (int, optional): The number of hops for subgraph sampling. Defaults to 2.
+    
+    - data (PygData): The input PyG dataset.
+    - hop (int, optional): The number of hops for subgraph sampling. Defaults to 2.
 
     Returns:
+    
         Tuple[LongTensor, LongTensor, Tuple[int, int]]: A tuple containing:
             - tupleid (LongTensor): The tensor containing subgraph node indices.
             - tuplefeat (LongTensor): The tensor containing distances from the starting node.
@@ -171,10 +175,12 @@ def I2Sampler(
     Perform subgraph sampling on a given graph for I2GNN.
 
     Args:
-        data (PygData): The input PyG dataset.
-        hop (int, optional): The number of hops for subgraph sampling. Defaults to 3.
+    
+    - data (PygData): The input PyG dataset.
+    - hop (int, optional): The number of hops for subgraph sampling. Defaults to 3.
 
     Returns:
+    
         Tuple[LongTensor, LongTensor, Tuple[int, int, int]]: A tuple containing:
             - tupleid (LongTensor): The tensor containing subgraph node indices.
             - tuplefeat (LongTensor): The tensor containing shortest distances between node pairs.

@@ -12,14 +12,6 @@ pygho.honn.Conv module
    :undoc-members:
    :show-inheritance:
 
-pygho.honn.Emb module
----------------------
-
-.. automodule:: pygho.honn.Emb
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 pygho.honn.MaOperator module
 ----------------------------
 

@@ -38,13 +38,15 @@ def Sppretransform(pre_transform: Optional[Callable],
     Create a data pre-transformation function for sparse data.
 
     Args:
-        pre_transform (Optional[Callable]): An optional pre-transformation function.
-        tuplesamplers (Union[Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]], List[Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]]]]): A tuple sampler or a list of tuple samplers.
-        annotate (List[str], optional): A list of annotations. Defaults to [""].
-        keys (List[str], optional): A list of keys. Defaults to [""].
+    
+    - pre_transform (Optional[Callable]): An optional pre-transformation function.
+    - tuplesamplers (Union[Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]], List[Callable[[PygData], Tuple[Tensor, Tensor, Union[List[int], int]]]]]): A tuple sampler or a list of tuple samplers.
+    - annotate (List[str], optional): A list of annotations. Defaults to [""].
+    - keys (List[str], optional): A list of keys. Defaults to [""].
 
     Returns:
-        Callable: A data pre-transformation function.
+    
+    - Callable: A data pre-transformation function.
     """
     hopre_transform = partial(sp_datapreprocess,
                               tuplesamplers=tuplesamplers,
@@ -67,12 +69,14 @@ def Mapretransform(pre_transform: Optional[Callable],
     Create a data pre-transformation function for dense data.
 
     Args:
-        pre_transform (Optional[Callable]): An optional pre-transformation function.
-        tuplesamplers (Union[Callable[[PygData], Tuple[Tensor, List[int]]], List[Callable[[PygData], Tuple[Tensor, List[int]]]]]): A tuple sampler or a list of tuple samplers.
-        annotate (List[str], optional): A list of annotations. Defaults to [""].
+    
+    - pre_transform (Optional[Callable]): An optional pre-transformation function.
+    - tuplesamplers (Union[Callable[[PygData], Tuple[Tensor, List[int]]], List[Callable[[PygData], Tuple[Tensor, List[int]]]]]): A tuple sampler or a list of tuple samplers.
+    - annotate (List[str], optional): A list of annotations. Defaults to [""].
 
     Returns:
-        Callable: A data pre-transformation function.
+    
+    - Callable: A data pre-transformation function.
     """
     hopre_transform = partial(ma_datapreprocess,
                               tuplesamplers=tuplesamplers,
@@ -109,9 +113,10 @@ class SpDataloader(PygDataLoader):
     A data loader for sparse data that converts the inner data format to SparseTensor.
 
     Args:
-        dataset (Dataset | Sequence[BaseData] | DatasetAdapter): The input dataset or data sequence.
-        device (optional): The device to place the data on. Defaults to None.
-        **kwargs: Additional keyword arguments for DataLoader. Same as Pyg Dataloader.
+    
+    - dataset (Dataset | Sequence[BaseData] | DatasetAdapter): The input dataset or data sequence.
+    - device (optional): The device to place the data on. Defaults to None.
+    - \*\*kwargs: Additional keyword arguments for DataLoader. Same as Pyg Dataloader.
     """
     def __init__(self,
                  dataset: Dataset | Sequence[BaseData] | DatasetAdapter,
@@ -141,10 +146,11 @@ class MaDataloader(PygDataLoader):
     A data loader for sparse data that converts the inner data format to MaskedTensor.
 
     Args:
-        dataset (Dataset | Sequence[BaseData] | DatasetAdapter): The input dataset or data sequence.
-        device (optional): The device to place the data on. Defaults to None.
-        denseadj (bool, optional): Whether to use dense adjacency. Defaults to True.
-        other kwargs: Additional keyword arguments for DataLoader. Same as Pyg dataloader
+    
+    - dataset (Dataset | Sequence[BaseData] | DatasetAdapter): The input dataset or data sequence.
+    - device (optional): The device to place the data on. Defaults to None.
+    - denseadj (bool, optional): Whether to use dense adjacency. Defaults to True.
+    - other kwargs: Additional keyword arguments for DataLoader. Same as Pyg dataloader
 
     """
     def __init__(self,

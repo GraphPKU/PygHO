@@ -12,24 +12,20 @@ def batched_tensordot(A: Tensor, catdim1: int, dim1: int, B: Tensor,
     This function computes the tensordot product of two tensors `A` and `B`, where `A` and `B` are batched tensors with specified concatenation dimensions `catdim1` and `catdim2`, and contraction dimensions `dim1` and `dim2`.
 
     Args:
-    - A (Tensor): The first batched tensor of shape (*catshape1, *broadcastshape).
+
+    - A (Tensor): The first batched tensor of shape (catshape1, broadcastshape).
     - catdim1 (int): The length of catshape1.
     - dim1 (int): The contraction dimension along `catdim1` of the first tensor.
-    - B (Tensor): The second batched tensor of shape (*catshape2, *broadcastshape)..
+    - B (Tensor): The second batched tensor of shape (catshape2, broadcastshape)..
     - catdim2 (int): The length of catshape2.
     - dim2 (int): The contraction dimension along `catdim2` of the second tensor.
 
     Returns:
-    - Tensor: The result of the batched tensordot operation of shape (*catshape1\dim1, *catshape2\dim2, *broadcastshape), where densedim is the common dense dimension of `A` and `B`.
 
-    Example:
-    ```python
-    A = torch.Tensor(...)  # Initialize A
-    B = torch.Tensor(...)  # Initialize B
-    result = batched_tensordot(A, catdim1=2, dim1=0, B, catdim2=2, dim2=1)
-    ```
+    - Tensor: The result of the batched tensordot operation of shape (\*catshape1\\dim1, \*catshape2\\dim2, \*broadcastshape), where densedim is the common dense dimension of `A` and `B`.
 
     Notes:
+
     - `catdim1` and `catdim2` specify the number of concatenation dimensions of `A` and `B`, respectively.
     - `dim1` and `dim2` specify the contraction dimensions along `catdim1` and `catdim2`, respectively.
     - The function uses optimized paths for specific cases (e.g., when `catdim1=2` and `catdim2=2`).
@@ -73,22 +69,18 @@ def broadcast_denseshape(A: Tensor, densedim1: int, B: Tensor,
     This function broadcasts the dense shapes of tensors `A` and `B` to the same by adding dimensions of size 1.
 
     Args:
+
     - A (Tensor): The first tensor.
     - densedim1 (int): The number of dense dimension of the first tensor.
     - B (Tensor): The second tensor.
     - densedim2 (int): The number of dense dimension of the second tensor.
 
     Returns:
+
     - Tuple[Tensor, Tensor]: A tuple containing the broadcasted tensors `A` and `B` with compatible dense shapes.
 
-    Example:
-    ```python
-    A = torch.Tensor(...)  # Initialize A
-    B = torch.Tensor(...)  # Initialize B
-    A, B = broadcast_denseshape(A, densedim1=2, B, densedim2=3)
-    ```
-
     Notes:
+
     - This function adds dimensions with size 1 to the smaller dense shape until both dense shapes match.
 
     """
@@ -113,25 +105,20 @@ def mamamm(A: MaskedTensor,
     This function performs batched matrix multiplication between two MaskedTensors `A` and `B`, where the masked dimensions `dim1` and `dim2` are contracted. The result is a new MaskedTensor with the specified mask.
 
     Args:
-    - A (MaskedTensor): The first MaskedTensor with shape (B, *maskedshape1, *denseshape).
+
+    - A (MaskedTensor): The first MaskedTensor with shape (B,\* maskedshape1,\*denseshapeshape).
     - dim1 (int): The masked dimension to contract in the first tensor `A`.
-    - B (MaskedTensor): The second MaskedTensor with shape (B, *maskedshape2, *denseshape).
+    - B (MaskedTensor): The second MaskedTensor with shape (B,\* maskedshape2,\*denseshapeshape).
     - dim2 (int): The masked dimension to contract in the second tensor `B`.
     - mask (BoolTensor): The mask to apply to the resulting MaskedTensor.
     - broadcast_firstdim (bool, optional): If True, broadcast the first dimension (batch dimension) of `A` and `B` to ensure compatibility. Default is True.
 
     Returns:
-    - MaskedTensor: A new MaskedTensor with shape (B, *maskedshape1\dim1, *maskedshape2\dim2, *denseshape) and the specified mask.
 
-    Example:
-    ```python
-    A = MaskedTensor(...)  # Initialize A
-    B = MaskedTensor(...)  # Initialize B
-    mask = BoolTensor(...)  # Initialize mask
-    result = mamamm(A, dim1=1, B, dim2=2, mask=mask)
-    ```
+    - MaskedTensor: A new MaskedTensor with shape (B,\* maskedshape1\dim1,\* maskedshape2\dim2,\*denseshapeshape) and the specified mask.
 
     Notes:
+
     - This function performs batched matrix multiplication between two MaskedTensors, contracting the specified masked dimensions.
     """
     tA = A.fill_masked(0)

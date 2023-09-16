@@ -15,6 +15,7 @@ def torch_scatter_reduce(dim: int, src: Tensor, ind: LongTensor, dim_size: int,
     by the `aggr` parameter, which can be 'sum', 'mean', 'min', 'max'.
 
     Args:
+
     - dim (int): The dimension along which to scatter elements (only dim=0 is currently supported).
     - src (Tensor): The source tensor of shape (nnz, denseshape).
     - ind (LongTensor): The indices tensor of shape (nnz).
@@ -22,19 +23,23 @@ def torch_scatter_reduce(dim: int, src: Tensor, ind: LongTensor, dim_size: int,
     - aggr (str): The reduction operation to apply ('sum', 'mean', 'min', 'max', 'mul', 'any').
 
     Returns:
+
     - Tensor: A tensor of shape (dim_size, denseshape) resulting from the scatter operation.
 
     Raises:
+
     - AssertionError: If `dim` is not 0, or if `ind` is not 1-dimensional.
 
     Example:
-    ```python
-    src = torch.tensor([[1, 2], [4, 5], [7, 8], [9, 10]], dtype=torch.float)
-    ind = torch.tensor([2, 2, 0, 1], dtype=torch.long)
-    dim_size = 3
-    aggr = 'sum'
-    result = torch_scatter_reduce(0, src, ind, dim_size, aggr)
-    ```
+    
+    ::
+        src = torch.tensor([[1, 2], [4, 5], [7, 8], [9, 10]], dtype=torch.float)
+        ind = torch.tensor([2, 2, 0, 1], dtype=torch.long)
+        dim_size = 3
+        aggr = 'sum'
+        result = torch_scatter_reduce(0, src, ind, dim_size, aggr)
+        
+
     """
     assert dim == 0, "other dim not implemented"
     assert ind.ndim == 1, "indice must be 1-d"

@@ -87,6 +87,7 @@ class MLP(nn.Module):
     Multi-Layer Perceptron (MLP) module with customizable layers and activation functions.
 
     Args:
+
     - hiddim (int): Number of hidden units in each layer.
     - outdim (int): Number of output units.
     - numlayer (int): Number of hidden layers in the MLP.
@@ -98,10 +99,12 @@ class MLP(nn.Module):
     - normparam (float): Parameter for normalization (e.g., momentum for BatchNorm).
 
     Methods:
+
     - forward(x: Tensor) -> Tensor:
       Forward pass of the MLP.
 
     Notes:
+    
     - This class defines a multi-layer perceptron with customizable layers, activation functions, normalization, and dropout.
     """
     def __init__(self,

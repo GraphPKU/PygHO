@@ -10,19 +10,23 @@ def filterinf(X: Tensor, filled_value: float = 0):
     Replaces positive and negative infinity values in a tensor with a specified value.
 
     Args:
+
     - X (Tensor): The input tensor.
     - filled_value (float, optional): The value to replace positive and negative
       infinity values with (default: 0).
 
     Returns:
+
     - Tensor: A tensor with positive and negative infinity values replaced by the
       specified `filled_value`.
 
     Example:
-    ```python
-    input_tensor = torch.tensor([1.0, 2.0, torch.inf, -torch.inf, 3.0])
-    result = filterinf(input_tensor, filled_value=999.0)
-    ```
+    
+    ::
+    
+        input_tensor = torch.tensor([1.0, 2.0, torch.inf, -torch.inf, 3.0])
+        result = filterinf(input_tensor, filled_value=999.0)
+
     """
     return torch.where(torch.logical_or(X == torch.inf, X == -torch.inf),
                        filled_value, X)
@@ -31,20 +35,21 @@ def filterinf(X: Tensor, filled_value: float = 0):
 class MaskedTensor:
     """
     Represents a masked tensor with optional padding values.
-
     This class allows you to work with tensors that have a mask indicating valid and
     invalid values. You can perform various operations on the masked tensor, such as
     filling masked values, computing sums, means, maximums, minimums, and more.
 
     Parameters:
-    - data (Tensor): The underlying data tensor of shape (*maskedshape, *denseshape)
-    - mask (BoolTensor): The mask tensor of shape (*maskedshape) 
+    
+    - data (Tensor): The underlying data tensor of shape (\*maskedshape, \*denseshape)
+    - mask (BoolTensor): The mask tensor of shape (\*maskedshape) 
       where `True` represents valid values, and False` represents invalid values.
     - padvalue (float, optional): The value to use for padding. Defaults to 0.
     - is_filled (bool, optional): Indicates whether the invalid values have already
       been filled to the padvalue. Defaults to False.
 
     Attributes:
+    
     - data (Tensor): The underlying data tensor.
     - mask (BoolTensor): The mask tensor.
     - fullmask (BoolTensor): The mask tensor after broadcasting to match the data's
@@ -57,6 +62,7 @@ class MaskedTensor:
     - denseshape (torch.Size): The shape of the tensor after the masked dimensions.
 
     Methods:
+    
     - fill_masked_(self, val: float = 0) -> None: In-place fill of masked values.
     - fill_masked(self, val: float = 0) -> Tensor: Return a tensor with masked values
       filled with the specified value.
@@ -81,16 +87,13 @@ class MaskedTensor:
     - add(self, tarX, samesparse: bool): Add two masked tensors together.
     - catvalue(self, tarX, samesparse: bool): Concatenate values of two masked
       tensors.
-
     """
     def __init__(self,
                  data: Tensor,
                  mask: BoolTensor,
                  padvalue: float = 0.0,
                  is_filled: bool = False):
-        '''
-        mask: True for valid value, False for invalid value
-        '''
+        # mask: True for valid value, False for invalid value
         assert data.ndim >= mask.ndim, "data's #dim should be larger than mask "
         assert data.shape[:mask.
                           ndim] == mask.shape, "data and mask's first dimensions should match"
@@ -107,23 +110,26 @@ class MaskedTensor:
             self.__padvalue = padvalue
 
     def fill_masked_(self, val: float = 0) -> None:
-        '''
+        """
         inplace fill the masked values
-        '''
+        """
         if self.padvalue == val:
             return
         self.__padvalue = val
         self.__data = torch.where(self.fullmask, self.data, val)
 
     def fill_masked(self, val: float = 0) -> Tensor:
-        '''
+        """
         return a tensor with masked values filled with val.
-        '''
+        """
         if self.__padvalue == val:
             return self.data
         return torch.where(self.fullmask, self.data, val)
 
     def to(self, device: torch.DeviceObjType, non_blocking: bool = True):
+        """
+        move data to some device
+        """
         self.__data = self.__data.to(device, non_blocking=non_blocking)
         self.__mask = self.__mask.to(device, non_blocking=non_blocking)
         self.__fullmask = self.__fullmask.to(device, non_blocking=non_blocking)
@@ -166,9 +172,6 @@ class MaskedTensor:
         return self.shape[self.masked_dim:]
 
     def sum(self, dims: Union[Iterable[int], int], keepdim: bool = False):
-        '''
-        mask true elements
-        '''
         return MaskedTensor(torch.sum(self.fill_masked(0),
                                       dim=dims,
                                       keepdim=keepdim),
@@ -177,9 +180,6 @@ class MaskedTensor:
                             is_filled=True)
 
     def mean(self, dims: Union[Iterable[int], int], keepdim: bool = False):
-        '''
-        mask true elements
-        '''
         count = torch.clamp_min_(
             torch.sum(self.fullmask, dim=dims, keepdim=keepdim), 1)
         valsum = self.sum(dims, keepdim)
@@ -205,9 +205,9 @@ class MaskedTensor:
                             is_filled=True)
 
     def diag(self, dims: Iterable[int]):
-        '''
-        put the output dim to dim[0]
-        '''
+        """
+        put the reduced output to dim[0]
+        """
         assert len(dims) >= 2, "must diag several dims"
         dims = sorted(list(dims))
         tdata = self.data

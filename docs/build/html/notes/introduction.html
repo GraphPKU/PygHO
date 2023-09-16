@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Introduction &mdash; PyGHO 0.0.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../_static/documentation_options.js?v=d45e8c67"></script>
+        <script src="../_static/doctools.js?v=888ff710"></script>
+        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="pygho.backend package" href="../modules/backend.html" />
+    <link rel="prev" title="Installation" href="installation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            PyGHO
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Notes</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Introduction</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#preliminary">Preliminary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#introduction-by-example">Introduction by Example</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#basic-data-structure">Basic Data Structure</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#maskedtensor">MaskedTensor</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#sparsetensor">SparseTensor</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#high-order-graph-data-preprocessing">High-Order Graph Data Preprocessing</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#high-order-feature-precomputation">High Order Feature Precomputation</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#mini-batch-and-dataloader">Mini-batch and DataLoader</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#learning-methods-on-graphs">Learning Methods on Graphs</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#code-architecture">Code Architecture</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#usage">Usage</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#speed-issue">Speed issue</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Package Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../modules/backend.html">pygho.backend package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/hodata.html">pygho.hodata package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/honn.html">pygho.honn package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">PyGHO</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Introduction</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/notes/introduction.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="introduction">
+<h1>Introduction<a class="headerlink" href="#introduction" title="Link to this heading"></a></h1>
+<section id="preliminary">
+<h2>Preliminary<a class="headerlink" href="#preliminary" title="Link to this heading"></a></h2>
+<p>PygHO is a library for high-order GNN. Ordinary GNNs, like GCN, GIN,
+GraphSage, all pass messages between nodes and produce node
+representations. The node representation forms a dense matrix of shape
+<span class="math notranslate nohighlight">\((n, d)\)</span>, where <span class="math notranslate nohighlight">\(n\)</span> is the number of nodes and <span class="math notranslate nohighlight">\(d\)</span> is
+the hidden dimension. Existing libraries like PyG can easily implement
+them.</p>
+<p>In constrast, higher-order GNNs use node tuples as the message passing
+unit and produce representations for the tuples. The tuple
+representation can be of shape <span class="math notranslate nohighlight">\((n, n, d)\)</span>, <span class="math notranslate nohighlight">\((n, n, n, d)\)</span>,
+and even more dimensions. Furthermore, to reduce complexity, the
+representation can be sparse.</p>
+<p>Taking NGNN (with GIN base)~:raw-latex:<cite>citep{NGNN}</cite> as an example,
+NGNN first samples a subgraph for each node <span class="math notranslate nohighlight">\(i\)</span> and then runs GIN
+on all subgraphs simultaneously. It produces a 2-D representation
+<span class="math notranslate nohighlight">\(H\in \mathbb{R}^{n\times n\times d}\)</span>, where <span class="math notranslate nohighlight">\(H_{ij}\)</span>
+represents the representation of node <span class="math notranslate nohighlight">\(j\)</span> in the subgraph rooted
+at node <span class="math notranslate nohighlight">\(i\)</span>. The message passing within all subgraphs can be
+expressed as:</p>
+<div class="math notranslate nohighlight">
+\[h_{ij}^{t+1} \leftarrow \sum_{k\in N_i(j)} \text{MLP}(h^t_{ik}),\]</div>
+<p>where <span class="math notranslate nohighlight">\(N_i(j)\)</span> represents the set of neighbors of node <span class="math notranslate nohighlight">\(j\)</span>
+in the subgraph rooted at <span class="math notranslate nohighlight">\(i\)</span>. After several layers of message
+passing, tuple representations <span class="math notranslate nohighlight">\(H\)</span> are pooled to generate the node
+representations:</p>
+<div class="math notranslate nohighlight">
+\[h_i = P(\{h_{ij} | j\in V_i\}).\]</div>
+<p>Thus, a set of operators on high-order tensors is required for HOGNN,
+which is the focus of our work.</p>
+</section>
+<section id="introduction-by-example">
+<h2>Introduction by Example<a class="headerlink" href="#introduction-by-example" title="Link to this heading"></a></h2>
+<p>We shortly introduce the fundamental concepts of PygHO through
+self-contained examples.</p>
+<p>PygHO provides the following main features:</p>
+<ul class="simple">
+<li><p>Basic Data Structure</p></li>
+<li><p>High-Order Graph Data Preprocessing</p></li>
+<li><p>Mini-batches and DataLoader</p></li>
+<li><p>Learning Methods on Graphs</p></li>
+</ul>
+<section id="basic-data-structure">
+<h3>Basic Data Structure<a class="headerlink" href="#basic-data-structure" title="Link to this heading"></a></h3>
+<p>While basic deep learning libraries typically support the high-order
+tensors directly, HOGNNs demand specialized structures. NGNN, for
+example, employs a 2-D tensor
+<span class="math notranslate nohighlight">\(H\in \mathbb{R}^{n\times n\times d}\)</span>, where <span class="math notranslate nohighlight">\(H_{ij}\)</span>
+represents the node representation of node <span class="math notranslate nohighlight">\(j\)</span> in subgraph
+<span class="math notranslate nohighlight">\(i\)</span>. Since not all nodes are included in each subgraph, some
+elements in <span class="math notranslate nohighlight">\(H_{ij}\)</span> may not correspond to any node and should not
+exist. To address this challenge, we introduce two distinct data
+structures that cater to the unique requirements of HOGNNs: MaskedTensor
+and SparseTensor.</p>
+<section id="maskedtensor">
+<h4>MaskedTensor<a class="headerlink" href="#maskedtensor" title="Link to this heading"></a></h4>
+<p>A MaskedTensor consists of two components: <code class="docutils literal notranslate"><span class="pre">data</span></code>, with shape
+<span class="math notranslate nohighlight">\((\text{masked shape}, \text{dense shape})\)</span>, and <code class="docutils literal notranslate"><span class="pre">mask</span></code>, with
+shape <span class="math notranslate nohighlight">\((\text{masked shape})\)</span>. The <code class="docutils literal notranslate"><span class="pre">mask</span></code> tensor contains
+Boolean values, indicating whether the corresponding element in <code class="docutils literal notranslate"><span class="pre">data</span></code>
+exists within the tensor. For example, in the context of NGNN’s
+representation <span class="math notranslate nohighlight">\(H\in \mathbb{R}^{n\times n\times d}\)</span>, <code class="docutils literal notranslate"><span class="pre">data</span></code>
+resides in <span class="math notranslate nohighlight">\(\mathbb{R}^{n\times n\times d}\)</span>, and <code class="docutils literal notranslate"><span class="pre">mask</span></code> is in
+<span class="math notranslate nohighlight">\(\{0,1\}^{n\times n}\)</span>. The element <span class="math notranslate nohighlight">\((i,j)\)</span> in <code class="docutils literal notranslate"><span class="pre">mask</span></code> is
+<span class="math notranslate nohighlight">\(1\)</span> if the tuple <span class="math notranslate nohighlight">\((i,j)\)</span> exists in the tensor. The unused
+elements will not affect the output of the operators in this library.
+For example, the summation over a Maskedtensor will consider the
+non-existing elements as <span class="math notranslate nohighlight">\(0\)</span> and thus ignore them.</p>
+<p>For example, the following matrix</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\begin{bmatrix}
+0&amp;1&amp;0\\
+0&amp;0&amp;2\\
+3&amp;0&amp;0
+\end{bmatrix}\end{split}\]</div>
+<p>can be built as</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pygho</span> <span class="kn">import</span> <span class="n">MaskedTensor</span>
+<span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">nnz</span><span class="p">,</span> <span class="n">d</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">17</span><span class="p">,</span> <span class="mi">7</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">],</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">4</span><span class="p">]])</span>
+<span class="n">mask</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">MaskedTensor</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">mask</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here the non-existing elements in data can be set arbitrarily</p>
+</section>
+<section id="sparsetensor">
+<h4>SparseTensor<a class="headerlink" href="#sparsetensor" title="Link to this heading"></a></h4>
+<p>In contrast, SparseTensor stores only existing elements while ignoring
+non-existing ones. This approach proves to be more efficient when a
+small ratio of valid elements is present. A SparseTensor, with shape
+(sparse_shape, dense_shape), comprises two tensors: <code class="docutils literal notranslate"><span class="pre">indices</span></code> (an
+Integer Tensor with shape (sparse_dim, nnz)) and <code class="docutils literal notranslate"><span class="pre">values</span></code> (with shape
+(nnz, dense_shape)). Here, sparse_dim represents the number of
+dimensions in the sparse shape, and nnz stands for the count of existing
+elements. The columns of <code class="docutils literal notranslate"><span class="pre">indices</span></code> and rows of <code class="docutils literal notranslate"><span class="pre">values</span></code> correspond
+to the non-zero elements, making it straightforward to retrieve and
+manipulate the required information.</p>
+<p>For example, in NGNN’s representation
+<span class="math notranslate nohighlight">\(H\in \mathbb{R}^{n\times n\times d}\)</span>, assuming the total number
+nodes in subgraphs is <span class="math notranslate nohighlight">\(m\)</span>, <span class="math notranslate nohighlight">\(H\)</span> can be represented as
+<code class="docutils literal notranslate"><span class="pre">indices</span></code> <span class="math notranslate nohighlight">\(a\in \mathbb{N}^{2\times m}\)</span> and <code class="docutils literal notranslate"><span class="pre">values</span></code>
+<span class="math notranslate nohighlight">\(v\in \mathbb{R}^{m\times d}\)</span>. Specifically, for
+<span class="math notranslate nohighlight">\(i=1,2,\ldots,n\)</span>, <span class="math notranslate nohighlight">\(H_{a_{1,i},a_{2,i}}=v_i\)</span>.</p>
+<p>For example, the following matrix</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\begin{bmatrix}
+0&amp;1&amp;0\\
+0&amp;0&amp;2\\
+3&amp;0&amp;0
+\end{bmatrix}\end{split}\]</div>
+<p>can be built as</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pygho</span> <span class="kn">import</span> <span class="n">SparseTensor</span>
+<span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">nnz</span><span class="p">,</span> <span class="n">d</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">17</span><span class="p">,</span> <span class="mi">7</span>
+<span class="n">indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">]],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">long</span><span class="p">)</span>
+<span class="n">values</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">SparseTensor</span><span class="p">(</span><span class="n">indices</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Note that each non-zero elements in SpTensor format takes <code class="docutils literal notranslate"><span class="pre">sparse_dim</span></code>
+int64 as indices and the elements itself, if the tensor is not sparse
+enough, SpTensor can take more space than dense tensor.</p>
+</section>
+</section>
+<section id="high-order-graph-data-preprocessing">
+<h3>High-Order Graph Data Preprocessing<a class="headerlink" href="#high-order-graph-data-preprocessing" title="Link to this heading"></a></h3>
+<p>HOGNNs and Message Passing Neural Networks (MPNNs) share common tasks,
+allowing us to reuse PyTorch Geometric’s (PyG) data processing routines.
+However, due to the specific requirements for precomputing and
+preserving high-order features, we have significantly extended these
+routines within PyGHO. As a result, PyGHO’s data processing capabilities
+remain highly compatible with PyG while offering convenience for HOGNNs.</p>
+<section id="high-order-feature-precomputation">
+<h4>High Order Feature Precomputation<a class="headerlink" href="#high-order-feature-precomputation" title="Link to this heading"></a></h4>
+<p>High-order feature precomputation can be efficiently conducted in
+parallel using the PyGHO library. To illustrate, consider the following
+example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Ordinary PyG dataset</span>
+<span class="kn">from</span> <span class="nn">torch_geometric.datasets</span> <span class="kn">import</span> <span class="n">ZINC</span>
+<span class="n">trn_dataset</span> <span class="o">=</span> <span class="n">ZINC</span><span class="p">(</span><span class="s2">&quot;dataset/ZINC&quot;</span><span class="p">,</span> <span class="n">subset</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">split</span><span class="o">=</span><span class="s2">&quot;train&quot;</span><span class="p">)</span>
+<span class="c1"># High-order graph dataset</span>
+<span class="kn">from</span> <span class="nn">pygho.hodata</span> <span class="kn">import</span> <span class="n">Sppretransform</span><span class="p">,</span> <span class="n">ParallelPreprocessDataset</span>
+<span class="n">trn_dataset</span> <span class="o">=</span> <span class="n">ParallelPreprocessDataset</span><span class="p">(</span>
+        <span class="s2">&quot;dataset/ZINC_trn&quot;</span><span class="p">,</span> <span class="n">trn_dataset</span><span class="p">,</span>
+        <span class="n">pre_transform</span><span class="o">=</span><span class="n">Sppretransform</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">tuplesamplers</span><span class="o">=</span><span class="p">[</span><span class="n">partial</span><span class="p">(</span><span class="n">KhopSampler</span><span class="p">,</span> <span class="n">hop</span><span class="o">=</span><span class="mi">3</span><span class="p">)],</span> <span class="n">annotate</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;&quot;</span><span class="p">],</span> <span class="n">keys</span><span class="o">=</span><span class="n">keys</span><span class="p">),</span> <span class="n">num_workers</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">ParallelPreprocessDataset</span></code> class takes an ordinary PyG dataset as
+input and performs transformations on each graph in parallel (utilizing
+8 processes in this example). Here, the <code class="docutils literal notranslate"><span class="pre">tuplesamplers</span></code> parameter
+represents functions that take a graph as input and produce a sparse
+tensor. Multiple samplers can be applied simultaneously, and the
+resulting output is assigned the names specified in the <code class="docutils literal notranslate"><span class="pre">annotate</span></code>
+parameter. As an example, we use <code class="docutils literal notranslate"><span class="pre">partial(KhopSampler,</span> <span class="pre">hop=3)</span></code>, a
+sampler designed for NGNN, to sample a 3-hop ego-network rooted at each
+node. The shortest path distance to the root node serves as the tuple
+features. The produced SparseTensor is then saved and can be effectively
+used to initialize tuple representations.</p>
+<p>Since the dataset preprocessing routine is closely related to data
+structures, we have designed two separate routines for sparse and dense
+tensors. These routines only differ in the <code class="docutils literal notranslate"><span class="pre">pre\_transform</span></code> function.
+For dense tensors, we can simply use
+<code class="docutils literal notranslate"><span class="pre">Mapretransform(None,</span> <span class="pre">tuplesamplers)</span></code>. In this case, the
+<code class="docutils literal notranslate"><span class="pre">tuplesamplers</span></code> is a list of functions produces a dense high-order
+MaskedTensor containing tuple features.</p>
+</section>
+</section>
+<section id="mini-batch-and-dataloader">
+<h3>Mini-batch and DataLoader<a class="headerlink" href="#mini-batch-and-dataloader" title="Link to this heading"></a></h3>
+<p>Enabling batch training in HOGNNs requires handling graphs of varying
+sizes, which is not a trivial task. Different strategies are employed
+for Sparse and Masked Tensor data structures.</p>
+<p>For Sparse Tensor data, the solution is relatively straightforward. We
+can concatenate the tensors of each graph along the diagonal of a larger
+tensor: For instance, in a batch of <span class="math notranslate nohighlight">\(B\)</span> graphs with adjacency
+matrices <span class="math notranslate nohighlight">\(A_i\in \mathbb{R}^{n_i\times n_i}\)</span>, node features
+<span class="math notranslate nohighlight">\(x\in \mathbb{R}^{n_i\times d}\)</span>, and tuple features
+<span class="math notranslate nohighlight">\(X\in \mathbb{R}^{n_i\times n_i\times d'}\)</span> for
+<span class="math notranslate nohighlight">\(i=1,2,\ldots,B\)</span>, the features for the entire batch are
+represented as <span class="math notranslate nohighlight">\(A\in \mathbb{R}^{n\times n}\)</span>,
+<span class="math notranslate nohighlight">\(x\in \mathbb{R}^{n\times d}\)</span>, and
+<span class="math notranslate nohighlight">\(X\in \mathbb{R}^{n\times n\times d'}\)</span>, where
+<span class="math notranslate nohighlight">\(n=\sum_{i=1}^B n_i\)</span>. The concatenation is as follows,</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}A=\begin{bmatrix}
+    A_1&amp;0&amp;0&amp;\cdots &amp;0\\
+    0&amp;A_2&amp;0&amp;\cdots &amp;0\\
+    0&amp;0&amp;A_3&amp;\cdots &amp;0\\
+    \vdots&amp;\vdots&amp;\vdots&amp;\vdots&amp;\vdots\\
+    0&amp;0&amp;0&amp;\cdots&amp;A_B
+\end{bmatrix}
+,x=\begin{bmatrix}
+    x_1\\
+    x_2\\
+    x_3\\
+    \vdots\\
+    x_B
+\end{bmatrix}
+,X=\begin{bmatrix}
+    X_1&amp;0&amp;0&amp;\cdots &amp;0\\
+    0&amp;X_2&amp;0&amp;\cdots &amp;0\\
+    0&amp;0&amp;X_3&amp;\cdots &amp;0\\
+    \vdots&amp;\vdots&amp;\vdots&amp;\vdots&amp;\vdots\\
+    0&amp;0&amp;0&amp;\cdots&amp;X_B
+\end{bmatrix}\end{split}\]</div>
+<p>This arrangement allows tensors in batched data have the same number of
+dimension as those of a single graph and thus share common operators. We
+provides PygHO’s own dataloader. It has the compatible parameters to
+PyTorch’s DataLoader and further combines sparse tensors for different
+graphs.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pygho.subgdata</span> <span class="kn">import</span> <span class="n">SpDataloader</span>
+<span class="n">trn_dataloader</span> <span class="o">=</span> <span class="n">SpDataloader</span><span class="p">(</span><span class="n">trn_dataset</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As concatenation along the diagonal leads to a lot of non-existing
+elements, handling Masked Tensor data involves a different strategy for
+saving space. In this case, tensors are padded to the same shape and
+stacked along a new axis. For example, in a batch of <span class="math notranslate nohighlight">\(B\)</span> graphs
+with adjacency matrices <span class="math notranslate nohighlight">\(A_i\in \mathbb{R}^{n_i\times n_i}\)</span>, node
+features <span class="math notranslate nohighlight">\(x\in \mathbb{R}^{n_i\times d}\)</span>, and tuple features
+<span class="math notranslate nohighlight">\(X\in \mathbb{R}^{n_i\times n_i\times d'}\)</span> for
+<span class="math notranslate nohighlight">\(i=1,2,\ldots,B\)</span>, the features for the entire batch are
+represented as
+<span class="math notranslate nohighlight">\(A\in \mathbb{R}^{B\times \tilde{n}\times \tilde{n}}\)</span>,
+<span class="math notranslate nohighlight">\(x\in \mathbb{R}^{B\times \tilde{n}\times d}\)</span>, and
+<span class="math notranslate nohighlight">\(X\in \mathbb{R}^{B\times \tilde{n}\times \tilde{n}\times d'}\)</span>,
+where <span class="math notranslate nohighlight">\(\tilde{n}=\max\{n_i|i=1,2,\ldots,B\}\)</span>.</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}A=\begin{bmatrix}
+     \begin{pmatrix}
+         A_1&amp;0_{n_1,\tilde n-n_1}\\
+         0_{\tilde n-n_1, n_1}&amp;0_{n_1,n_1}\\
+     \end{pmatrix}\\
+     \begin{pmatrix}
+         A_2&amp;0_{n_2,\tilde n-n_2}\\
+         0_{\tilde n-n_2, n_2}&amp;0_{n_2,n_2}\\
+     \end{pmatrix}\\
+     \vdots\\
+     \begin{pmatrix}
+         A_B&amp;0_{n_B,\tilde n-n_B}\\
+         0_{\tilde n-n_B, n_B}&amp;0_{n_B,n_B}\\
+     \end{pmatrix}\\
+\end{bmatrix}
+,x=\begin{bmatrix}
+    \begin{pmatrix}
+         x_1\\
+         0_{\tilde n-n_1, d}\\
+     \end{pmatrix}\\
+    \begin{pmatrix}
+         x_2\\
+         0_{\tilde n-n_2, d}\\
+     \end{pmatrix}\\
+    \vdots\\
+    \begin{pmatrix}
+         x_B\\
+         0_{\tilde n-n_B, d}\\
+     \end{pmatrix}\\
+\end{bmatrix}
+,X=\begin{bmatrix}
+    \begin{pmatrix}
+         X_1&amp;0_{n_1,\tilde n-n_1}\\
+         0_{\tilde n-n_1, n_1}&amp;0_{n_1,n_1}\\
+     \end{pmatrix}\\
+     \begin{pmatrix}
+         X_2&amp;0_{n_2,\tilde n-n_2}\\
+         0_{\tilde n-n_2, n_2}&amp;0_{n_2,n_2}\\
+     \end{pmatrix}\\
+     \vdots\\
+     \begin{pmatrix}
+         X_B&amp;0_{n_B,\tilde n-n_B}\\
+         0_{\tilde n-n_B, n_B}&amp;0_{n_B,n_B}\\
+     \end{pmatrix}\\
+\end{bmatrix}\end{split}\]</div>
+<p>This padding and stacking strategy ensures consistent shapes across
+tensors, allowing for efficient processing of dense data. We also
+provide the dataloader to implement it conveniently.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pygho.subgdata</span> <span class="kn">import</span> <span class="n">MaDataloader</span>
+<span class="n">trn_dataloader</span> <span class="o">=</span> <span class="n">MaDataloader</span><span class="p">(</span><span class="n">trn_dataset</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="learning-methods-on-graphs">
+<h3>Learning Methods on Graphs<a class="headerlink" href="#learning-methods-on-graphs" title="Link to this heading"></a></h3>
+<p>The previous section introduced novel data structures for the
+representation of high-order Graph Neural Networks (HOGNNs) and a novel
+data processing routine. Consequently, the learning methods in HOGNNs
+can be decomposed into operations on these tensors.</p>
+<section id="code-architecture">
+<h4>Code Architecture<a class="headerlink" href="#code-architecture" title="Link to this heading"></a></h4>
+<p>The overall code for these operations is organized into three layers:
+<strong>Layer 1: Backend:</strong> The <code class="docutils literal notranslate"><span class="pre">pygho.backend</span></code> layer contains basic data
+structures and operations on them. This layer focuses solely on tensor
+operations and lacks graph learning concepts. It includes: * Matrix
+multiplication: This method provides general matrix multiplication
+capabilities, including operations on two SparseTensors, one sparse and
+one MaskedTensor, and two MaskedTensors. It also supports batched matrix
+multiplication. Additionally, it offers operations replacing the sum in
+ordinary matrix multiplication with max and mean. * Two matrix
+addition: Operations for adding two sparse or two dense matrices. *
+Reduce operations: These operations include sum, mean, max, and min,
+which reduce dimensions in tensors. * Expand operation: This operation
+adds new dimensions to tensors. * Tuplewiseapply(func): It applies a
+given function to each element in the tensor. * Diagonalapply(func):
+This operation applies a function to diagonal elements of tensors.
+<strong>Layer 2: Graph operations:</strong> Built upon Layer 1, the
+<code class="docutils literal notranslate"><span class="pre">pygho.honn.SpOperator</span></code> and <code class="docutils literal notranslate"><span class="pre">pygho.honn.MaOperator</span></code> modules provide
+graph operations specifically tailored for Sparse and Masked Tensor
+structures. Additionally, the <code class="docutils literal notranslate"><span class="pre">pygho.honn.TensorOp</span></code> layer wraps these
+operators, abstracting away the differences between Sparse and Masked
+Tensor data structures. These operations encompass: * General message
+passing between tuples: Facilitating message passing between tuples of
+nodes. * Pooling: This operation reduces high-order tensors to
+lower-order ones by summing, taking the maximum, or computing the mean
+across specific dimensions. * Diagonal: It reduces high-order tensors
+to lower-order ones by extracting diagonal elements. * Unpooling: This
+operation extends low-order tensors to high-order ones. <strong>Layer 3:
+Models:</strong> Building on Layer 2, this layer provides a collection of
+representative high-order GNN layers, including NGNN, GNNAK, DSSGNN,
+SUN, SSWL, PPGN, and I2GNN.</p>
+<p>Layer 3 offers numerous ready-to-use methods, and with Layer 2, users
+can design additional models using general graph operations. Layer 1
+allows for the development of novel operations, expanding the library’s
+flexibility and utility.</p>
+</section>
+<section id="usage">
+<h4>Usage<a class="headerlink" href="#usage" title="Link to this heading"></a></h4>
+<p>To illustrate how these operators work, we will use NGNN as an example.
+Although our operators can be applied to batched data, for simplicity,
+we will focus on the single-graph case. Let
+<span class="math notranslate nohighlight">\(H\in \mathbb{R}^{n\times n\times d}\)</span> represent the representation
+matrix, and <span class="math notranslate nohighlight">\(A\in \mathbb{R}^{n\times n}\)</span> denote the adjacency
+matrix. The GIN operation on all subgraphs, defined as:</p>
+<div class="math notranslate nohighlight">
+\[h_{ij}\leftarrow \sum_{k\in N_i(j)} \text{MLP}(h_{ik})\]</div>
+<p>can be represented as the following two operations:</p>
+<div class="math notranslate nohighlight">
+\[X' = X.\text{tuplewiseapply}(\text{MLP})\]</div>
+<p>This operation applies the MLP function to each tuple’s representation.
+The matrix multiplication then sums over neighbors:</p>
+<div class="math notranslate nohighlight">
+\[X\leftarrow X'A^T\]</div>
+<p>In the matrix multiplication step, batching is applied to the last
+dimension of <span class="math notranslate nohighlight">\(X\)</span>. While this conversion may seem trivial, several
+key points are worth noting:</p>
+<ul class="simple">
+<li><p>Optimization for induced subgraph input: In the original equation,
+the sum is over neighbors in the subgraph. However, the matrix
+multiplication version includes neighbors in the whole graph as well.
+Importantly, our implementation optimizes for induced subgraph cases,
+where neighbors outside the subgraph are automatically handled by
+setting their values to zero.</p></li>
+<li><p>Optimization for sparse output: The operation <span class="math notranslate nohighlight">\(X'A^T\)</span> can
+produce non-zero elements for pairs <span class="math notranslate nohighlight">\((i,j)\)</span> that do not exist
+in the subgraph. For sparse input tensors <span class="math notranslate nohighlight">\(X\)</span> and <span class="math notranslate nohighlight">\(A\)</span>, we
+optimize the multiplication to avoid computing such non-existent
+elements.</p></li>
+</ul>
+<p>While we’ve illustrated the implementation of GIN as an example, our
+library supports the implementation of various Message Passing Neural
+Networks (MPNNs) on subgraphs, including GAT, GraphSage, and GCN.
+Message passing can also occur across subgraphs by simply transposing
+<span class="math notranslate nohighlight">\(X\)</span>.</p>
+<p>Pooling processes can also be considered as a reduction of <span class="math notranslate nohighlight">\(X\)</span>.
+For instance:</p>
+<div class="math notranslate nohighlight">
+\[h_i=\sum_{j\in V_i}\text{MLP}_2(h_{ij})\]</div>
+<p>can be implemented as follows:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Xn</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">tuplewiseapply</span><span class="p">(</span><span class="n">MLP_1</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>These examples demonstrate how our library’s operators can be used to
+efficiently implement various MPNNs on subgraphs, providing flexibility
+and ease of use for HOGNNs.</p>
+</section>
+</section>
+</section>
+<section id="speed-issue">
+<h2>Speed issue<a class="headerlink" href="#speed-issue" title="Link to this heading"></a></h2>
+<p>You can use python -O to disable all <code class="docutils literal notranslate"><span class="pre">assert</span></code> when you are sure there
+is no bug.</p>
+<p>Changing the <code class="docutils literal notranslate"><span class="pre">transform</span></code> of dataset to <code class="docutils literal notranslate"><span class="pre">pre_transform</span></code> can
+accelerate significantly.</p>
+<p>Precompute spspmm’s indice may provide some acceleration. (See the
+sparse data section)</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="installation.html" class="btn btn-neutral float-left" title="Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../modules/backend.html" class="btn btn-neutral float-right" title="pygho.backend package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, GraphPKU.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

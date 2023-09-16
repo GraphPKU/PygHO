@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>pygho.honn.MaOperator &mdash; PyGHO 0.0.1 documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../_static/documentation_options.js?v=d45e8c67"></script>
+        <script src="../../../_static/doctools.js?v=888ff710"></script>
+        <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            PyGHO
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../notes/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../notes/introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Package Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/backend.html">pygho.backend package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/hodata.html">pygho.hodata package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/honn.html">pygho.honn package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">PyGHO</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">pygho.honn.MaOperator</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for pygho.honn.MaOperator</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">BoolTensor</span>
+
+<span class="kn">from</span> <span class="nn">pygho.backend.MaTensor</span> <span class="kn">import</span> <span class="n">MaskedTensor</span>
+<span class="kn">from</span> <span class="nn">pygho.backend.SpTensor</span> <span class="kn">import</span> <span class="n">SparseTensor</span>
+<span class="kn">from</span> <span class="nn">..backend.SpTensor</span> <span class="kn">import</span> <span class="n">SparseTensor</span>
+<span class="kn">from</span> <span class="nn">..backend.Spmamm</span> <span class="kn">import</span> <span class="n">spmamm</span>
+<span class="kn">from</span> <span class="nn">..backend.Mamamm</span> <span class="kn">import</span> <span class="n">mamamm</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Dict</span>
+<span class="kn">from</span> <span class="nn">torch.nn</span> <span class="kn">import</span> <span class="n">Module</span>
+<span class="kn">from</span> <span class="nn">..backend.MaTensor</span> <span class="kn">import</span> <span class="n">MaskedTensor</span>
+
+
+<div class="viewcode-block" id="OpNodeMessagePassing">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpNodeMessagePassing">[docs]</a>
+<span class="k">class</span> <span class="nc">OpNodeMessagePassing</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Perform node-level message passing with an adjacency matrix A of shape (b, n, n) and node features X of shape (b, n).</span>
+
+<span class="sd">    Args:</span>
+
+<span class="sd">    - None</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+<div class="viewcode-block" id="OpNodeMessagePassing.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpNodeMessagePassing.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">A</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span>
+                <span class="n">tarX</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform forward pass of node-level message passing.</span>
+
+<span class="sd">        Args:</span>
+
+<span class="sd">        - A (MaskedTensor): Adjacency matrix of shape (b, n, n).</span>
+<span class="sd">        - X (MaskedTensor): Node features of shape (b, n).</span>
+<span class="sd">        - tarX (MaskedTensor): Target node features of shape (b, n).</span>
+
+<span class="sd">        Returns:</span>
+
+<span class="sd">        - Tensor: The result of the message passing operation.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">mamamm</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tarX</span><span class="o">.</span><span class="n">mask</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpSpNodeMessagePassing">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpSpNodeMessagePassing">[docs]</a>
+<span class="k">class</span> <span class="nc">OpSpNodeMessagePassing</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Operator for node-level message passing.</span>
+
+<span class="sd">    Args:</span>
+
+<span class="sd">    - aggr (str, optional): The aggregation method for message passing (default: &quot;sum&quot;).</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">    </span>
+<span class="sd">    - aggr (str): The aggregation method used for message passing.</span>
+
+<span class="sd">    Methods:</span>
+<span class="sd">    - forward(A: SparseTensor, X: Tensor, tarX: Tensor) -&gt; Tensor: Perform node-level message passing.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">aggr</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sum&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aggr</span> <span class="o">=</span> <span class="n">aggr</span>
+
+<div class="viewcode-block" id="OpSpNodeMessagePassing.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpSpNodeMessagePassing.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">A</span><span class="p">:</span> <span class="n">SparseTensor</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span>
+                <span class="n">tarX</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform forward pass of node-level message passing.</span>
+
+<span class="sd">        Args:</span>
+
+<span class="sd">        - A (SparseTensor): Adjacency matrix of shape (b, n, n).</span>
+<span class="sd">        - X (MaskedTensor): Node features of shape (b, n).</span>
+<span class="sd">        - tarX (MaskedTensor): Target node features of shape (b, n). </span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        </span>
+<span class="sd">        - Tensor: The result of the message passing operation.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">spmamm</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tarX</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">aggr</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpMessagePassing">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpMessagePassing">[docs]</a>
+<span class="k">class</span> <span class="nc">OpMessagePassing</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    General message passing operator for masked tensor adjacency and masked tensor tuple representation.</span>
+
+<span class="sd">    This operator takes two input masked tensors &#39;A&#39; and &#39;B&#39; and performs message passing </span>
+<span class="sd">    between them to generate a new masked tensor &#39;tarX&#39;. The resulting tensor has a shape of </span>
+<span class="sd">    (b,\* maskedshape1_dim1,\* maskedshape2_dim2,\*denseshapeshape), where &#39;b&#39; represents the batch size.</span>
+
+<span class="sd">    Args:</span>
+
+<span class="sd">    - dim1 (int): The dimension along which message passing is applied in &#39;A&#39;.</span>
+<span class="sd">    - dim2 (int): The dimension along which message passing is applied in &#39;B&#39;.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim1</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">dim2</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim1</span> <span class="o">=</span> <span class="n">dim1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim2</span> <span class="o">=</span> <span class="n">dim2</span>
+
+<div class="viewcode-block" id="OpMessagePassing.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpMessagePassing.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">A</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span> <span class="n">B</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span>
+                <span class="n">tarX</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform message passing between two masked tensors.</span>
+
+<span class="sd">        Args:</span>
+
+<span class="sd">        - A (MaskedTensor): The first input masked tensor.</span>
+<span class="sd">        - B (MaskedTensor): The second input masked tensor.</span>
+<span class="sd">        - tarX (MaskedTensor): The target masked tensor. The output will use its mask</span>
+
+<span class="sd">        Returns:</span>
+
+<span class="sd">        - MaskedTensor: The result of message passing, represented as a masked tensor.</span>
+
+<span class="sd">        Notes:</span>
+
+<span class="sd">        - This method applies message passing between &#39;A&#39; and &#39;B&#39; to generate &#39;tarX&#39;.</span>
+<span class="sd">        - It considers the specified dimensions for message passing.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">tarmask</span> <span class="o">=</span> <span class="n">tarX</span><span class="o">.</span><span class="n">mask</span>
+        <span class="k">return</span> <span class="n">mamamm</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim1</span><span class="p">,</span> <span class="n">B</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim2</span><span class="p">,</span> <span class="n">tarmask</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="Op2FWL">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.Op2FWL">[docs]</a>
+<span class="k">class</span> <span class="nc">Op2FWL</span><span class="p">(</span><span class="n">OpMessagePassing</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Operator for simulating the 2-Folklore-Weisfeiler-Lehman (FWL) test. X &lt;- X1 * X2.</span>
+
+<span class="sd">    This operator is specifically designed for simulating the 2-Folklore-Weisfeiler-Lehman (FWL) test </span>
+<span class="sd">    by performing message passing between two masked tensors &#39;X1&#39; and &#39;X2&#39;. The result is masked as the</span>
+<span class="sd">    target masked tensor &#39;tarX&#39;.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">    </span>
+<span class="sd">    - None</span>
+
+<span class="sd">    See Also:</span>
+<span class="sd">    </span>
+<span class="sd">    - OpMessagePassing: The base class for generalized message passing.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Op2FWL.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.Op2FWL.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X1</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span> <span class="n">X2</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span> <span class="n">datadict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+                <span class="n">tarX</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Simulate the 2-Folklore-Weisfeiler-Lehman (FWL) test by performing message passing.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">        </span>
+<span class="sd">        - X1 (MaskedTensor): The first input masked tensor of shape (b, n, n,\*denseshapeshape1).</span>
+<span class="sd">        - X2 (MaskedTensor): The second input masked tensor of shape (b, n, n,\*denseshapeshape2).</span>
+<span class="sd">        - datadict (Dict): A dictionary for caching intermediate data.</span>
+<span class="sd">        - tarX (MaskedTensor): The target masked tensor.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="n">X1</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;X1 should be bxnxn adjacency matrix &quot;</span>
+        <span class="k">assert</span> <span class="n">X2</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;X2 should be bxnxn 2d representations&quot;</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">X1</span><span class="p">,</span> <span class="n">X2</span><span class="p">,</span> <span class="n">tarX</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpMessagePassingOnSubg2D">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpMessagePassingOnSubg2D">[docs]</a>
+<span class="k">class</span> <span class="nc">OpMessagePassingOnSubg2D</span><span class="p">(</span><span class="n">OpMessagePassing</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Operator for performing message passing on each subgraph for 2D subgraph Graph Neural Networks.</span>
+
+<span class="sd">    This operator is designed for use in 2D subgraph Graph Neural Networks (GNNs). It extends the </span>
+<span class="sd">    base class `OpMessagePassing` to perform message passing on each subgraph represented by input tensors </span>
+<span class="sd">    &#39;A&#39; (adjacency matrix) and &#39;X&#39; (2D representations). The result is stored in the target masked tensor &#39;tarX&#39;.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">    </span>
+<span class="sd">    - None</span>
+
+<span class="sd">    See Also:</span>
+<span class="sd">    </span>
+<span class="sd">    - OpMessagePassing: The base class for generalized message passing.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OpMessagePassingOnSubg2D.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpMessagePassingOnSubg2D.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">A</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span> <span class="n">datadict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+                <span class="n">tarX</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform message passing on each subgraph for 2D subgraph Graph Neural Networks.</span>
+
+<span class="sd">        Args:</span>
+
+<span class="sd">        - A (MaskedTensor): The input masked tensor representing the adjacency matrix of subgraphs, of shape (b, n, n,\*denseshapeshape1).</span>
+<span class="sd">        - X (MaskedTensor): The input masked tensor representing 2D representations of subgraph nodes, of shape (b, n, n,\*denseshapeshape2).</span>
+<span class="sd">        - datadict (Dict): A dictionary for caching intermediate data (not used in this method).</span>
+<span class="sd">        - tarX (MaskedTensor): The target masked tensor to mask the result.</span>
+
+<span class="sd">        Returns:</span>
+
+<span class="sd">        - MaskedTensor: The result of message passing on each subgraph.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="n">A</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;A should be bxnxn adjacency matrix &quot;</span>
+        <span class="k">assert</span> <span class="n">X</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;X should be bxnxn 2d representations&quot;</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">tarX</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpMessagePassingOnSubg3D">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpMessagePassingOnSubg3D">[docs]</a>
+<span class="k">class</span> <span class="nc">OpMessagePassingOnSubg3D</span><span class="p">(</span><span class="n">OpMessagePassing</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Operator for performing message passing on each subgraph for 3D subgraph Graph Neural Networks.</span>
+
+<span class="sd">    Args:</span>
+
+<span class="sd">    - None</span>
+
+<span class="sd">    See Also:</span>
+
+<span class="sd">    - OpMessagePassing: The base class for generalized message passing.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OpMessagePassingOnSubg3D.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpMessagePassingOnSubg3D.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">A</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span> <span class="n">datadict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+                <span class="n">tarX</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform message passing on each subgraph for 3D subgraph Graph Neural Networks.</span>
+
+<span class="sd">        Args:</span>
+
+<span class="sd">        - A (MaskedTensor): The input masked tensor representing the adjacency matrix of subgraphs, of shape (b, n, n,\*denseshapeshape1)</span>
+<span class="sd">        - X (MaskedTensor): The input masked tensor representing 3D representations of subgraph nodes, of shape (b, n, n, n,\*denseshapeshape2)</span>
+<span class="sd">        - datadict (Dict): A dictionary for caching intermediate data (not used in this method).</span>
+<span class="sd">        - tarX (MaskedTensor): The target masked tensor to mask the result,  of shape (b, n, n, n,\*denseshapeshape3).</span>
+
+<span class="sd">        Notes:</span>
+
+<span class="sd">        - denseshape1, denseshape2 must be broadcastable.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="n">A</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;A should be bxnxn adjacency matrix &quot;</span> 
+        <span class="k">assert</span> <span class="n">X</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">4</span><span class="p">,</span> <span class="s2">&quot;X should be bxnxnxn 3d representations&quot;</span> 
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">tarX</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpMessagePassingCrossSubg2D">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpMessagePassingCrossSubg2D">[docs]</a>
+<span class="k">class</span> <span class="nc">OpMessagePassingCrossSubg2D</span><span class="p">(</span><span class="n">OpMessagePassing</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Perform message passing across subgraphs within the 2D subgraph Graph Neural Network (GNN).</span>
+
+<span class="sd">    Args:</span>
+
+<span class="sd">    - None</span>
+
+<span class="sd">    See Also:</span>
+
+<span class="sd">    - OpMessagePassing: The base class for generalized message passing.</span>
+
+<span class="sd">    Notes:</span>
+
+<span class="sd">    - It assumes that &#39;A&#39; represents the adjacency matrix of subgraphs, and &#39;X&#39; represents 2D representations </span>
+<span class="sd">      of subgraph nodes.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OpMessagePassingCrossSubg2D.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpMessagePassingCrossSubg2D.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">A</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span> <span class="n">datadict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+                <span class="n">tarX</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform message passing across subgraphs within the 2D subgraph Graph Neural Network.</span>
+
+<span class="sd">        Args:</span>
+
+<span class="sd">        - A (MaskedTensor): The input masked tensor representing the adjacency matrix of subgraphs. of shape (b, n, n,\*denseshapeshape1).</span>
+<span class="sd">        - X (MaskedTensor): The input masked tensor representing 2D representations of subgraph nodes. of shape (b, n, n,\*denseshapeshape2).</span>
+<span class="sd">        - datadict (Dict): A dictionary for caching intermediate data (not used in this method).</span>
+<span class="sd">        - tarX (MaskedTensor): The target masked tensor to store the result. of  shape (b, n, n,\*denseshapeshape3).</span>
+
+<span class="sd">        Returns:</span>
+
+<span class="sd">        - MaskedTensor: The result of message passing that bridges subgraphs.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="n">A</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;A should be bxnxn adjacency matrix &quot;</span>
+        <span class="k">assert</span> <span class="n">X</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;X should be bxnxn 2d representations&quot;</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">tarX</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpSpMessagePassing">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpSpMessagePassing">[docs]</a>
+<span class="k">class</span> <span class="nc">OpSpMessagePassing</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    OpMessagePassing but use sparse adjacency matrix.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim1</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">dim2</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">aggr</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sum&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim1</span> <span class="o">=</span> <span class="n">dim1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim2</span> <span class="o">=</span> <span class="n">dim2</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aggr</span> <span class="o">=</span> <span class="n">aggr</span>
+
+<div class="viewcode-block" id="OpSpMessagePassing.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpSpMessagePassing.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">A</span><span class="p">:</span> <span class="n">SparseTensor</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span>
+                <span class="n">tarX</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">A</span><span class="o">.</span><span class="n">sparse_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;A should be bxnxn adjacency matrix &quot;</span>
+        <span class="k">return</span> <span class="n">spmamm</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim1</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim2</span><span class="p">,</span> <span class="n">tarX</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">aggr</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpSpMessagePassingOnSubg2D">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpSpMessagePassingOnSubg2D">[docs]</a>
+<span class="k">class</span> <span class="nc">OpSpMessagePassingOnSubg2D</span><span class="p">(</span><span class="n">OpSpMessagePassing</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    OpMessagePassingOnSubg2D but use sparse adjacency matrix.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">aggr</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sum&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">aggr</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OpSpMessagePassingOnSubg2D.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpSpMessagePassingOnSubg2D.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">A</span><span class="p">:</span> <span class="n">SparseTensor</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span> <span class="n">datadict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+                <span class="n">tarX</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">X</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;X should be bxnxn 2D representation &quot;</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">tarX</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpSpMessagePassingOnSubg3D">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpSpMessagePassingOnSubg3D">[docs]</a>
+<span class="k">class</span> <span class="nc">OpSpMessagePassingOnSubg3D</span><span class="p">(</span><span class="n">OpSpMessagePassing</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    OpMessagePassingOnSubg3D but use sparse adjacency matrix.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">aggr</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sum&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">aggr</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OpSpMessagePassingOnSubg3D.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpSpMessagePassingOnSubg3D.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">A</span><span class="p">:</span> <span class="n">SparseTensor</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span> <span class="n">datadict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+                <span class="n">tarX</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">X</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;X should be bxnxnxn 3D representation &quot;</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">tarX</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpSpMessagePassingCrossSubg2D">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpSpMessagePassingCrossSubg2D">[docs]</a>
+<span class="k">class</span> <span class="nc">OpSpMessagePassingCrossSubg2D</span><span class="p">(</span><span class="n">OpSpMessagePassing</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    OpMessagePassingCrossSubg2D but use sparse adjacency matrix.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">aggr</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sum&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">aggr</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OpSpMessagePassingCrossSubg2D.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpSpMessagePassingCrossSubg2D.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">A</span><span class="p">:</span> <span class="n">SparseTensor</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span> <span class="n">datadict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+                <span class="n">tarX</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">X</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;X should be bxnxn 2D representation &quot;</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">tarX</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpDiag">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpDiag">[docs]</a>
+<span class="k">class</span> <span class="nc">OpDiag</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Operator for extracting diagonal elements from a SparseTensor.</span>
+
+<span class="sd">    Args:</span>
+
+<span class="sd">    - dims (Iterable[int]): A list of dimensions along which to extract diagonal elements.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dims</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">dims</span><span class="p">)))</span>
+
+<div class="viewcode-block" id="OpDiag.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpDiag.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">A</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        forward function</span>
+
+<span class="sd">        Args:</span>
+
+<span class="sd">        - A (MaskedTensor): The input masked Tensor</span>
+
+<span class="sd">        Returns:</span>
+
+<span class="sd">        - MaskedTensor: The diagonal elements.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">A</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dims</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpDiag2D">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpDiag2D">[docs]</a>
+<span class="k">class</span> <span class="nc">OpDiag2D</span><span class="p">(</span><span class="n">OpDiag</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span>
+
+<div class="viewcode-block" id="OpDiag2D.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpDiag2D.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Extract diagonal elements from the input masked.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">        </span>
+<span class="sd">        - A (MaskedTensor): The input MaskedTensor from which to extract diagonal elements. Be of shape (b, n, n,\*denseshapeshape)</span>
+
+<span class="sd">        Returns:</span>
+
+<span class="sd">        - MaskedTensor: of shape (b, n,\*denseshapeshape)</span>
+
+<span class="sd">        Returns:</span>
+
+<span class="sd">        - Union[Tensor, SparseTensor]: The extracted diagonal elements as either a dense or sparse tensor.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="n">X</span>
+        <span class="k">assert</span> <span class="n">X</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;X should be bxnxn 2d representations&quot;</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">X</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpPooling">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpPooling">[docs]</a>
+<span class="k">class</span> <span class="nc">OpPooling</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                 <span class="n">dims</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span>
+                 <span class="n">pool</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sum&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dims</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">dims</span> <span class="o">=</span> <span class="p">[</span><span class="n">dims</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dims</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">dims</span><span class="p">)))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pool</span> <span class="o">=</span> <span class="n">pool</span>
+
+<div class="viewcode-block" id="OpPooling.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpPooling.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pool</span><span class="p">)(</span><span class="n">dims</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dims</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpPoolingSubg2D">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpPoolingSubg2D">[docs]</a>
+<span class="k">class</span> <span class="nc">OpPoolingSubg2D</span><span class="p">(</span><span class="n">OpPooling</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Operator for pooling node representations within each subgraph for 2D subgraph GNNs. </span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">        - `pool` (str): The pooling operation to apply.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pool</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sum&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">([</span><span class="mi">2</span><span class="p">],</span> <span class="n">pool</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OpPoolingSubg2D.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpPoolingSubg2D.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">            - `X` (MaskedTensor): The input MaskedTensor of shape(b, n, n,\*denseshapeshape) representing 2D node representations.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            - (Tensor): The pooled dense tensor. of shape (b, n,\*denseshapeshape)</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            - AssertionError: If `X` is not 2D representations.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="n">X</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;X should be bxnxn 2d representations&quot;</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">X</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpPoolingSubg3D">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpPoolingSubg3D">[docs]</a>
+<span class="k">class</span> <span class="nc">OpPoolingSubg3D</span><span class="p">(</span><span class="n">OpPooling</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Operator for pooling node representations within each subgraph for 3D subgraph GNNs. It returns sparse output only.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">        - `pool` (str): The pooling operation to apply.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pool</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sum&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">([</span><span class="mi">3</span><span class="p">],</span> <span class="n">pool</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OpPoolingSubg3D.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpPoolingSubg3D.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">            - `X` (MaskedTensor): The input MaskedTensor of shape(b, n, n, n,\*denseshapeshape) representing 2D node representations.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            - (Tensor): The pooled dense tensor. of shape (b, n, n,\*denseshapeshape)</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            - AssertionError: If `X` is not 2D representations.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="n">X</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">4</span><span class="p">,</span> <span class="s2">&quot;X should be bxnxnxn 3d representations&quot;</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">X</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpPoolingCrossSubg2D">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpPoolingCrossSubg2D">[docs]</a>
+<span class="k">class</span> <span class="nc">OpPoolingCrossSubg2D</span><span class="p">(</span><span class="n">OpPooling</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Operator for pooling the same node representations within different subgraphsfor 2D subgraph GNNs. It returns dense output only.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">        - `pool` (str): The pooling operation to apply.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pool</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;sum&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">([</span><span class="mi">1</span><span class="p">],</span> <span class="n">pool</span><span class="p">)</span>
+
+<div class="viewcode-block" id="OpPoolingCrossSubg2D.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpPoolingCrossSubg2D.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">            - `X` (MaskedTensor): The input MaskedTensor of shape(b, n, n,\*denseshapeshape) representing 2D node representations.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            - (Tensor): The pooled dense tensor. of shape (b, n,\*denseshapeshape)</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            - AssertionError: If `X` is not 2D representations.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="n">X</span><span class="o">.</span><span class="n">masked_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;X should be bxnxn 2d representations&quot;</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">X</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpUnpooling">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpUnpooling">[docs]</a>
+<span class="k">class</span> <span class="nc">OpUnpooling</span><span class="p">(</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Operator for unpooling tensors by adding new dimensions.</span>
+<span class="sd">    </span>
+<span class="sd">    Parameters:</span>
+<span class="sd">        - `dims` (int or Iterable[int]): The dimensions along which to unpool the tensor.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">int</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dims</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">dims</span> <span class="o">=</span> <span class="p">[</span><span class="n">dims</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dims</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">dims</span><span class="p">)))</span>
+
+<div class="viewcode-block" id="OpUnpooling.forward">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpUnpooling.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">,</span> <span class="n">tarX</span><span class="p">:</span> <span class="n">MaskedTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskedTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform unpooling on tensors by adding new dimensions.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">            - `X` (MaskedTensor): The input tensor to unpool.</span>
+<span class="sd">            - `tarX` (MaskedTensor): The target MaskedTensor to mask the output.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            - (MaskedTensor): The result of unpooling.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">X</span><span class="o">.</span><span class="n">unpooling</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dims</span><span class="p">,</span> <span class="n">tarX</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="OpUnpoolingSubgNodes2D">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpUnpoolingSubgNodes2D">[docs]</a>
+<span class="k">class</span> <span class="nc">OpUnpoolingSubgNodes2D</span><span class="p">(</span><span class="n">OpUnpooling</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Operator for copy node representations to the node representation of all subgraphs</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">([</span><span class="mi">2</span><span class="p">])</span></div>
+
+
+
+<div class="viewcode-block" id="OpUnpoolingRootNodes2D">
+<a class="viewcode-back" href="../../../modules/honn.html#pygho.honn.MaOperator.OpUnpoolingRootNodes2D">[docs]</a>
+<span class="k">class</span> <span class="nc">OpUnpoolingRootNodes2D</span><span class="p">(</span><span class="n">OpUnpooling</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Operator for copy root node representations to the subgraph rooted at i for all nodes</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">([</span><span class="mi">1</span><span class="p">])</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, GraphPKU.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

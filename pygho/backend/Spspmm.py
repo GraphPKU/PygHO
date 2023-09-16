@@ -14,10 +14,12 @@ def ptr2batch(ptr: LongTensor, dim_size: int) -> LongTensor:
     indices in the original tensor.
 
     Args:
+
     - ptr (LongTensor): The pointer tensor, where `ptr[0] = 0` and `torch.all(diff(ptr) >= 0)` is true.
     - dim_size (int): The size of the target dimension.
 
     Returns:
+
     - LongTensor: A batch tensor of shape `(dim_size,)` where `batch[ptr[i]:ptr[i+1]] = i`.
     """
     assert ptr.ndim == 1, "ptr should be 1-d"
@@ -43,6 +45,7 @@ def spspmm_ind(ind1: LongTensor,
     The result represents the product of the input indices.
 
     Args:
+
     - ind1 (LongTensor): The indices of the first sparse tensor of shape `(sparsedim1, M1)`.
     - dim1 (int): The dimension to eliminate in `ind1`.
     - ind2 (LongTensor): The indices of the second sparse tensor of shape `(sparsedim2, M2)`.
@@ -50,20 +53,23 @@ def spspmm_ind(ind1: LongTensor,
     - is_k2_sorted (bool, optional): Whether `ind2` is sorted along `dim2`. Defaults to `False`.
 
     Returns:
+    
     - tarind: LongTensor: The resulting indices after performing the sparse-sparse matrix    multiplication.
-    - bcd: LongTensor: In tensor perspective (*i_1, k, *i_2), (*j_1, k, *j_2) -> (*i_1, *i_2, *j_1, *j_2).
-      The return indice is of shape (3, nnz), (b, c, d), c represent index of *i, d represent index of *j, b represent index of output.For i=1,2,...,nnz,  val1[c[i]] * val2[d[i]] will be add to output val's b[i]-th element.
+    - bcd: LongTensor: In tensor perspective (\*i_1, k, \*i_2), (\*j_1, k, \*j_2) -> (\*i_1, \*i_2, \*j_1, \*j_2).
+      The return indice is of shape (3, nnz), (b, c, d), c represent index of \*i, d represent index of \*j, b represent index of output.For i=1,2,...,nnz,  val1[c[i]] * val2[d[i]] will be add to output val's b[i]-th element.
 
     Example:
-    ```python
-    ind1 = torch.tensor([[0, 1, 1, 2],
-                        [2, 1, 0, 2]], dtype=torch.long)
-    dim1 = 0
-    ind2 = torch.tensor([[2, 1, 0, 1],
-                        [1, 0, 2, 2]], dtype=torch.long)
-    dim2 = 1
-    result = spspmm_ind(ind1, dim1, ind2, dim2)
-    ```
+    
+    ::
+
+        ind1 = torch.tensor([[0, 1, 1, 2],
+                            [2, 1, 0, 2]], dtype=torch.long)
+        dim1 = 0
+        ind2 = torch.tensor([[2, 1, 0, 1],
+                            [1, 0, 2, 2]], dtype=torch.long)
+        dim2 = 1
+        result = spspmm_ind(ind1, dim1, ind2, dim2)
+
     """
     assert 0 <= dim1 < ind1.shape[
         0], f"ind1's reduced dim {dim1} is out of range"
@@ -121,23 +127,25 @@ def spsphadamard_ind(tar_ind: LongTensor, ind: LongTensor) -> LongTensor:
     This function is an auxiliary function used in the Hadamard product of two sparse tensors. Given the indices `tar_ind` of sparse tensor A and the indices `ind` of sparse tensor B, this function returns an index array `b2a` of shape `(ind.shape[1],)` such that `ind[:, i]` matches `tar_ind[:, b2a[i]]` for each `i`. If `b2a[i]` is less than 0, it means `ind[:, i]` is not matched.
 
     Args:
+
     - tar_ind (LongTensor): The indices of sparse tensor A.
     - ind (LongTensor): The indices of sparse tensor B.
 
     Returns:
+
     - LongTensor: An index array `b2a` representing the matching indices between `tar_ind` and `ind`.
       b2a of shape ind.shape[1]. ind[:, i] matches tar_ind[:, b2a[i]]. if b2a[i]<0, ind[:, i] is not matched 
+    
     Example:
-    ```python
-    tar_ind = torch.tensor([[0, 1, 1, 2],
-                            [2, 1, 0, 2]], dtype=torch.long)
-    ind = torch.tensor([[2, 1, 0, 1],
-                        [1, 0, 2, 2]], dtype=torch.long)
-    b2a = spsphadamard_ind(tar_ind, ind)
 
-    return:
-      
-    ```
+    ::
+
+        tar_ind = torch.tensor([[0, 1, 1, 2],
+                                [2, 1, 0, 2]], dtype=torch.long)
+        ind = torch.tensor([[2, 1, 0, 1],
+                            [1, 0, 2, 2]], dtype=torch.long)
+        b2a = spsphadamard_ind(tar_ind, ind)
+
     """
     assert tar_ind.shape[0] == ind.shape[0]
     combine_tar_ind = indicehash(tar_ind)
@@ -160,24 +168,29 @@ def filterind(tar_ind: LongTensor, ind: LongTensor,
     Given the indices `tar_ind` of sparse tensor A, the indices `ind` of sparse tensor BC, and the index array `bcd`, this function returns an index array `acd`, where `(A ⊙ (BC)).val[a] = A.val[a] * scatter(B.val[c] * C.val[d], a)`.
 
     Args:
+
     - tar_ind (LongTensor): The indices of sparse tensor A.
     - ind (LongTensor): The indices of sparse tensor BC.
     - bcd (LongTensor): An index array representing `(BC).val`.
 
     Returns:
+    
     - LongTensor: An index array `acd` representing the filtered indices.
 
     Example:
-    ```python
-    tar_ind = torch.tensor([[0, 1, 1, 2],
-                            [2, 1, 0, 2]], dtype=torch.long)
-    ind = torch.tensor([[2, 1, 0, 1],
-                        [1, 0, 2, 2]], dtype=torch.long)
-    bcd = torch.tensor([[3, 2, 1, 0],
-                        [6, 5, 4, 3],
-                        [9, 8, 7, 6]], dtype=torch.long)
-    acd = filterind(tar_ind, ind, bcd)
-    ```
+    
+    ::
+
+        tar_ind = torch.tensor([[0, 1, 1, 2],
+                                [2, 1, 0, 2]], dtype=torch.long)
+        ind = torch.tensor([[2, 1, 0, 1],
+                            [1, 0, 2, 2]], dtype=torch.long)
+        bcd = torch.tensor([[3, 2, 1, 0],
+                            [6, 5, 4, 3],
+                            [9, 8, 7, 6]], dtype=torch.long)
+        acd = filterind(tar_ind, ind, bcd)
+
+
     """
     b2a = spsphadamard_ind(tar_ind, ind)
     a = b2a[bcd[0]]
@@ -195,30 +208,20 @@ def spsphadamard(A: SparseTensor,
     This function performs the element-wise Hadamard product between two SparseTensors, `A` and `B`. The `b2a` parameter is an optional auxiliary index produced by the `spsphadamard_ind` function.
 
     Args:
+
     - A (SparseTensor): The first SparseTensor.
     - B (SparseTensor): The second SparseTensor.
     - b2a (LongTensor, optional): An optional index array produced by `spsphadamard_ind`. If not provided, it will be computed.
 
     Returns:
+
     - SparseTensor: A SparseTensor containing the result of the Hadamard product.
 
-    Example:
-    ```python
-    A = SparseTensor(indices=torch.tensor([[0, 0, 1], [1, 2, 2]], dtype=torch.long),
-                     values=torch.tensor([1, 2, 3], dtype=torch.float),
-                     shape=(2, 3),
-                     is_coalesced=True)
-    B = SparseTensor(indices=torch.tensor([[0, 1, 2], [0, 2, 1]], dtype=torch.long),
-                     values=torch.tensor([4, 5, 6], dtype=torch.float),
-                     shape=(2, 3),
-                     is_coalesced=True)
-    result = spsphadamard(A, B)
-    ```
 
     Notes:
+
     - Both `A` and `B` must be coalesced SparseTensors.
     - The dense shapes of `A` and `B` must be broadcastable.
-
     """
     assert A.is_coalesced(), "A should be coalesced"
     assert B.is_coalesced(), "B should be coalesced"
@@ -255,6 +258,7 @@ def spspmm(A: SparseTensor,
     This function performs matrix multiplication between two SparseTensors, `A` and `B`, at the specified sparse dimensions `dim1` and `dim2`. The result is a SparseTensor containing the result of the multiplication. The `aggr` parameter specifies the reduction operation used for merging the resulting values.
 
     Args:
+
     - A (SparseTensor): The first SparseTensor.
     - dim1 (int): The dimension along which `A` is multiplied.
     - B (SparseTensor): The second SparseTensor.
@@ -265,22 +269,11 @@ def spspmm(A: SparseTensor,
     - acd (LongTensor, optional): An optional auxiliary index array produced by filterind.
 
     Returns:
+
     - SparseTensor: A SparseTensor containing the result of the matrix multiplication.
 
-    Example:
-    ```python
-    A = SparseTensor(indices=torch.tensor([[0, 0, 1], [1, 2, 2]], dtype=torch.long),
-                     values=torch.tensor([1, 2, 3], dtype=torch.float),
-                     shape=(2, 3),
-                     is_coalesced=True)
-    B = SparseTensor(indices=torch.tensor([[0, 1, 2], [0, 2, 1]], dtype=torch.long),
-                     values=torch.tensor([4, 5, 6], dtype=torch.float),
-                     shape=(2, 3),
-                     is_coalesced=True)
-    result = spspmm(A, dim1=0, B, dim2=0)
-    ```
-
     Notes:
+
     - Both `A` and `B` must be coalesced SparseTensors.
     - The dense shapes of `A` and `B` must be broadcastable.
     - This function allows for optional indices `bcd` and `tar_ind` for improved performance and control.
@@ -330,6 +323,7 @@ def spspmpnn(A: SparseTensor,
     This function extend matrix multiplication between two SparseTensors, `A` and `B`, at the specified sparse dimensions `dim1` and `dim2`, while using a message function `message_func` to compute the messages sent from `A` to `B` and `C`. The result is a SparseTensor containing the result of the multiplication. The `aggr` parameter specifies the reduction operation used for merging the resulting values.
 
     Args:
+
     - A (SparseTensor): The first SparseTensor.
     - dim1 (int): The dimension along which `A` is multiplied.
     - B (SparseTensor): The second SparseTensor.
@@ -340,22 +334,11 @@ def spspmpnn(A: SparseTensor,
     - aggr (str, optional): The reduction operation to use for merging edge features ("sum", "min", "max", "mul", "any"). Defaults to "sum".
 
     Returns:
+
     - SparseTensor: A SparseTensor containing the result of the matrix multiplication.
 
-    Example:
-    ```python
-    def custom_message_func(A_values, B_values, C_values, acd):
-        # Custom message function logic here
-        return messages
-
-    A = SparseTensor(...)  # Initialize A
-    B = SparseTensor(...)  # Initialize B
-    C = SparseTensor(...)  # Initialize C
-    acd = LongTensor(...)  # Initialize acd
-    result = spspmpnn(A, dim1=0, B, dim2=0, C, acd, custom_message_func)
-    ```
-
     Notes:
+    
     - Both `A` and `B` must be coalesced SparseTensors.
     - The dense shapes of `A`, `B`, and `C` must be broadcastable.
     - The `message_func` should take four arguments: `A_values`, `B_values`, `C_values`, and `acd`, and return messages based on custom logic.

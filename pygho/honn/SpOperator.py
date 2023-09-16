@@ -17,16 +17,19 @@ def parse_precomputekey(model: Module) -> List[str]:
     Parse and return precompute keys from a PyTorch model.
 
     Args:
+
     - model (Module): The PyTorch model to parse.
 
     Returns:
+    
     - List[str]: A list of unique precompute keys found in the model.
 
     Example:
-    ```python
-    model = MyModel()  # Initialize your PyTorch model
-    precompute_keys = parse_precomputekey(model)
-    ```
+    
+    ::
+
+        model = MyModel()  # Initialize your PyTorch model
+        precompute_keys = parse_precomputekey(model)
 
     Notes:
     - This function is useful for extracting precompute keys from message-passing models.
@@ -46,13 +49,8 @@ class OpNodeMessagePassing(Module):
     Operator for node-level message passing.
 
     Args:
-    - aggr (str, optional): The aggregation method for message passing (default: "sum").
 
-    Example:
-    ```python
-    message_passing = OpNodeMessagePassing(aggr="sum")
-    result = message_passing(A, X, tarX)
-    ```
+    - aggr (str, optional): The aggregation method for message passing (default: "sum").
 
     Attributes:
     - aggr (str): The aggregation method used for message passing.
@@ -73,17 +71,15 @@ class OpNodeMessagePassing(Module):
         Perform node-level message passing.
 
         Args:
+
         - A (SparseTensor): The adjacency matrix of the graph.
         - X (Tensor): The node feature tensor.
         - tarX (Tensor): The target node feature tensor. of no use
 
         Returns:
+
         - Tensor: The result of node-level message passing (AX).
 
-        Example:
-        ```python
-        result = message_passing.forward(A, X, tarX)
-        ```
         """
         assert A.sparse_dim == 2, "A is adjacency matrix of the whole graph of shape nxn"
         return spmm(A, 1, X, self.aggr)
@@ -96,6 +92,7 @@ class OpMessagePassing(Module):
     This class operates on two sparse tensors A and B and performs message passing based on specified operations and dimensions.
 
     Args:
+
     - op0 (str, optional): The operation name for the first input (default: "X"). 
       It is used to compute precomputekey and retrieve precomputation results
     - op1 (str, optional): The operation name for the second input (default: "X").
@@ -104,21 +101,20 @@ class OpMessagePassing(Module):
     - dim2 (int, optional): The dimension to apply op2 (default: 0).
     - aggr (str, optional): The aggregation method for message passing (default: "sum").
 
-    Example:
-    ```python
-    message_passing = OpMessagePassing(op0="X", op1="X", dim1=1, op2="A", dim2=0, aggr="sum")
-    result = message_passing(A, B, datadict, tarX)
-    ```
+
     Attributes:
+
     - dim1 (int): The dimension to apply op0.
     - dim2 (int): The dimension to apply op2.
     - precomputekey (str): The precomputed key for caching intermediate data.
     - aggr (str): The aggregation method used for message passing.
 
     Methods:
+    
     - forward(A: SparseTensor, B: SparseTensor, datadict: Dict, tarX: Optional[SparseTensor] = None) -> SparseTensor: Perform generalized message passing.
 
     Notes:
+    
     - This class is designed for generalized message passing on tuple features.
     - It supports specifying custom operations and dimensions for message passing.
     - The `forward` method performs the message passing operation and returns the result.
@@ -147,22 +143,21 @@ class OpMessagePassing(Module):
         Perform generalized message passing.
 
         Args:
+
         - A (SparseTensor): The first input sparse tensor.
         - B (SparseTensor): The second input sparse tensor.
         - datadict (Dict): A dictionary for caching intermediate data. Containing precomputation results.
         - tarX (Optional[SparseTensor]): The target sparse tensor (default: None).
 
         Returns:
+
         - SparseTensor: The result of generalized message passing.
 
-        Example:
-        ```python
-        result = message_passing.forward(A, B, datadict, tarX)
-        ```
-
         Notes:
+
         - This method performs the generalized message passing operation using the provided inputs.
         - It supports caching intermediate data in the `datadict` dictionary.
+
         """
         return spspmm(
             A,
@@ -181,12 +176,15 @@ class Op2FWL(OpMessagePassing):
     Operator for simulating the 2-Folklore-Weisfeiler-Lehman (FWL) test. X <- X1 * X2.
 
     Args:
+
     - aggr (str, optional): The aggregation method for message passing (default: "sum").
 
     Methods:
+
     - forward(X1: SparseTensor, X2: SparseTensor, datadict: Dict, tarX: Optional[SparseTensor] = None) -> SparseTensor: Simulate the 2-FWL test by performing message passing.
     
     See Also:
+
     - OpMessagePassing: The base class for generalized message passing.
 
     """
@@ -203,12 +201,14 @@ class Op2FWL(OpMessagePassing):
         Simulate the 2-Folklore-Weisfeiler-Lehman (FWL) test by performing message passing.
 
         Args:
+
         - X1 (SparseTensor): The first input sparse tensor (2D representations).
         - X2 (SparseTensor): The second input sparse tensor (2D representations).
         - datadict (Dict): A dictionary for caching intermediate data.
         - tarX (Optional[SparseTensor]): The target sparse tensor (default: None).
 
         Returns:
+
         - SparseTensor: The result of simulating the 2-FWL test by performing message passing.
         """
         assert X1.sparse_dim == 2, "X1 should be 2d representations "
@@ -221,18 +221,15 @@ class OpMessagePassingOnSubg2D(OpMessagePassing):
     Operator for performing message passing on each subgraph for 2D subgraph Graph Neural Networks.
 
     Args:
+
     - aggr (str, optional): The aggregation method for message passing (default: "sum").
 
-    Example:
-    ```python
-    subg_gnn_operator = OpMessagePassingOnSubg2D(aggr="sum")
-    result = subg_gnn_operator(A, X, datadict, tarX)
-    ```
-
     Methods:
+
     - forward(A: SparseTensor, X: SparseTensor, datadict: Dict, tarX: Optional[SparseTensor] = None) -> SparseTensor: Perform message passing on each subgraph within the 2D subgraph GNN.
 
     See Also:
+    
     - OpMessagePassing: The base class for generalized message passing.
 
     """
@@ -249,12 +246,14 @@ class OpMessagePassingOnSubg2D(OpMessagePassing):
         Perform message passing on each subgraph within the 2D subgraph Graph Neural Network (GNN).
 
         Args:
+
         - A (SparseTensor): The adjacency matrix of the whole graph (nxn).
         - X (SparseTensor): The 2D representations of the subgraphs.
         - datadict (Dict): A dictionary for caching intermediate data.
         - tarX (Optional[SparseTensor]): The target sparse tensor (default: None).
 
         Returns:
+
         - SparseTensor: The result of message passing on each subgraph within the 2D subgraph GNN.
         """
         assert A.sparse_dim == 2, "A should be nxn adjacency matrix "
@@ -267,18 +266,15 @@ class OpMessagePassingOnSubg3D(OpMessagePassing):
     Operator for performing message passing on each subgraph for 3D subgraph Graph Neural Networks.
 
     Args:
+
     - aggr (str, optional): The aggregation method for message passing (default: "sum").
 
-    Example:
-    ```python
-    subg_gnn_operator = OpMessagePassingOnSubg3D(aggr="sum")
-    result = subg_gnn_operator(A, X, datadict, tarX)
-    ```
-
     Methods:
+
     - forward(A: SparseTensor, X: SparseTensor, datadict: Dict, tarX: Optional[SparseTensor] = None) -> SparseTensor: Perform message passing on each subgraph within the 2D subgraph GNN.
 
     See Also:
+
     - OpMessagePassing: The base class for generalized message passing.
 
     """
@@ -295,12 +291,14 @@ class OpMessagePassingOnSubg3D(OpMessagePassing):
         Perform message passing on each subgraph within the 3D subgraph Graph Neural Network (GNN).
 
         Args:
+
         - A (SparseTensor): The adjacency matrix of the whole graph (nxn).
         - X (SparseTensor): The 3D representations of the subgraphs.
         - datadict (Dict): A dictionary for caching intermediate data.
         - tarX (Optional[SparseTensor]): The target sparse tensor (default: None).
 
         Returns:
+
         - SparseTensor: The result of message passing on each subgraph within the 2D subgraph GNN.
         """
         assert A.sparse_dim == 2, "A should be nxn adjacency matrix "
@@ -313,8 +311,11 @@ class OpMessagePassingCrossSubg2D(OpMessagePassing):
     Perform message passing across subgraphs within the 2D subgraph Graph Neural Network (GNN).
 
     Args:
+
     - aggr (str): The aggregation method in message passing
+    
     Returns:
+
     - SparseTensor: The result of message passing on each subgraph within the 2D subgraph GNN.
     """
 
@@ -330,12 +331,14 @@ class OpMessagePassingCrossSubg2D(OpMessagePassing):
         Perform message passing across subgraphs within the 2D subgraph Graph Neural Network (GNN).
 
         Args:
+
         - A (SparseTensor): The adjacency matrix of the whole graph (nxn).
         - X (SparseTensor): The 2D representations of the subgraphs.
         - datadict (Dict): A dictionary for caching intermediate data.
         - tarX (Optional[SparseTensor]): The target sparse tensor (default: None).
 
         Returns:
+
         - SparseTensor: The result of message passing on each subgraph within the 2D subgraph GNN.
         """
         assert A.sparse_dim == 2, "A should be nxn adjacency matrix "
@@ -348,19 +351,16 @@ class OpDiag(Module):
     Operator for extracting diagonal elements from a SparseTensor.
 
     Args:
+
     - dims (Iterable[int]): A list of dimensions along which to extract diagonal elements.
     - return_sparse (bool, optional): Whether to return the diagonal elements as a SparseTensor of a Tensor (default: False).
 
-    Example:
-    ```python
-    diag_operator = OpDiag(dims=[0, 1], return_sparse=True)
-    diagonal = diag_operator(A)
-    ```
-
     Methods:
+
     - forward(A: SparseTensor) -> Union[Tensor, SparseTensor]: Extract diagonal elements from the input SparseTensor.
 
     Notes:
+
     - This class is used to extract diagonal elements from a SparseTensor along specified dimensions.
     - You can choose to return the diagonal elements as either a dense or sparse tensor.
 
@@ -387,9 +387,11 @@ class OpDiag2D(OpDiag):
         Extract diagonal elements from the input SparseTensor.
 
         Args:
+
         - A (SparseTensor): The input SparseTensor from which to extract diagonal elements.
 
         Returns:
+
         - Union[Tensor, SparseTensor]: The extracted diagonal elements as either a dense or sparse tensor.
         """
         assert X.sparse_dim == 2, "X should be 2d representations"
@@ -401,17 +403,13 @@ class OpPooling(Module):
     Operator for pooling tuple representations by reducing dimensions.
 
     Args:
+
     - dims (Union[int, Iterable[int]]): The dimensions along which to apply pooling.
     - pool (str, optional): The pooling operation to apply (default: "sum").
     - return_sparse (bool, optional): Whether to return the pooled tensor as a SparseTensor (default: False).
 
-    Example:
-    ```python
-    pooling_operator = OpPooling(dims=[1, 2], pool="max", return_sparse=True)
-    pooled_tensor = pooling_operator(X)
-    ```
-
     Methods:
+
     - forward(X: SparseTensor) -> Union[SparseTensor, Tensor]: Apply pooling operation to the input SparseTensor.
 
     """
@@ -432,9 +430,11 @@ class OpPooling(Module):
         Apply pooling operation to the input SparseTensor.
 
         Args:
+
         - X (SparseTensor): The input SparseTensor to which pooling is applied.
 
         Returns:
+        
         - Union[SparseTensor, Tensor]: The pooled tensor as either a dense or sparse tensor.
         """
         return getattr(X, self.pool)(self.dims,

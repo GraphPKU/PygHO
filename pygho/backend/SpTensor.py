@@ -18,14 +18,15 @@ def indicehash(indice: LongTensor) -> LongTensor:
     - LongTensor: A single LongTensor representing the hashed values.
 
     Raises:
-    - AssertionError: If the input tensor doesn't have the expected shape or
-      if the indices are too large or if there exists negative indice.
+    - AssertionError: If the input tensor doesn't have the expected shape or if the indices are too large or if there exists negative indice.
 
     Example:
-    ```python
-    indices = torch.tensor([[1, 2, 3], [4, 5, 6]], dtype=torch.long)
-    hashed = indicehash(indices)
-    ```
+    
+    ::
+    
+        indices = torch.tensor([[1, 2, 3], [4, 5, 6]], dtype=torch.long)
+        hashed = indicehash(indices)
+
     """
     assert indice.ndim == 2
     assert torch.all(indice >= 0), "indice cannot be negative"
@@ -51,21 +52,27 @@ def decodehash(indhash: LongTensor, sparse_dim: int) -> LongTensor:
     which is commonly used in sparse tensor operations.
 
     Parameters:
+
     - indhash (LongTensor): The input hashed LongTensor of shape (nnz).
     - sparse_dim (int): The number of dimensions represented by the hash.
 
     Returns:
+
     - LongTensor: A LongTensor representing pairs of indices.
 
     Raises:
+
     - AssertionError: If the input tensor doesn't have the expected shape or
       if the sparse dimension is invalid.
 
-    ```python
-    indices = torch.tensor([[1, 2, 3], [4, 5, 6]], dtype=torch.long)
-    hashed = indicehash(indices)
-    indices = decodehash(hashed)
-    ```
+    Example:
+
+    ::
+
+        indices = torch.tensor([[1, 2, 3], [4, 5, 6]], dtype=torch.long)
+        hashed = indicehash(indices)
+        indices = decodehash(hashed)
+
     """
     if sparse_dim == 1:
         return indhash.unsqueeze(0)
@@ -86,22 +93,22 @@ def indicehash_tight(indice: LongTensor, dimsize: LongTensor) -> LongTensor:
 
     Parameters:
     - indice (LongTensor): The input indices tensor of shape (sparse_dim, nnz).
-    - dimsize (LongTensor): The sizes of each dimension in the sparse tensor of shape
-      (sparse_dim).
+    - dimsize (LongTensor): The sizes of each dimension in the sparse tensor of shape (sparse_dim).
 
     Returns:
     - LongTensor: A single LongTensor representing the tightly hashed values.
 
     Raises:
-    - AssertionError: If the input tensors don't have the expected shapes or if the
-      indices exceed the dimension sizes.
+    - AssertionError: If the input tensors don't have the expected shapes or if the indices exceed the dimension sizes.
 
     Example:
-    ```python
-    indices = torch.tensor([[1, 2, 0], [4, 1, 2]], dtype=torch.long)
-    dim_sizes = torch.tensor([3, 5], dtype=torch.long)
-    hashed = indicehash_tight(indices, dim_sizes)
-    ```
+    
+    ::
+
+        indices = torch.tensor([[1, 2, 0], [4, 1, 2]], dtype=torch.long)
+        dim_sizes = torch.tensor([3, 5], dtype=torch.long)
+        hashed = indicehash_tight(indices, dim_sizes)
+
     """
     assert indice.ndim == 2, "indice shoule be of shape (sparse_dim, nnz) "
     assert dimsize.ndim == 1, "dim size should be of shape (sparse_dim)"
@@ -125,23 +132,23 @@ def decodehash_tight(indhash: LongTensor, dimsize: LongTensor) -> LongTensor:
 
     Parameters:
     - indhash (LongTensor): The input hashed LongTensor of shape (nnz).
-    - dimsize (LongTensor): The sizes of each dimension in the sparse tensor of shape
-      (sparse_dim).
+    - dimsize (LongTensor): The sizes of each dimension in the sparse tensor of shape (sparse_dim).
 
     Returns:
     - LongTensor: A LongTensor representing pairs of indices.
 
     Raises:
-    - AssertionError: If the input tensors don't have the expected shapes or if the
-      total size exceeds the range that torch.long can express.
+    - AssertionError: If the input tensors don't have the expected shapes or if the total size exceeds the range that torch.long can express.
 
     Example:
-    ```python
-    indices = torch.tensor([[1, 2, 0], [4, 1, 2]], dtype=torch.long)
-    dim_sizes = torch.tensor([3, 5], dtype=torch.long)
-    hashed = indicehash_tight(indices, dim_sizes)
-    indices = decodehash_tight(hashed, dim_sizes)
-    ```
+
+    ::
+
+        indices = torch.tensor([[1, 2, 0], [4, 1, 2]], dtype=torch.long)
+        dim_sizes = torch.tensor([3, 5], dtype=torch.long)
+        hashed = indicehash_tight(indices, dim_sizes)
+        indices = decodehash_tight(hashed, dim_sizes)
+
     """
     assert indhash.ndim == 1, "indhash should of shape (nnz) "
     assert torch.prod(dimsize) < (
@@ -163,6 +170,7 @@ def coalesce(edge_index: LongTensor,
     Coalesces and reduces duplicate entries in edge indices and attributes.
     
     Args:
+
     - edge_index (LongTensor): The edge indices.
     - edge_attr (Tensor or List[Tensor], optional): Edge weights or multi-dimensional
       edge features. If given as a list, it will be reshuffled and duplicates will be
@@ -171,6 +179,7 @@ def coalesce(edge_index: LongTensor,
       Options include 'sum', 'mean', 'min', 'max', 'mul'. (default: 'sum')
 
     Returns:
+
     - Tuple[Tensor, Optional[Tensor]]: A tuple containing the coalesced edge indices
       and the coalesced and reduced edge attributes (if provided). If edge_attr is
       None, the second element will be None.
@@ -197,42 +206,24 @@ class SparseTensor:
 
     Parameters:
     - indices (LongTensor): The indices of the sparse tensor, of shape (#sparsedim, #nnz).
-    - values (Optional[Tensor]): The values associated with the indices, of shape (#nnz, *denseshape). Should have
-      the same number of nnz as indices. Defaults to None.
-    - shape (Optional[List[int]]): The shape of the sparse tensor. If None, it is
-      computed from the indices and values. Defaults to None.
-    - is_coalesced (bool): Indicates whether the indices and values are coalesced.
-      Defaults to False.
+    - values (Optional[Tensor]): The values associated with the indices, of shape (#nnz,\*denseshapeshape). Should have the same number of nnz as indices. Defaults to None.
+    - shape (Optional[List[int]]): The shape of the sparse tensor. If None, it is computed from the indices and values. Defaults to None.
+    - is_coalesced (bool): Indicates whether the indices and values are coalesced. Defaults to False.
 
     Methods:
     - is_coalesced(self): Check if the tensor is coalesced.
-    - to(self, device: torch.DeviceObjType, non_blocking: bool = False): Move the
-      tensor to the specified device.
-    - diag(self, dims: Optional[Iterable[int]], return_sparse: bool = False):
-      Extract diagonal elements from the tensor. The dimensions in dims will be take diagonal and put at dims[0]
-    - sum(self, dims: Union[int, Optional[Iterable[int]]], return_sparse: bool = False):
-      Compute the sum of tensor values along specified dimensions. 
-      return_sparse=True will return a sparse tensor, otherwise return a dense tensor.
-    - max(self, dims: Union[int, Optional[Iterable[int]]], return_sparse: bool = False):
-      Compute the maximum of tensor values along specified dimensions.
-      return_sparse=True will return a sparse tensor, otherwise return a dense tensor.
-    - mean(self, dims: Union[int, Optional[Iterable[int]]], return_sparse: bool = False):
-      Compute the mean of tensor values along specified dimensions.
-      return_sparse=True will return a sparse tensor, otherwise return a dense tensor.
-    - unpooling(self, dims: Union[int, Iterable[int]], tarX): Perform unpooling
-      operation along specified dimensions.
-    - tuplewiseapply(self, func: Callable[[Tensor], Tensor]): Apply a function to
-      each element of the tensor.
-    - diagonalapply(self, func: Callable[[Tensor, LongTensor], Tensor]): Apply a
-      function to diagonal elements of the tensor.
-    - add(self, tarX, samesparse: bool): Add two sparse tensors together. 
-      samesparse=True means that two sparse tensor have the indice and can add values directly. 
-    - catvalue(self, tarX, samesparse: bool): Concatenate values of two sparse tensors.
-      samesparse=True means that two sparse tensor have the indice and can cat values along the first dimension directly. 
-    - from_torch_sparse_coo(cls, A: torch.Tensor): Create a SparseTensor from a
-      torch sparse COO tensor.
-    - to_torch_sparse_coo(self) -> Tensor: Convert the SparseTensor to a torch sparse
-      COO tensor.
+    - to(self, device: torch.DeviceObjType, non_blocking: bool = False): Move the tensor to the specified device.
+    - diag(self, dims: Optional[Iterable[int]], return_sparse: bool = False): Extract diagonal elements from the tensor. The dimensions in dims will be take diagonal and put at dims[0]
+    - sum(self, dims: Union[int, Optional[Iterable[int]]], return_sparse: bool = False): Compute the sum of tensor values along specified dimensions. return_sparse=True will return a sparse tensor, otherwise return a dense tensor.
+    - max(self, dims: Union[int, Optional[Iterable[int]]], return_sparse: bool = False): Compute the maximum of tensor values along specified dimensions. return_sparse=True will return a sparse tensor, otherwise return a dense tensor.
+    - mean(self, dims: Union[int, Optional[Iterable[int]]], return_sparse: bool = False): Compute the mean of tensor values along specified dimensions. return_sparse=True will return a sparse tensor, otherwise return a dense tensor.
+    - unpooling(self, dims: Union[int, Iterable[int]], tarX): Perform unpooling operation along specified dimensions.
+    - tuplewiseapply(self, func: Callable[[Tensor], Tensor]): Apply a function to each element of the tensor.
+    - diagonalapply(self, func: Callable[[Tensor, LongTensor], Tensor]): Apply a function to diagonal elements of the tensor.
+    - add(self, tarX, samesparse: bool): Add two sparse tensors together. samesparse=True means that two sparse tensor have the indice and can add values directly. 
+    - catvalue(self, tarX, samesparse: bool): Concatenate values of two sparse tensors. samesparse=True means that two sparse tensor have the indice and can cat values along the first dimension directly. 
+    - from_torch_sparse_coo(cls, A: torch.Tensor): Create a SparseTensor from a torch sparse COO tensor.
+    - to_torch_sparse_coo(self) -> Tensor: Convert the SparseTensor to a torch sparse COO tensor.
 
     Attributes:
     - indices (LongTensor): The indices of the sparse tensor.
