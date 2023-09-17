@@ -6,7 +6,7 @@
 :github_url: https://github.com/GraphPKU/PygHO
 
 PyTorch Geometric High Order Documentation
-========================================
+==========================================
 
 PygHO is a library for high-order GNN. Ordinary GNNs, like GCN, GIN, GraphSage, all pass messages between nodes and produce node representations. The node representation forms a dense matrix of shape $(n, d)$, where $n$ is the number of nodes and $d$ is the hidden dimension. Existing libraries like PyG can easily implement them.
 

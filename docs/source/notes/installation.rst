@@ -5,7 +5,7 @@ The installation of PyGHO requires pytorch>=2.0 and pytorch_geometric>=2.3. Plea
 
 Once the required versions of PyTorch and PyTorch Geometric are installed, simply run:
 
-    .. code-block:: none
+    .. code-block:: bash
         
         $ git clone https://github.com/GraphPKU/PygHO.git
         $ cd PygHO
@@ -13,7 +13,7 @@ Once the required versions of PyTorch and PyTorch Geometric are installed, simpl
 
 To update PyGHO, simply run
 
-    .. code-block:: none
+    .. code-block:: bash
         
         $ git pull
 
