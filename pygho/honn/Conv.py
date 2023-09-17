@@ -40,9 +40,11 @@ class NGNNConv(Module):
                  outdim: int,
                  aggr: str = "sum",
                  mode: Literal["SD", "DD", "SS"] = "SS",
-                 mlp: dict = {}):
+                 mlp: dict = {},
+                 optuplefeat: str="X",
+                 opadj: str="A"):
         super().__init__()
-        self.aggr = TensorOp.OpMessagePassingOnSubg2D(mode, aggr)
+        self.aggr = TensorOp.OpMessagePassingOnSubg2D(mode, aggr, optuplefeat, opadj)
         self.lin = MLP(indim, outdim, **mlp)
 
     def forward(self, A: Union[SparseTensor, MaskedTensor],
@@ -78,10 +80,12 @@ class SSWLConv(Module):
                  outdim: int,
                  aggr: str = "sum",
                  mode: Literal["SD", "DD", "SS"] = "SS",
-                 mlp: dict = {}):
+                 mlp: dict = {},
+                 optuplefeat: str="X",
+                 opadj: str="A"):
         super().__init__()
-        self.aggr1 = TensorOp.OpMessagePassingOnSubg2D(mode, aggr)
-        self.aggr2 = TensorOp.OpMessagePassingCrossSubg2D(mode, aggr)
+        self.aggr1 = TensorOp.OpMessagePassingOnSubg2D(mode, aggr, optuplefeat, opadj)
+        self.aggr2 = TensorOp.OpMessagePassingCrossSubg2D(mode, aggr, optuplefeat, opadj)
         self.lin = MLP(3 * indim, outdim, **mlp)
 
     def forward(self, A: Union[SparseTensor, MaskedTensor],
@@ -120,9 +124,11 @@ class I2Conv(Module):
                  outdim: int,
                  aggr: str = "sum",
                  mode: Literal["SD", "DD", "SS"] = "SS",
-                 mlp: dict = {}):
+                 mlp: dict = {},
+                 optuplefeat: str="X",
+                 opadj: str="A"):
         super().__init__()
-        self.aggr = TensorOp.OpMessagePassingOnSubg3D(mode, aggr)
+        self.aggr = TensorOp.OpMessagePassingOnSubg3D(mode, aggr, optuplefeat, opadj)
         self.lin = MLP(indim, outdim, **mlp)
 
     def forward(self, A: Union[SparseTensor, MaskedTensor],
@@ -161,9 +167,11 @@ class DSSGNNConv(Module):
                  aggr_global: str = "sum",
                  pool: str = "mean",
                  mode: Literal["SD", "DD", "SS"] = "SS",
-                 mlp: dict = {}):
+                 mlp: dict = {},
+                 optuplefeat: str="X",
+                 opadj: str="A"):
         super().__init__()
-        self.aggr_subg = TensorOp.OpMessagePassingOnSubg2D(mode, aggr_subg)
+        self.aggr_subg = TensorOp.OpMessagePassingOnSubg2D(mode, aggr_subg, optuplefeat, opadj)
         self.pool2global = TensorOp.OpPoolingCrossSubg2D(mode[1], pool)
         self.aggr_global = TensorOp.OpNodeMessagePassing(mode, aggr_global)
         self.unpooling2subg = TensorOp.OpUnpoolingRootNodes2D(mode[1])
@@ -203,9 +211,10 @@ class PPGNConv(Module):
                  outdim: int,
                  aggr: str = "sum",
                  mode: Literal["DD", "SS"] = "SS",
-                 mlp: dict = {}):
+                 mlp: dict = {},
+                 optuplefeat: str="X"):
         super().__init__()
-        self.op = TensorOp.Op2FWL(mode, aggr)
+        self.op = TensorOp.Op2FWL(mode, aggr, optuplefeat)
         self.lin1 = MLP(indim, outdim, **mlp)
         self.lin2 = MLP(indim, outdim, **mlp)
 
@@ -245,10 +254,12 @@ class GNNAKConv(Module):
                  mode: Literal["SD", "DD", "SS"] = "SS",
                  mlp0: dict = {},
                  mlp1: dict = {},
-                 ctx: bool = True):
+                 ctx: bool = True,
+                 optuplefeat: str="X",
+                 opadj: str="A"):
         super().__init__()
         self.lin0 = MLP(indim, indim, **mlp0)
-        self.aggr = TensorOp.OpMessagePassingOnSubg2D(mode, aggr)
+        self.aggr = TensorOp.OpMessagePassingOnSubg2D(mode, aggr, optuplefeat, opadj)
         self.diag = TensorOp.OpDiag2D(mode[1])
         self.pool2subg = TensorOp.OpPoolingSubg2D(mode[1], pool)
         self.unpool4subg = TensorOp.OpUnpoolingSubgNodes2D(mode[1])
@@ -301,10 +312,12 @@ class SUNConv(Module):
                  pool: str = "mean",
                  mode: Literal["SD", "DD", "SS"] = "SS",
                  mlp0: dict = {},
-                 mlp1: dict = {}):
+                 mlp1: dict = {},
+                 optuplefeat: str="X",
+                 opadj: str="A"):
         super().__init__()
         self.lin0 = MLP(indim, indim, **mlp0)
-        self.aggr = TensorOp.OpMessagePassingOnSubg2D(mode, aggr)
+        self.aggr = TensorOp.OpMessagePassingOnSubg2D(mode, aggr, optuplefeat, opadj)
         self.diag = TensorOp.OpDiag2D(mode[1])
         self.pool2subg = TensorOp.OpPoolingSubg2D(mode[1], pool)
         self.unpool4subg = TensorOp.OpUnpoolingSubgNodes2D(mode[1])

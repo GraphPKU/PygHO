@@ -1,13 +1,12 @@
 from torch_geometric.data import Data as PygData, Batch as PygBatch
-from torch_geometric.utils import to_networkx, to_scipy_sparse_matrix, k_hop_subgraph
-import networkx as nx
+from torch_geometric.utils import to_scipy_sparse_matrix, k_hop_subgraph
 import torch
 from typing import List, Optional, Tuple, Union
 from torch import Tensor, LongTensor
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 from typing import Tuple
 import scipy.sparse as ssp
-from ..backend.SpTensor import coalesce
+from ..backend.SpTensor import coalesce, SparseTensor
 
 
 def k_hop_subgraph(
@@ -89,46 +88,9 @@ def k_hop_subgraph(
     return subset, edge_index, inv, edge_mask, dist
 
 
-def CycleCenteredKhopSampler(
-        data: PygData,
-        hop: int = 2) -> Tuple[LongTensor, LongTensor, Tuple[int, int]]:
-    ng = to_networkx(PygData(edge_index=data.edge_index), to_undirected=True)
-    cynodes = set(sum(nx.cycle_basis(ng), start=[]))
-
-    subgraphs = []
-
-    for i in range(data.num_nodes):
-        if i in cynodes:
-            subset, _, _, _, dist = k_hop_subgraph(i,
-                                                   hop,
-                                                   data.edge_index,
-                                                   relabel_nodes=True,
-                                                   num_nodes=data.num_nodes)
-            assert subset.shape[0] > 1, "empty subgraph!"
-            nodeidx1 = subset.clone()
-            nodeidx1.fill_(i)
-            subgraphs.append(
-                PygData(
-                    x=dist,
-                    subg_nodeidx=torch.stack((nodeidx1, subset), dim=-1),
-                    num_nodes=subset.shape[0],
-                ))
-        else:
-            subgraphs.append(
-                PygData(
-                    x=torch.zeros((1), dtype=torch.long),
-                    subg_nodeidx=torch.tensor([[i, i]], dtype=torch.long),
-                    num_nodes=1,
-                ))
-    subgbatch = PygBatch.from_data_list(subgraphs)
-    return subgbatch.subg_nodeidx.t(), subgbatch.x, [
-        data.num_nodes, data.num_nodes
-    ]
-
-
 def KhopSampler(
         data: PygData,
-        hop: int = 2) -> Tuple[LongTensor, LongTensor, Tuple[int, int]]:
+        hop: int = 2) -> SparseTensor:
     """
     sample k-hop subgraph on a given PyG graph.
 
@@ -139,10 +101,7 @@ def KhopSampler(
 
     Returns:
     
-        Tuple[LongTensor, LongTensor, Tuple[int, int]]: A tuple containing:
-            - tupleid (LongTensor): The tensor containing subgraph node indices.
-            - tuplefeat (LongTensor): The tensor containing distances from the starting node.
-            - Tuple[int, int]: A tuple representing the shape of the resulting tensors.
+        SparseTensor for the precomputed tuple features.
     """
 
     subgraphs = []
@@ -164,13 +123,12 @@ def KhopSampler(
             ))
     subgbatch = PygBatch.from_data_list(subgraphs)
     tupleid, tuplefeat = subgbatch.subg_nodeidx.t(), subgbatch.x
-    tupleid, tuplefeat = coalesce(tupleid, tuplefeat, reduce="min")
-    return tupleid, tuplefeat, [data.num_nodes, data.num_nodes]
+    return SparseTensor(tupleid, tuplefeat, shape=2*[data.num_nodes]+list(tuplefeat.shape[1:]), is_coalesced=False, reduce="min")
 
 
 def I2Sampler(
         data: PygData,
-        hop: int = 3) -> Tuple[LongTensor, LongTensor, Tuple[int, int, int]]:
+        hop: int = 3) -> SparseTensor:
     """
     Perform subgraph sampling on a given graph for I2GNN.
 
@@ -181,10 +139,7 @@ def I2Sampler(
 
     Returns:
     
-        Tuple[LongTensor, LongTensor, Tuple[int, int, int]]: A tuple containing:
-            - tupleid (LongTensor): The tensor containing subgraph node indices.
-            - tuplefeat (LongTensor): The tensor containing shortest distances between node pairs.
-            - Tuple[int, int, int]: A tuple representing the shape of the resulting tensors.
+        SparseTensor for the precomputed tuple features.
     """
     subgraphs = []
     spadj = to_scipy_sparse_matrix(data.edge_index, num_nodes=data.num_nodes)
@@ -216,5 +171,4 @@ def I2Sampler(
             ))
     subgbatch = PygBatch.from_data_list(subgraphs)
     tupleid, tuplefeat = subgbatch.subg_nodeidx.t(), subgbatch.x
-    tupleid, tuplefeat = coalesce(tupleid, tuplefeat, reduce="max")
-    return tupleid, tuplefeat, [data.num_nodes, data.num_nodes, data.num_nodes]
+    return SparseTensor(tupleid, tuplefeat, shape=3*[data.num_nodes]+list(tuplefeat.shape[1:]), is_coalesced=False, reduce="min")

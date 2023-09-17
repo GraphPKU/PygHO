@@ -314,23 +314,23 @@ if args.sparse:
     if args.conv in ["I2GNN"]:
         trn_dataset = ParallelPreprocessDataset(
             "dataset/ZINC_trn", trn_dataset,
-            Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 0)
+            Sppretransform(partial(I2Sampler, hop=3), [""], keys), 0)
         val_dataset = ParallelPreprocessDataset(
             "dataset/ZINC_val", val_dataset,
-            Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 0)
+            Sppretransform(partial(I2Sampler, hop=3), [""], keys), 0)
         tst_dataset = ParallelPreprocessDataset(
             "dataset/ZINC_tst", tst_dataset,
-            Sppretransform(None, partial(I2Sampler, hop=3), [""], keys), 0)
+            Sppretransform(partial(I2Sampler, hop=3), [""], keys), 0)
     else:
         trn_dataset = ParallelPreprocessDataset(
             "dataset/ZINC_trn", trn_dataset,
-            Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 0)
+            Sppretransform(partial(KhopSampler, hop=3), [""], keys), 0)
         val_dataset = ParallelPreprocessDataset(
             "dataset/ZINC_val", val_dataset,
-            Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 0)
+            Sppretransform(partial(KhopSampler, hop=3), [""], keys), 0)
         tst_dataset = ParallelPreprocessDataset(
             "dataset/ZINC_tst", tst_dataset,
-            Sppretransform(None, partial(KhopSampler, hop=3), [""], keys), 0)
+            Sppretransform(partial(KhopSampler, hop=3), [""], keys), 0)
     trn_dataloader = SpDataloader(trn_dataset,
                                   batch_size=args.bs,
                                   shuffle=True,
@@ -342,20 +342,20 @@ else:
     trn_dataset = ParallelPreprocessDataset("dataset/ZINC_trn",
                                             trn_dataset,
                                             pre_transform=Mapretransform(
-                                                None, partial(spdsampler,
+                                                partial(spdsampler,
                                                               hop=4)),
                                             num_worker=0)
     val_dataset = ParallelPreprocessDataset("dataset/ZINC_val",
                                             val_dataset,
                                             pre_transform=Mapretransform(
-                                                None, partial(spdsampler,
+                                                partial(spdsampler,
                                                               hop=4)),
                                             num_worker=0)
 
     tst_dataset = ParallelPreprocessDataset("dataset/ZINC_tst",
                                             tst_dataset,
                                             pre_transform=Mapretransform(
-                                                None, partial(spdsampler,
+                                                partial(spdsampler,
                                                               hop=4)),
                                             num_worker=0)
 

@@ -189,8 +189,8 @@ class Op2FWL(OpMessagePassing):
 
     """
 
-    def __init__(self, aggr: str = "sum") -> None:
-        super().__init__("X", "X", 1, "X", 0, aggr)
+    def __init__(self, aggr: str = "sum", optuplefeat: str= "X") -> None:
+        super().__init__(optuplefeat, optuplefeat, 1, optuplefeat, 0, aggr)
 
     def forward(self,
                 X1: SparseTensor,
@@ -234,8 +234,8 @@ class OpMessagePassingOnSubg2D(OpMessagePassing):
 
     """
 
-    def __init__(self, aggr: str = "sum") -> None:
-        super().__init__("X", "X", 1, "A", 0, aggr)
+    def __init__(self, aggr: str = "sum", optuplefeat: str = "X", opadj: str="A") -> None:
+        super().__init__(optuplefeat, optuplefeat, 1, opadj, 0, aggr)
 
     def forward(self,
                 A: SparseTensor,
@@ -279,8 +279,8 @@ class OpMessagePassingOnSubg3D(OpMessagePassing):
 
     """
 
-    def __init__(self, aggr: str = "sum") -> None:
-        super().__init__("X", "X", 2, "A", 0, aggr)
+    def __init__(self, aggr: str = "sum", optuplefeat: str = "X", opadj: str="A") -> None:
+        super().__init__(optuplefeat, optuplefeat, 2, opadj, 0, aggr)
 
     def forward(self,
                 A: SparseTensor,
@@ -319,8 +319,8 @@ class OpMessagePassingCrossSubg2D(OpMessagePassing):
     - SparseTensor: The result of message passing on each subgraph within the 2D subgraph GNN.
     """
 
-    def __init__(self, aggr: str = "sum") -> None:
-        super().__init__("X", "A", 1, "X", 0, aggr)
+    def __init__(self, aggr: str = "sum", optuplefeat: str = "X", opadj: str="A") -> None:
+        super().__init__(optuplefeat, opadj, 1, optuplefeat, 0, aggr)
 
     def forward(self,
                 A: SparseTensor,

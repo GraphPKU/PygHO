@@ -113,14 +113,7 @@ def batch2sparse(batch: PygBatch, keys: List[str] = [""]) -> PygBatch:
 
 
 def sp_datapreprocess(data: PygData,
-                      tuplesamplers: Union[Callable[[PygData],
-                                                    Tuple[Tensor, Tensor,
-                                                          Union[List[int],
-                                                                int]]],
-                                           List[Callable[[PygData],
-                                                         Tuple[Tensor, Tensor,
-                                                               Union[List[int],
-                                                                     int]]]]],
+                      tuplesamplers: List[Callable[[PygData], SparseTensor]],
                       annotate: List[str] = [""],
                       keys: List[str] = [""]) -> SpHoData:
     '''
@@ -140,8 +133,7 @@ def sp_datapreprocess(data: PygData,
     data.edge_index, data.edge_attr = coalesce(data.edge_index,
                                                data.edge_attr,
                                                num_nodes=data.num_nodes)
-    if not isinstance(tuplesamplers, Iterable):
-        tuplesamplers = [tuplesamplers]
+    
     assert len(tuplesamplers) == len(
         annotate
     ), "number of tuple sampler should match the number of annotate"
@@ -155,7 +147,8 @@ def sp_datapreprocess(data: PygData,
         "edge_attr": data.edge_attr,
     })
     for i, tuplesampler in enumerate(tuplesamplers):
-        tupleid, tuplefeat, tupleshape = tuplesampler(data)
+        feat = tuplesampler(data)
+        tupleid, tuplefeat, tupleshape = feat.indices, feat.values, feat.sparseshape 
         num_tuples = tupleid.shape[1]
         datadict.update({
             f"tupleid{annotate[i]}":

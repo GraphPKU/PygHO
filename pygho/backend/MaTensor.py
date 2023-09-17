@@ -238,7 +238,7 @@ class MaskedTensor:
         return MaskedTensor(ndata, self.mask)
 
     def diagonalapply(self, func: Callable[[Tensor, LongTensor], Tensor]):
-        assert self.masked_dim == 3, "only implemented for 3D"
+        assert self.masked_dim == 3, "only implemented for 2D"
         diagonaltype = torch.eye(self.shape[1],
                                  self.shape[2],
                                  dtype=torch.long,

@@ -15,6 +15,7 @@ class MaHoData(PygData):
     '''
     a data class for dense high order graph data.
     '''
+
     def __inc__(self, key: str, value: Any, *args, **kwargs):
         if key == 'edge_index':
             return 0
@@ -255,11 +256,8 @@ def batch2dense(batch: PygBatch,
 
 
 def ma_datapreprocess(data: PygData,
-                      tuplesamplers: Union[Callable[[PygData],
-                                                    Tuple[Tensor, List[int]]],
-                                           List[Callable[[PygData],
-                                                         Tuple[Tensor,
-                                                               List[int]]]]],
+                      tuplesamplers: List[Callable[[PygData],
+                                                   Tuple[Tensor, List[int]]]],
                       annotate: List[str] = [""]) -> MaHoData:
     '''
     A wrapper for preprocessing dense data.
@@ -275,8 +273,6 @@ def ma_datapreprocess(data: PygData,
     - MaHoData: Preprocessed data object.
 
     '''
-    if not isinstance(tuplesamplers, Iterable):
-        tuplesamplers = [tuplesamplers]
     assert len(tuplesamplers) == len(
         annotate), "each tuplesampler need a different annotate"
     data.edge_index, data.edge_attr = coalesce(data.edge_index,

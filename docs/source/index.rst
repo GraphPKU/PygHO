@@ -8,7 +8,9 @@
 PyTorch Geometric High Order Documentation
 ========================================
 
-PyTorch Geometric High Order (PyGHO) is a high order graph neural network (HOGNN) extension library for `PyTorch Geometric <https://github.com/rusty1s/pytorch_geometric/>`_.  Unlike ordinary GNNs producing node representations, HOGNNs produce representations for node tuples. PyGHO is the first unified library for HOGNNs.
+PygHO is a library for high-order GNN. Ordinary GNNs, like GCN, GIN, GraphSage, all pass messages between nodes and produce node representations. The node representation forms a dense matrix of shape $(n, d)$, where $n$ is the number of nodes and $d$ is the hidden dimension. Existing libraries like PyG can easily implement them.
+
+In constrast, higher-order GNNs (HOGNNs) use node tuples as the message passing unit and produce representations for the tuples. The tuple representation can be of shape $(n, n, d)$, $(n, n, n, d)$, and even more dimensions. Furthermore, to reduce complexity, the representation can be sparse. PyGHO is the first unified library for HOGNNs.
 
 .. code-block:: latex
 
@@ -24,7 +26,17 @@ PyTorch Geometric High Order (PyGHO) is a high order graph neural network (HOGNN
    :caption: Notes
 
    notes/installation
-   notes/introduction
+   notes/miniexample
+   notes/datastructure
+   notes/hodata
+   notes/operator
+
+.. toctree::
+   :glob:
+   :maxdepth: 2
+   :caption: Advanced Tutorial
+
+   notes/multtensor
 
 .. toctree::
    :glob:

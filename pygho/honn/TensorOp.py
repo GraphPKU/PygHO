@@ -86,10 +86,11 @@ class Op2FWL(Module):
 
     def __init__(self,
                  mode: Literal["SS", "DD"] = "SS",
-                 aggr: Literal["sum", "mean", "max"] = "sum") -> None:
+                 aggr: Literal["sum", "mean", "max"] = "sum",
+                 optuplefeat: str="X") -> None:
         super().__init__()
         if mode == "SS":
-            self.mod = SpOperator.Op2FWL(aggr)
+            self.mod = SpOperator.Op2FWL(aggr, optuplefeat)
         elif mode == "DD":
             assert aggr == "sum", "only sum aggragation implemented for Dense adjacency"
             self.mod = MaOperator.Op2FWL()
@@ -125,7 +126,8 @@ class OpMessagePassingOnSubg2D(Module):
 
     def __init__(self,
                  mode: Literal["SD", "SS", "DD"] = "SS",
-                 aggr: Literal["sum", "mean", "max"] = "sum") -> None:
+                 aggr: Literal["sum", "mean", "max"] = "sum",
+                 optuplefeat: str = "X", opadj: str="A") -> None:
         """
         Perform message passing on each subgraph for 2D subgraph Graph Neural Networks with support for both sparse and masked tensors.
 
@@ -146,7 +148,7 @@ class OpMessagePassingOnSubg2D(Module):
         """
         super().__init__()
         if mode == "SS":
-            self.mod = SpOperator.OpMessagePassingOnSubg2D(aggr)
+            self.mod = SpOperator.OpMessagePassingOnSubg2D(aggr, optuplefeat, opadj)
         elif mode == "SD":
             self.mod = MaOperator.OpSpMessagePassingOnSubg2D(aggr)
         elif mode == "DD":
@@ -201,10 +203,11 @@ class OpMessagePassingOnSubg3D(Module):
     """
     def __init__(self,
                  mode: Literal["SD", "SS", "DD"] = "SS",
-                 aggr: Literal["sum", "mean", "max"] = "sum") -> None:
+                 aggr: Literal["sum", "mean", "max"] = "sum",
+                 optuplefeat: str = "X", opadj: str="A") -> None:
         super().__init__()
         if mode == "SS":
-            self.mod = SpOperator.OpMessagePassingOnSubg3D(aggr)
+            self.mod = SpOperator.OpMessagePassingOnSubg3D(aggr, optuplefeat, opadj)
         elif mode == "SD":
             self.mod = MaOperator.OpSpMessagePassingOnSubg3D(aggr)
         elif mode == "DD":
@@ -258,10 +261,11 @@ class OpMessagePassingCrossSubg2D(Module):
     """
     def __init__(self,
                  mode: Literal["SD", "SS", "DD"] = "SS",
-                 aggr: Literal["sum", "mean", "max"] = "sum") -> None:
+                 aggr: Literal["sum", "mean", "max"] = "sum",
+                 optuplefeat: str = "X", opadj: str="A") -> None:
         super().__init__()
         if mode == "SS":
-            self.mod = SpOperator.OpMessagePassingCrossSubg2D(aggr)
+            self.mod = SpOperator.OpMessagePassingCrossSubg2D(aggr, optuplefeat, opadj)
         elif mode == "SD":
             self.mod = MaOperator.OpMessagePassingCrossSubg2D(aggr)
         elif mode == "DD":
