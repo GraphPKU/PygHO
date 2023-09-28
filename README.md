@@ -13,7 +13,3 @@ cd PygHO
 pip install -e ./
 ```
 `-e` enables modifying the library code dynamically and is optional. 
-
-## Usage
-
-Please refer to our [online document](https://graphpku.github.io/PyGHO_doc/) for more details.
