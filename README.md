@@ -13,3 +13,11 @@ cd PygHO
 pip install -e ./
 ```
 `-e` enables modifying the library code dynamically and is optional. 
+
+## Document
+
+```
+cd docs
+make html
+```
+Then use explorer to view `docs/build/html/index.html`.
