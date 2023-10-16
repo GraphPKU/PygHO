@@ -2,7 +2,7 @@ import numpy as np
 
 from functools import partial
 import time
-from typing import Callable
+from typing import Callable, Final
 
 import torch
 import torch.nn as nn
@@ -155,7 +155,7 @@ maconvdict = {
 
 
 class MaModel(nn.Module):
-
+    residual: Final[bool]
     def __init__(self,
                  convfn: Callable,
                  num_tasks=1,
@@ -209,6 +209,14 @@ class MaModel(nn.Module):
         X = datadict["X"]
         x = datadict["x"]
         X = self.tupleinit(datadict["X"], datadict["x"])
+        '''
+        for conv in self.subggnns:
+            tX = conv.forward(A, X, datadict)
+            if self.residual:
+                X = X.add(tX, samesparse=True)
+            else:
+                X = tX
+        '''
         for conv in self.subggnns:
             tX = conv.forward(A, X, datadict)
             if self.residual:
