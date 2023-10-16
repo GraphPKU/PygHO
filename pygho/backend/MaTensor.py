@@ -28,8 +28,7 @@ def filterinf(X: Tensor, filled_value: float = 0):
         result = filterinf(input_tensor, filled_value=999.0)
 
     """
-    return torch.where(torch.logical_or(X == torch.inf, X == -torch.inf),
-                       filled_value, X)
+    return X.masked_fill(torch.isinf(X), filled_value)
 
 
 class MaskedTensor:
@@ -52,8 +51,8 @@ class MaskedTensor:
     
     - data (Tensor): The underlying data tensor.
     - mask (BoolTensor): The mask tensor.
-    - fullmask (BoolTensor): The mask tensor after broadcasting to match the data's
-      dimensions.
+    - fullnegmask (BoolTensor): The mask tensor after broadcasting to match the data's
+      dimensions and take logical_not.
     - padvalue (float): The padding value.
     - shape (torch.Size): The shape of the data tensor.
     - masked_dim (int): The number of dimensions in maskedshape.
@@ -104,29 +103,29 @@ class MaskedTensor:
           mask = mask.unsqueeze(-1)
           if self.dense_dim > 1:
               mask = mask.unflatten(-1, (self.dense_dim)*(1,))
-        self.__fullmask = mask
+        self.__fullnegmask = torch.logical_not(mask)
         if not is_filled:
-            self.__padvalue = torch.inf if padvalue != torch.inf else -torch.inf
+            self.__padvalue = padvalue
             self.fill_masked_(padvalue)
         else:
             self.__padvalue = padvalue
 
-    def fill_masked_(self, val: float = 0) -> None:
+    def fill_masked_(self, val: float = 0.0) -> None:
         """
         inplace fill the masked values
         """
         if self.padvalue == val:
             return
         self.__padvalue = val
-        self.__data = torch.where(self.fullmask, self.data, val)
+        self.__data = self.data.masked_fill(self.fullnegmask, val)
 
-    def fill_masked(self, val: float = 0) -> Tensor:
+    def fill_masked(self, val: float = 0.0) -> Tensor:
         """
         return a tensor with masked values filled with val.
         """
         if self.__padvalue == val:
             return self.data
-        return torch.where(self.fullmask, self.data, val)
+        return self.data.masked_fill(self.fullnegmask, val)
 
     def to(self, device: torch.DeviceObjType, non_blocking: bool = True):
         """
@@ -134,7 +133,7 @@ class MaskedTensor:
         """
         self.__data = self.__data.to(device, non_blocking=non_blocking)
         self.__mask = self.__mask.to(device, non_blocking=non_blocking)
-        self.__fullmask = self.__fullmask.to(device, non_blocking=non_blocking)
+        self.__fullnegmask = self.__fullnegmask.to(device, non_blocking=non_blocking)
         return self
 
     @property
@@ -150,8 +149,8 @@ class MaskedTensor:
         return self.__mask
 
     @property
-    def fullmask(self) -> BoolTensor:
-        return self.__fullmask
+    def fullnegmask(self) -> BoolTensor:
+        return self.__fullnegmask
 
     @property
     def shape(self) -> torch.Size:
@@ -174,7 +173,7 @@ class MaskedTensor:
         return self.shape[self.masked_dim:]
 
     def sum(self, dims: Union[Iterable[int], int], keepdim: bool = False):
-        return MaskedTensor(torch.sum(self.fill_masked(0),
+        return MaskedTensor(torch.sum(self.fill_masked(0.),
                                       dim=dims,
                                       keepdim=keepdim),
                             torch.amax(self.mask, dims, keepdim=keepdim),
@@ -183,7 +182,7 @@ class MaskedTensor:
 
     def mean(self, dims: Union[Iterable[int], int], keepdim: bool = False):
         count = torch.clamp_min_(
-            torch.sum(self.fullmask, dim=dims, keepdim=keepdim), 1)
+            torch.sum(torch.logical_not(self.fullnegmask), dim=dims, keepdim=keepdim), 1)
         valsum = self.sum(dims, keepdim)
         return MaskedTensor(valsum.data / count,
                             valsum.mask,
@@ -236,7 +235,7 @@ class MaskedTensor:
 
     def tuplewiseapply(self, func: Callable[[Tensor], Tensor]):
         # it may cause nan in gradient and makes amp unable to update
-        ndata = func(self.fill_masked(0))
+        ndata = func(self.fill_masked(0.))
         return MaskedTensor(ndata, self.mask)
 
     def diagonalapply(self, func: Callable[[Tensor, LongTensor], Tensor]):
@@ -250,6 +249,8 @@ class MaskedTensor:
         return MaskedTensor(ndata, self.mask)
 
     def add(self, tarX, samesparse: bool):
+        assert isinstance(tarX, MaskedTensor)
+        tarX: MaskedTensor = tarX
         if samesparse:
             return MaskedTensor(tarX.data + self.data,
                                 self.mask,
@@ -257,7 +258,7 @@ class MaskedTensor:
                                 is_filled=self.padvalue == tarX.padvalue)
         else:
             return MaskedTensor(
-                tarX.fill_masked(0) + self.fill_masked(0),
+                tarX.fill_masked(0.) + self.fill_masked(0.),
                 torch.logical_or(self.mask, tarX.mask), 0, True)
 
     def catvalue(self, tarX: Iterable, samesparse: bool):

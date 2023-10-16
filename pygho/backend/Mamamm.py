@@ -32,7 +32,7 @@ def mamamm(A: MaskedTensor,
 
     - This function performs batched matrix multiplication between two MaskedTensors, contracting the specified masked dimensions.
     """
-    tA, tB = A.fill_masked(0), B.fill_masked(0)
+    tA, tB = A.fill_masked(0.), B.fill_masked(0.)
     catdim1, catdim2 = A.masked_dim, B.masked_dim
     if broadcast_firstdim:
         assert dim1 > 0, "0 dim of A is batch, need to be broadcasted"

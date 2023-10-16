@@ -28,7 +28,8 @@ from pygho.honn.utils import MLP
 import argparse
 
 torch.set_float32_matmul_precision('high')
-
+import torch._dynamo
+torch._dynamo.config.verbose=True
 parser = argparse.ArgumentParser()
 parser.add_argument("--sparse", action="store_true")
 parser.add_argument("--aggr", choices=["sum", "mean", "max"], default="sum")
@@ -196,8 +197,8 @@ class MaModel(nn.Module):
 
     def tupleinit(self, X: MaskedTensor, x: MaskedTensor) -> MaskedTensor:
         return X.tuplewiseapply(
-            lambda val: self.lin_tupleinit0(x.fill_masked(0)).unsqueeze(
-                1) * self.lin_tupleinit1(x.fill_masked(0)).unsqueeze(2) * val)
+            lambda val: self.lin_tupleinit0(x.fill_masked(0.)).unsqueeze(
+                1) * self.lin_tupleinit1(x.fill_masked(0.)).unsqueeze(2) * val)
 
     def forward(self, datadict: dict):
         '''
@@ -216,7 +217,7 @@ class MaModel(nn.Module):
                 X = tX
         x = self.lpool(X)
         x = x.tuplewiseapply(self.poolmlp)
-        h_graph = self.npool.forward(x).fill_masked(0)
+        h_graph = self.npool.forward(x).fill_masked(0.)
         return self.pred_lin(h_graph)
 
 
