@@ -130,11 +130,9 @@ def mamamm(A: MaskedTensor,
 
     densedim = max(densedim1, densedim2)
 
-    if broadcast_denseshape:
+    if broadcast_firstdim:
         assert dim1 > 0, "0 dim of A is batch, need to be broadcasted"
         assert dim2 > 0, "0 dim of B is batch, need to be broadcasted"
-
-    if broadcast_firstdim:
         tA = torch.movedim(tA, 0, -densedim - 1)
         tB = torch.movedim(tB, 0, -densedim - 1)
         densedim += 1

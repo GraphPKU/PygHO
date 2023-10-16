@@ -27,6 +27,8 @@ from pygho.honn.utils import MLP
 
 import argparse
 
+torch.set_float32_matmul_precision('high')
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--sparse", action="store_true")
 parser.add_argument("--aggr", choices=["sum", "mean", "max"], default="sum")
@@ -67,8 +69,6 @@ class InputEncoderMa(nn.Module):
             lambda x: self.x_encoder(x.squeeze(-1)))
         datadict["A"] = datadict["A"].tuplewiseapply(self.ea_encoder)
         datadict["X"] = datadict["X"].tuplewiseapply(self.tuplefeat_encoder)
-        if args.conv == "PPGN":
-            datadict["X"] = datadict["X"].add(datadict["A"], False)
         return datadict
 
 
@@ -84,8 +84,6 @@ class InputEncoderSp(nn.Module):
         datadict["x"] = self.x_encoder(datadict["x"].flatten())
         datadict["A"] = datadict["A"].tuplewiseapply(self.ea_encoder)
         datadict["X"] = datadict["X"].tuplewiseapply(self.tuplefeat_encoder)
-        if args.conv == "PPGN":
-            datadict["X"] = datadict["X"].add(datadict["A"], False)
         return datadict
 
 
@@ -366,12 +364,6 @@ else:
                                   device=device)
     val_dataloader = MaDataloader(val_dataset, batch_size=args.bs, device=device)
     tst_dataloader = MaDataloader(tst_dataset, batch_size=args.bs, device=device)
-optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.wd)
-
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,
-                                                       T_max=args.cosT * len(trn_dataloader), eta_min=args.minlr)
-
-model = model.to(device)
 
 # 4 training process
 def train(dataloader):
@@ -413,6 +405,7 @@ for i in range(args.repeat):
         model = SpModel(spconvdict[args.conv], npool=args.npool, lpool=args.lpool, outlayer=args.outlayer, mlp=mlpdict)
     else:
         model = MaModel(maconvdict[args.conv], npool=args.npool, lpool=args.lpool, outlayer=args.outlayer, mlp=mlpdict)
+    model = torch.compile(model)
     model = model.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.wd)
     scheduler = CosineAnnealingWarmRestarts(optimizer=optimizer,
@@ -431,7 +424,7 @@ for i in range(args.repeat):
             tst_score = eval(tst_dataloader)
         t3 = time.time()
         print(
-            f"epoch {epoch} trn time {t2-t1:.2f} val time {t3-t2:.2f} memory {torch.cuda.max_memory_allocated()/1024**3:.2f} GB  l1loss {losss:.4f} val MAE {val_score:.4f} tst MAE {tst_score:.4f}"
+            f"epoch {epoch} trn time {t2-t1:.2f} val time {t3-t2:.2f} memory {torch.cuda.max_memory_allocated()/1024**3:.2f} GB  l1loss {losss:.4f} val MAE {val_score:.4f} tst MAE {tst_score:.4f}", flush=True
         )
         if np.isnan(losss) or np.isnan(val_score):
             break

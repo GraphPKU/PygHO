@@ -5,8 +5,6 @@ from torch.optim.lr_scheduler import LRScheduler
 class CosineAnnealingWarmRestarts(LRScheduler):
 
     def __init__(self, optimizer, T_0, T_mult=1, eta_min=0, last_epoch=-1, K = 0.0, K2 = 0.0, verbose=False):
-        if T_0 <= 0:
-            raise ValueError("Expected positive integer T_0, but got {}".format(T_0))
         if T_mult < 1:
             raise ValueError("Expected integer T_mult >= 1, but got {}".format(T_mult))
         self.T_0 = T_0
@@ -23,12 +21,15 @@ class CosineAnnealingWarmRestarts(LRScheduler):
         if not self._get_lr_called_within_step:
             warnings.warn("To get the last learning rate computed by the scheduler, "
                           "please use `get_last_lr()`.", UserWarning)
-
-        return [(1/(1+self.K*self.num_cos+self.K2*self.num_cos**2))*(self.eta_min + (base_lr - self.eta_min) * (1 + math.cos(math.pi * self.T_cur / self.T_i)) / 2)
-                for base_lr in self.base_lrs]
+        if self.T_0 < 1:
+            return [base_lr for base_lr in self.base_lrs]
+        else:
+            return [(1/(1+self.K*self.num_cos+self.K2*self.num_cos**2))*(self.eta_min + (base_lr - self.eta_min) * (1 + math.cos(math.pi * self.T_cur / self.T_i)) / 2)
+                    for base_lr in self.base_lrs]
 
     def step(self, epoch=None):
-
+        if self.T_0 < 1:
+            return
         if epoch is None and self.last_epoch < 0:
             epoch = 0
 

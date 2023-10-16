@@ -258,13 +258,6 @@ class MaskedTensor:
                 tarX.fill_masked(0) + self.fill_masked(0),
                 torch.logical_or(self.mask, tarX.mask), 0, True)
 
-    def catvalue(self, tarX, samesparse: bool):
+    def catvalue(self, tarX: Iterable, samesparse: bool):
         assert samesparse == True, "must have the same sparcity to concat value"
-        if isinstance(tarX, MaskedTensor):
-            return self.tuplewiseapply(lambda _: torch.concat(
-                (self.data, tarX.data), dim=-1))
-        elif isinstance(tarX, Iterable):
-            return self.tuplewiseapply(lambda _: torch.concat(
-                [self.data] + [_.data for _ in tarX], dim=-1))
-        else:
-            raise NotImplementedError
+        return self.tuplewiseapply(lambda _: torch.concat([self.data] + [_.data for _ in tarX], dim=-1))

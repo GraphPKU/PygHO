@@ -82,7 +82,8 @@ def decodehash(indhash: LongTensor, sparse_dim: int) -> LongTensor:
     offset = (sparse_dim - 1 - torch.arange(
         sparse_dim, device=indhash.device)).unsqueeze(-1) * interval
     ret = torch.bitwise_right_shift(indhash.unsqueeze(0),
-                                    offset).bitwise_and_(mask)
+                                    offset)
+    ret = ret.bitwise_and_(torch.tensor(mask, device=indhash.device))
     return ret
 
 
@@ -328,19 +329,20 @@ class SparseTensor:
         ), "please use tuplewiseapply for operation on dense dims"
         assert np.all(np.array(dims) >= 0), "do not support negative dims"
         dims = sorted(list(dims))
-        mask = torch.all((self.indices[dims] - self.indices[[dims[0]]]) == 0,
-                         dims=0)
         idx = [i for i in range(self.sparse_dim) if i not in dims[1:]]
         nsparse_shape = [self.shape[i] for i in idx]
         nsparse_size = np.prod(nsparse_shape)
-
-        thash = indicehash_tight(
-            self.indices[idx][:, mask],
+        tindices = self.indices[dims]
+        mask = torch.all((tindices - tindices[0]) == 0, dim=0)
+        ttindices = self.indices[idx]
+        # ttindices = ttindices[:, mask]
+        tthash = indicehash_tight(
+            ttindices[:, mask],
             torch.LongTensor(nsparse_shape).to(self.indices.device))
-        ret = torch.zeros((nsparse_size, ) + self.denseshape,
-                          device=thash.device,
+        ret: Tensor = torch.zeros((nsparse_size, ) + self.denseshape,
+                          device=self.values.device,
                           dtype=self.values.dtype)
-        ret[thash] = self.values[mask]
+        ret.index_put_((tthash, ), self.values[mask], accumulate=False)
         ret = ret.unflatten(0, nsparse_shape)
         return ret
 
@@ -505,16 +507,13 @@ class SparseTensor:
         else:
             return self.tuplewiseapply(lambda x: x + tarX.values)
 
-    def catvalue(self, tarX, samesparse: bool):
+    def catvalue(self, tarXs: Iterable, samesparse: bool):
         assert samesparse == True, "must have the same sparcity to concat value"
-        if isinstance(tarX, SparseTensor):
-            return self.tuplewiseapply(lambda _: torch.concat(
-                (self.values, tarX.values), dim=-1))
-        elif isinstance(tarX, Iterable):
-            return self.tuplewiseapply(lambda _: torch.concat(
-                [self.values] + [_.values for _ in tarX], dim=-1))
-        else:
-            raise NotImplementedError
+        nvalues = torch.concat([self.values] + [_.values for _ in tarXs], dim=-1)
+        return SparseTensor(self.indices,
+                            nvalues,
+                            self.sparseshape + tuple(nvalues.shape[1:]),
+                            is_coalesced=True)
 
     def __repr__(self):
         return f'SparseTensor(shape={self.shape}, sparse_dim={self.sparse_dim}, nnz={self.nnz})'

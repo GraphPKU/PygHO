@@ -101,7 +101,8 @@ def spspmm_ind(ind1: LongTensor,
         ret = torch.zeros((3, retsize), device=ind1.device, dtype=ind1.dtype)
         ret[1] = ptr2batch(retptr, retsize)
         torch.arange(retsize, out=ret[2], device=ret.device, dtype=ret.dtype)
-        offset = (ret[2][retptr[:-1]] - lowerbound)[ret[1]]
+        offset = ret[2][retptr[:-1].clamp_max(retsize-1)] - lowerbound
+        offset = offset[ret[1]]
         ret[2] -= offset
 
         # compute the ind pair index

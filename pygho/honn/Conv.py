@@ -303,6 +303,7 @@ class SUNConv(Module):
       Forward pass of the SUNConv layer.
 
     Notes:
+    
     - This layer is based on Symmetry Understanding Networks (SUN) and performs message passing on 2D subgraph representations with subgraph and cross-subgraph pooling.
     """
     def __init__(self,
