@@ -8,12 +8,13 @@ datadict contains precomputation results.
 from torch import Tensor
 from ..backend.SpTensor import SparseTensor
 from ..backend.MaTensor import MaskedTensor
-from typing import Union, Tuple, List, Iterable, Literal, Dict, Optional
+from typing import Union, Tuple, List, Iterable, Literal, Dict, Optional, Callable
 from torch.nn import Module
 from .utils import MLP
 from . import TensorOp
 from torch_geometric.nn import HeteroLinear
 import torch.nn as nn
+
 
 # NGNNConv: Nested Graph Neural Network Convolution Layer
 class NGNNConv(Module):
@@ -41,10 +42,12 @@ class NGNNConv(Module):
                  aggr: str = "sum",
                  mode: Literal["SD", "DD", "SS"] = "SS",
                  mlp: dict = {},
-                 optuplefeat: str="X",
-                 opadj: str="A"):
+                 optuplefeat: str = "X",
+                 opadj: str = "A",
+                 message_func: Optional[Callable] = None):
         super().__init__()
-        self.aggr = TensorOp.OpMessagePassingOnSubg2D(mode, aggr, optuplefeat, opadj)
+        self.aggr = TensorOp.OpMessagePassingOnSubg2D(mode, aggr, optuplefeat,
+                                                      opadj, message_func)
         self.lin = MLP(indim, outdim, **mlp)
 
     def forward(self, A: Union[SparseTensor, MaskedTensor],
@@ -53,6 +56,7 @@ class NGNNConv(Module):
         tX = X.tuplewiseapply(self.lin)
         ret = self.aggr.forward(A, tX, datadict, tX)
         return ret
+
 
 # SSWLConv: Subgraph Weisfeiler-Lehman Convolution Layer
 class SSWLConv(Module):
@@ -81,11 +85,13 @@ class SSWLConv(Module):
                  aggr: str = "sum",
                  mode: Literal["SD", "DD", "SS"] = "SS",
                  mlp: dict = {},
-                 optuplefeat: str="X",
-                 opadj: str="A"):
+                 optuplefeat: str = "X",
+                 opadj: str = "A"):
         super().__init__()
-        self.aggr1 = TensorOp.OpMessagePassingOnSubg2D(mode, aggr, optuplefeat, opadj)
-        self.aggr2 = TensorOp.OpMessagePassingCrossSubg2D(mode, aggr, optuplefeat, opadj)
+        self.aggr1 = TensorOp.OpMessagePassingOnSubg2D(mode, aggr, optuplefeat,
+                                                       opadj)
+        self.aggr2 = TensorOp.OpMessagePassingCrossSubg2D(
+            mode, aggr, optuplefeat, opadj)
         self.lin = MLP(3 * indim, outdim, **mlp)
 
     def forward(self, A: Union[SparseTensor, MaskedTensor],
@@ -95,6 +101,7 @@ class SSWLConv(Module):
         X1 = self.aggr1.forward(A, tX, datadict, tX)
         X2 = self.aggr2.forward(A, tX, datadict, tX)
         return X.catvalue([X1, X2], True).tuplewiseapply(self.lin)
+
 
 # I2Conv: I2-GNN Convolution Layer
 class I2Conv(Module):
@@ -125,10 +132,11 @@ class I2Conv(Module):
                  aggr: str = "sum",
                  mode: Literal["SD", "DD", "SS"] = "SS",
                  mlp: dict = {},
-                 optuplefeat: str="X",
-                 opadj: str="A"):
+                 optuplefeat: str = "X",
+                 opadj: str = "A"):
         super().__init__()
-        self.aggr = TensorOp.OpMessagePassingOnSubg3D(mode, aggr, optuplefeat, opadj)
+        self.aggr = TensorOp.OpMessagePassingOnSubg3D(mode, aggr, optuplefeat,
+                                                      opadj)
         self.lin = MLP(indim, outdim, **mlp)
 
     def forward(self, A: Union[SparseTensor, MaskedTensor],
@@ -137,6 +145,7 @@ class I2Conv(Module):
         tX = X.tuplewiseapply(self.lin)
         ret = self.aggr.forward(A, tX, datadict, tX)
         return ret
+
 
 # DSSGNNConv: Equivariant Subgraph Aggregation Networks Convolution Layer
 class DSSGNNConv(Module):
@@ -168,10 +177,11 @@ class DSSGNNConv(Module):
                  pool: str = "mean",
                  mode: Literal["SD", "DD", "SS"] = "SS",
                  mlp: dict = {},
-                 optuplefeat: str="X",
-                 opadj: str="A"):
+                 optuplefeat: str = "X",
+                 opadj: str = "A"):
         super().__init__()
-        self.aggr_subg = TensorOp.OpMessagePassingOnSubg2D(mode, aggr_subg, optuplefeat, opadj)
+        self.aggr_subg = TensorOp.OpMessagePassingOnSubg2D(
+            mode, aggr_subg, optuplefeat, opadj)
         self.pool2global = TensorOp.OpPoolingCrossSubg2D(mode[1], pool)
         self.aggr_global = TensorOp.OpNodeMessagePassing(mode, aggr_global)
         self.unpooling2subg = TensorOp.OpUnpoolingRootNodes2D(mode[1])
@@ -184,6 +194,7 @@ class DSSGNNConv(Module):
             self.aggr_global.forward(A, self.pool2global.forward(X)), X)
         X2 = self.aggr_subg.forward(A, X, datadict, X)
         return X2.catvalue(X1, True).tuplewiseapply(self.lin)
+
 
 # PPGNConv: Provably Powerful Graph Networks Convolution Layer
 class PPGNConv(Module):
@@ -212,16 +223,18 @@ class PPGNConv(Module):
                  aggr: str = "sum",
                  mode: Literal["DD", "SS"] = "SS",
                  mlp: dict = {},
-                 optuplefeat: str="X"):
+                 optuplefeat: str = "X"):
         super().__init__()
         self.op = TensorOp.Op2FWL(mode, aggr, optuplefeat)
         self.lin1 = MLP(indim, outdim, **mlp)
         self.lin2 = MLP(indim, outdim, **mlp)
 
-    def forward(self, A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor],
+    def forward(self, A: Union[SparseTensor, MaskedTensor],
+                X: Union[SparseTensor, MaskedTensor],
                 datadict: dict) -> Union[SparseTensor, MaskedTensor]:
         return self.op.forward(X.tuplewiseapply(self.lin1),
                                X.tuplewiseapply(self.lin2), datadict, X)
+
 
 # GNNAKConv: Graph Neural Networks As Kernel Convolution layer
 class GNNAKConv(Module):
@@ -246,6 +259,7 @@ class GNNAKConv(Module):
       Forward pass of the GNNAKConv layer.
 
     """
+
     def __init__(self,
                  indim: int,
                  outdim: int,
@@ -255,11 +269,12 @@ class GNNAKConv(Module):
                  mlp0: dict = {},
                  mlp1: dict = {},
                  ctx: bool = True,
-                 optuplefeat: str="X",
-                 opadj: str="A"):
+                 optuplefeat: str = "X",
+                 opadj: str = "A"):
         super().__init__()
         self.lin0 = MLP(indim, indim, **mlp0)
-        self.aggr = TensorOp.OpMessagePassingOnSubg2D(mode, aggr, optuplefeat, opadj)
+        self.aggr = TensorOp.OpMessagePassingOnSubg2D(mode, aggr, optuplefeat,
+                                                      opadj)
         self.diag = TensorOp.OpDiag2D(mode[1])
         self.pool2subg = TensorOp.OpPoolingSubg2D(mode[1], pool)
         self.unpool4subg = TensorOp.OpUnpoolingSubgNodes2D(mode[1])
@@ -280,6 +295,7 @@ class GNNAKConv(Module):
             return X2.catvalue([X1, X3], True).tuplewiseapply(self.lin)
         else:
             return X2.catvalue(X1, True).tuplewiseapply(self.lin)
+
 
 # SUNConv: Subgraph Union Network Convolution Layer
 class SUNConv(Module):
@@ -305,6 +321,7 @@ class SUNConv(Module):
     Notes:
     - This layer is based on Symmetry Understanding Networks (SUN) and performs message passing on 2D subgraph representations with subgraph and cross-subgraph pooling.
     """
+
     def __init__(self,
                  indim: int,
                  outdim: int,
@@ -313,11 +330,12 @@ class SUNConv(Module):
                  mode: Literal["SD", "DD", "SS"] = "SS",
                  mlp0: dict = {},
                  mlp1: dict = {},
-                 optuplefeat: str="X",
-                 opadj: str="A"):
+                 optuplefeat: str = "X",
+                 opadj: str = "A"):
         super().__init__()
         self.lin0 = MLP(indim, indim, **mlp0)
-        self.aggr = TensorOp.OpMessagePassingOnSubg2D(mode, aggr, optuplefeat, opadj)
+        self.aggr = TensorOp.OpMessagePassingOnSubg2D(mode, aggr, optuplefeat,
+                                                      opadj)
         self.diag = TensorOp.OpDiag2D(mode[1])
         self.pool2subg = TensorOp.OpPoolingSubg2D(mode[1], pool)
         self.unpool4subg = TensorOp.OpUnpoolingSubgNodes2D(mode[1])
@@ -338,6 +356,7 @@ class SUNConv(Module):
         X6 = self.unpool4subg.forward(self.pool2subg(X), X)
         X7 = self.unpool4rootnode.forward(self.pool2node(X4), X)
         X = X1.catvalue([X2, X3, X4, X5, X6, X7], True)
-        X = X.diagonalapply(lambda val, ind: self.lin1_0(val.flatten(0, -2), ind.flatten()).unflatten(0, val.shape[0:-1]))
+        X = X.diagonalapply(lambda val, ind: self.lin1_0(
+            val.flatten(0, -2), ind.flatten()).unflatten(0, val.shape[0:-1]))
         X = X.tuplewiseapply(self.lin1_1)
         return X

@@ -3,10 +3,10 @@ Operators for SparseTensor
 """
 from torch import Tensor, LongTensor
 from pygho.backend.SpTensor import SparseTensor
-from ..backend.Spspmm import spspmm
+from ..backend.Spspmm import spspmm, spspmpnn
 from ..backend.Spmm import spmm
 from ..backend.SpTensor import SparseTensor
-from typing import Optional, Iterable, Dict, Union, List, Tuple
+from typing import Optional, Iterable, Dict, Union, List, Tuple, Callable
 from torch.nn import Module
 
 KEYSEP = "___"
@@ -127,12 +127,15 @@ class OpMessagePassing(Module):
                  dim1: int = 1,
                  op2: str = "A",
                  dim2: int = 0,
-                 aggr: str = "sum") -> None:
+                 aggr: str = "sum",
+                 message_func: Optional[Callable] = None) -> None:
         super().__init__()
         self.dim1 = dim1
         self.dim2 = dim2
         self.precomputekey = f"{op0}{KEYSEP}{op1}{KEYSEP}{dim1}{KEYSEP}{op2}{KEYSEP}{dim2}"
         self.aggr = aggr
+        self.message_func = message_func
+        self.use_mpnn = not (message_func is None)
 
     def forward(self,
                 A: SparseTensor,
@@ -159,16 +162,25 @@ class OpMessagePassing(Module):
         - It supports caching intermediate data in the `datadict` dictionary.
 
         """
-        return spspmm(
-            A,
-            self.dim1,
-            B,
-            self.dim2,
-            self.aggr,
-            acd=datadict.get(f"{self.precomputekey}{KEYSEP}acd", None),
-            bcd=datadict.get(f"{self.precomputekey}{KEYSEP}bcd", None),
-            tar_ind=datadict.get(f"{self.precomputekey}{KEYSEP}tarind", None)
-            if tarX is None else tarX.indices)
+        if self.use_mpnn:
+            return spspmm(
+                A,
+                self.dim1,
+                B,
+                self.dim2,
+                self.aggr,
+                acd=datadict.get(f"{self.precomputekey}{KEYSEP}acd", None),
+                bcd=datadict.get(f"{self.precomputekey}{KEYSEP}bcd", None),
+                tar_ind=datadict.get(f"{self.precomputekey}{KEYSEP}tarind",
+                                     None) if tarX is None else tarX.indices)
+        else:
+            assert not (
+                tarX is None
+            ), "target representation is a must when message func is not None"
+            return spspmpnn(
+                A, self.dim1, B, self.dim2, tarX,
+                datadict.get(f"{self.precomputekey}{KEYSEP}acd", None),
+                self.message_func, self.aggr)
 
 
 class Op2FWL(OpMessagePassing):
@@ -189,7 +201,7 @@ class Op2FWL(OpMessagePassing):
 
     """
 
-    def __init__(self, aggr: str = "sum", optuplefeat: str= "X") -> None:
+    def __init__(self, aggr: str = "sum", optuplefeat: str = "X") -> None:
         super().__init__(optuplefeat, optuplefeat, 1, optuplefeat, 0, aggr)
 
     def forward(self,
@@ -234,8 +246,13 @@ class OpMessagePassingOnSubg2D(OpMessagePassing):
 
     """
 
-    def __init__(self, aggr: str = "sum", optuplefeat: str = "X", opadj: str="A") -> None:
-        super().__init__(optuplefeat, optuplefeat, 1, opadj, 0, aggr)
+    def __init__(self,
+                 aggr: str = "sum",
+                 optuplefeat: str = "X",
+                 opadj: str = "A",
+                 message_func: Optional[Callable] = None) -> None:
+        super().__init__(optuplefeat, optuplefeat, 1, opadj, 0, aggr,
+                         message_func)
 
     def forward(self,
                 A: SparseTensor,
@@ -279,8 +296,13 @@ class OpMessagePassingOnSubg3D(OpMessagePassing):
 
     """
 
-    def __init__(self, aggr: str = "sum", optuplefeat: str = "X", opadj: str="A") -> None:
-        super().__init__(optuplefeat, optuplefeat, 2, opadj, 0, aggr)
+    def __init__(self,
+                 aggr: str = "sum",
+                 optuplefeat: str = "X",
+                 opadj: str = "A",
+                 message_func: Optional[Callable] = None) -> None:
+        super().__init__(optuplefeat, optuplefeat, 2, opadj, 0, aggr,
+                         message_func)
 
     def forward(self,
                 A: SparseTensor,
@@ -319,8 +341,13 @@ class OpMessagePassingCrossSubg2D(OpMessagePassing):
     - SparseTensor: The result of message passing on each subgraph within the 2D subgraph GNN.
     """
 
-    def __init__(self, aggr: str = "sum", optuplefeat: str = "X", opadj: str="A") -> None:
-        super().__init__(optuplefeat, opadj, 1, optuplefeat, 0, aggr)
+    def __init__(self,
+                 aggr: str = "sum",
+                 optuplefeat: str = "X",
+                 opadj: str = "A",
+                 message_func: Optional[Callable] = None) -> None:
+        super().__init__(optuplefeat, opadj, 1, optuplefeat, 0, aggr,
+                         message_func)
 
     def forward(self,
                 A: SparseTensor,

@@ -5,9 +5,10 @@ from .SpTensor import SparseTensor, indicehash, decodehash
 import warnings
 from .utils import torch_scatter_reduce
 
-def ptr2batch(ptr: LongTensor, dim_size: int) -> LongTensor:
+
+def ptr2batch(ptr: LongTensor, dim_size: int=None) -> LongTensor:
     """
-    Converts a pointer tensor to a batch tensor. TODO: use torch_scatter gather instead?
+    Converts a pointer tensor to a batch tensor.
 
     This function takes a pointer tensor `ptr` and a `dim_size` and converts it to a
     batch tensor where each element in the batch tensor corresponds to a range of
@@ -26,8 +27,30 @@ def ptr2batch(ptr: LongTensor, dim_size: int) -> LongTensor:
     assert ptr[0] == 0 and torch.all(
         torch.diff(ptr) >= 0), "should put in a ptr tensor"
     assert ptr[-1] == dim_size, "dim_size should match ptr"
-    tmp = torch.arange(dim_size, device=ptr.device, dtype=ptr.dtype)
-    ret = torch.searchsorted(ptr, tmp, right=True) - 1
+    ret = torch.repeat_interleave(torch.diff(ptr), output_size=dim_size)
+    return ret
+
+
+def deg2batch(deg: LongTensor, dim_size: int=None) -> LongTensor:
+    """
+    Converts a degree tensor to a batch tensor. 
+
+    This function takes a degree tensor `deg` and a `dim_size` and converts it to a
+    batch tensor where each element in the batch tensor corresponds to a range of
+    indices in the original tensor.
+
+    Args:
+
+    - deg (LongTensor): The degree tensor, where `deg[i]` represents the number of element i in returned tensor.
+    - dim_size (int): The size of the target dimension.
+
+    Returns:
+
+    - LongTensor: A batch tensor of shape `(dim_size,)`.
+    """
+    assert deg.ndim == 1, "ptr should be 1-d"
+    assert torch.all(deg >= 0), "should put in a degree tensor"
+    ret = torch.repeat_interleave(deg, output_size=dim_size)
     return ret
 
 
@@ -84,7 +107,9 @@ def spspmm_ind(ind1: LongTensor,
         nnz1, nnz2, sparsedim1, sparsedim2 = ind1.shape[1], ind2.shape[
             1], ind1.shape[0], ind2.shape[0]
         k1, k2 = ind1[dim1], ind2[dim2]
+
         assert torch.all(torch.diff(k2) >= 0), "ind2[0] should be sorted"
+        
         # for each k in k1, it can match a interval of k2 as k2 is sorted
         upperbound = torch.searchsorted(k2, k1, right=True)
         lowerbound = torch.searchsorted(k2, k1, right=False)
@@ -99,13 +124,11 @@ def spspmm_ind(ind1: LongTensor,
 
         # fill the output with ptr
         ret = torch.zeros((3, retsize), device=ind1.device, dtype=ind1.dtype)
-        ret[1] = ptr2batch(retptr, retsize)
+        ret[1] = deg2batch(matched_num, retsize)
         torch.arange(retsize, out=ret[2], device=ret.device, dtype=ret.dtype)
-        offset = (ret[2][retptr[:-1]] - lowerbound)[ret[1]]
-        ret[2] -= offset
+        ret[2] += (lowerbound - retptr[:-1])[ret[1]]
 
         # compute the ind pair index
-
         combinedind = indicehash(
             torch.concat(
                 ((torch.concat((ind1[:dim1], ind1[dim1 + 1:])))[:, ret[1]],
@@ -328,7 +351,7 @@ def spspmpnn(A: SparseTensor,
     - dim1 (int): The dimension along which `A` is multiplied.
     - B (SparseTensor): The second SparseTensor.
     - dim2 (int): The dimension along which `B` is multiplied.
-    - C (SparseTensor): The third SparseTensor.
+    - C (SparseTensor): The third SparseTensor, providing the target indice
     - acd (LongTensor): The auxiliary index array produced by a previous operation.
     - message_func (Callable): A callable function that computes the messages between `A`, `B`, and `C`.
     - aggr (str, optional): The reduction operation to use for merging edge features ("sum", "min", "max", "mul", "any"). Defaults to "sum".

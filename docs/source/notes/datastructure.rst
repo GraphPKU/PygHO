@@ -1,4 +1,4 @@
-Refined Basic Data Structure
+Basic Data Structure
 ============================
 
 In this section, we'll provide a refined explanation of the basic data

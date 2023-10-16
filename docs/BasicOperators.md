@@ -72,7 +72,15 @@ The overall wrapper for these functions is `pygho.honn.Spspmm.spspmm`, which can
 $$
 ret_{ij} = \phi(\{(A_{ij}, B_{ik}, C_{kj})|B_{ik},C_{kj} \text{ elements exist}\})
 $$
-where `phi` is a general multiset function, which is a functional parameter of `spspmpnn`. With it, we can implement GAT on each subgraph ...??.
+where `phi` is a general multiset function, which is a functional parameter of `spspmpnn`. With it, we can implement GAT on each subgraph as follows.
+
+```python
+self.attentionnn1 = nn.Linear(hiddim, hiddim, hiddim)
+self.attentionnn2 = nn.Linear(hiddim, hiddim, hiddim)
+self.attentionnn3 = nn.Linear(hiddim, hiddim, hiddim)
+self.subggnn = NGNNConv(hiddim, hiddim, args.aggr, "SS", transfermlpparam(mlp), message_func=lambda a,b,c,tarid: scatter_softmax(self.attentionnn1(a) * b * self.attention2(c), tarid) * self.attentionnn3(c))
+        
+```
 
 #### TuplewiseApply
 

@@ -75,10 +75,10 @@ assuming their output is B:
    B_{ij} = \sum_k C_{ik} D_{kj}
 
 The Spspmm operator utilizes a coo format to represent elements.
-Assuming element C\_{ik} corresponds to C.values[c\_{ik}] and D\_{kj}
-corresponds to D.values[d\_{kj}], we can create a tensor ``bcd`` of
+Assuming element C\_ik corresponds to C.values[c\_ik] and D\_kj
+corresponds to D.values[d\_kj], we can create a tensor ``bcd`` of
 shape (3, m), where m is the number of pairs (i, j, k) where both
-C\_{ik} and D\_{kj} exist. The multiplication can be performed as
+C\_ik and D\_kj exist. The multiplication can be performed as
 follows:
 
 .. code:: python
@@ -97,7 +97,7 @@ where :math:`C = A \odot B`: C can use the same indice as :math:`A`.
 
 .. code:: python
 
-    C.values[a_{ij}] = A.values[a_{ij}] * B.values[b_{ij}]
+    C.values[a_ij] = A.values[a_ij] * B.values[b_ij]
 
 The tensor ``b2a`` can be defined, where ``b2a[b_ij] = a_ij`` if A has
 the element (i, j); otherwise, it is set to -1. Then, the Hadamard
@@ -121,7 +121,7 @@ computation can be done as follows:
 
     ret.values = zeros(...)
     for i in range(acd.shape[1]):
-        ret.values[acd[0, i]] += A.values[acd[0, i]] * B.values[acd[1, i]] * C.values[acd[2, i]]
+        ret.values[acd[0, i]] += A.values[acd[0, i]] * C.values[acd[1, i]] * D.values[acd[2, i]]
 
 Like the previous operations, this can also be implemented efficiently
 in parallel on a GPU. Additionally, by setting ``A.values[acd[0, i]]``
@@ -143,7 +143,21 @@ framework.
 
 where ``phi`` is a general multiset function, which is a functional
 parameter of ``spspmpnn``. For example, with it, we can implement GAT on each
-subgraph. TODO
+subgraph as follows.
+
+.. code:: python
+
+   self.attentionnn1 = nn.Linear(hiddim, hiddim)
+   self.attentionnn2 = nn.Linear(hiddim, hiddim)
+   self.attentionnn3 = nn.Linear(hiddim, hiddim)
+   self.subggnn = NGNNConv(hiddim, hiddim, args.aggr, 
+                  "SS", transfermlpparam(mlp), 
+                  message_func=lambda a,b,c,tarid: 
+                     scatter_softmax(
+                        self.attentionnn1(a) * b * self.attention2(c), 
+                        tarid) 
+                        * self.attentionnn3(c))
+
 
 TuplewiseApply
 ^^^^^^^^^^^^^^
