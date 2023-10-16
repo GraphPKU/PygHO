@@ -301,7 +301,7 @@ class SparseTensor:
     def denseshape(self):
         return self.shape[self.sparse_dim:]
 
-    def _diag_to_sparse(self, dims: Iterable[int]):
+    def _diag_to_sparse(self, dims: List[int]):
         assert np.all(
             np.array(dims) < self.__sparse_dim
         ), "please use tuplewiseapply for operation on dense dims"
@@ -309,7 +309,6 @@ class SparseTensor:
         '''
         diag dims is then put at the first dims in dims list.
         '''
-        dims = sorted(list(dims))
         mask = torch.all((self.indices[dims] - self.indices[[dims[0]]]) == 0,
                          dims=0)
         idx = [i for i in range(self.sparse_dim) if i not in dims[1:]]
@@ -320,31 +319,37 @@ class SparseTensor:
                             is_coalesced=(idx[0] == 0)
                             and np.all(np.diff(idx) == 1))
 
-    def _diag_to_dense(self, dims: Iterable[int]) -> Tensor:
+    def _diag_to_dense(self, dims: List[int]) -> Tensor:
         '''
         diag dims is then put at the first dims in dims list.
         '''
-        assert np.all(
-            np.array(dims) < self.__sparse_dim
-        ), "please use tuplewiseapply for operation on dense dims"
-        assert np.all(np.array(dims) >= 0), "do not support negative dims"
-        dims = sorted(list(dims))
-        idx = [i for i in range(self.sparse_dim) if i not in dims[1:]]
-        nsparse_shape = [self.shape[i] for i in idx]
-        nsparse_size = np.prod(nsparse_shape)
-        tindices = self.indices[dims]
-        mask = torch.all((tindices - tindices[0]) == 0, dim=0)
-        ttindices = self.indices[idx]
-        # ttindices = ttindices[:, mask]
-        tthash = indicehash_tight(
-            ttindices[:, mask],
-            torch.LongTensor(nsparse_shape).to(self.indices.device))
-        ret: Tensor = torch.zeros((nsparse_size, ) + self.denseshape,
-                          device=self.values.device,
-                          dtype=self.values.dtype)
-        ret.index_put_((tthash, ), self.values[mask], accumulate=False)
-        ret = ret.unflatten(0, nsparse_shape)
-        return ret
+        if len(dims) == self.sparse_dim:
+            diag_idx = torch.arange(self.shape[dims[0]], device=self.indices.device)
+            diag_hash = indicehash(diag_idx.reshape(1, -1).expand(len(dims), -1))
+            selfhash = indicehash(self.indices[dims])
+            matchidx = torch.searchsorted(selfhash, diag_hash, right=True) - 1
+            notmatchmask = matchidx < 0
+            matchidx.clamp_min_(0)
+            ret = self.values[matchidx]
+            ret[notmatchmask] = 0
+            return ret
+        else:
+            idx = [i for i in range(self.sparse_dim) if i not in dims[1:]]
+            nsparse_shape = [self.shape[i] for i in idx]
+            
+            diag_idx = torch.arange(self.shape[dims[0]], device=self.indices.device)
+            diag_hash = indicehash(diag_idx.reshape(1, -1).expand(len(dims), -1))
+            selfhash = indicehash(self.indices[dims])
+            matchidx = torch.searchsorted(selfhash, diag_hash, right=True) - 1
+            notmatchmask = matchidx < 0
+            matchidx.clamp_min_(0)
+            ret = torch.zeros(nsparse_shape + self.denseshape,
+                            device=self.indices.device,
+                            dtype=self.values.dtype)
+            value_to_fill = self.values[matchidx]
+            value_to_fill[notmatchmask] = 0
+            ret.index_put_(tuple(self.indices[_][matchidx] if _ != dims[0] else diag_idx for _ in idx),  value_to_fill)
+            return ret
 
     def diag(self, dims: Optional[Iterable[int]], return_sparse: bool = False):
         '''
@@ -354,6 +359,7 @@ class SparseTensor:
             raise NotImplementedError
         if dims == None:
             dims = list(range(self.sparse_dim))
+        dims = sorted(list(set(dims)))
         if return_sparse:
             return self._diag_to_sparse(dims)
         else:

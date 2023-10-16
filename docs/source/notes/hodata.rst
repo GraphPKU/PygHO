@@ -167,12 +167,12 @@ specific precomputation. For example, consider the key:
 Here, the precomputation involves sparse matrix multiplication
 :math:`AX`, but only computes the output elements that exist in
 :math:`X`. These precomputation results can be shared among matrices
-with the same indices. The key elements signify the following: - The
-first ``X`` refers to the target sparse matrix indices. - ``A`` and
-``X`` represent the matrices involved in the multiplication, the
-adjacency matrix ``A``, and the tuple feature ``X``. - ``1`` denotes
-that dimension ``1`` of ``A`` will be reduced. - ``0`` signifies that
-dimension ``0`` of ``X`` will be reduced.
+with the same indices. The key elements signify the following: 
+
+- The first ``X`` refers to the target sparse matrix indices. 
+- ``A`` and ``X`` represent the matrices involved in the multiplication, the adjacency matrix ``A``, and the tuple feature ``X``. 
+- ``1`` denotes that dimension ``1`` of ``A`` will be reduced. 
+- ``0`` signifies that dimension ``0`` of ``X`` will be reduced.
 
 You don't need to manually feed the precomputation results to the model.
 Converting the batch to a dictionary and using it as the ``datadict``

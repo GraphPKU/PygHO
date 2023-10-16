@@ -5,7 +5,7 @@ Wrappers unifying operators for sparse and masked tensors
 from torch import Tensor
 from ..backend.SpTensor import SparseTensor
 from ..backend.MaTensor import MaskedTensor
-from typing import Union, Tuple, List, Iterable, Literal, Dict, Optional
+from typing import Union, Tuple, List, Iterable, Literal, Dict, Optional, Callable
 from . import SpOperator
 from . import MaOperator
 from torch.nn import Module
@@ -35,6 +35,7 @@ class OpNodeMessagePassing(Module):
     - forward(A: Union[SparseTensor, MaskedTensor], X: Union[Tensor, MaskedTensor]) -> Union[Tensor, MaskedTensor]:
       Perform node-wise message passing on the input tensors based on the specified mode and aggregation method.
     """
+
     def __init__(self,
                  mode: Literal["SS", "SD", "DD"] = "SS",
                  aggr: str = "sum") -> None:
@@ -87,7 +88,7 @@ class Op2FWL(Module):
     def __init__(self,
                  mode: Literal["SS", "DD"] = "SS",
                  aggr: Literal["sum", "mean", "max"] = "sum",
-                 optuplefeat: str="X") -> None:
+                 optuplefeat: str = "X") -> None:
         super().__init__()
         if mode == "SS":
             self.mod = SpOperator.Op2FWL(aggr, optuplefeat)
@@ -127,7 +128,9 @@ class OpMessagePassingOnSubg2D(Module):
     def __init__(self,
                  mode: Literal["SD", "SS", "DD"] = "SS",
                  aggr: Literal["sum", "mean", "max"] = "sum",
-                 optuplefeat: str = "X", opadj: str="A") -> None:
+                 optuplefeat: str = "X",
+                 opadj: str = "A",
+                 message_func: Optional[Callable] = None) -> None:
         """
         Perform message passing on each subgraph for 2D subgraph Graph Neural Networks with support for both sparse and masked tensors.
 
@@ -148,10 +151,13 @@ class OpMessagePassingOnSubg2D(Module):
         """
         super().__init__()
         if mode == "SS":
-            self.mod = SpOperator.OpMessagePassingOnSubg2D(aggr, optuplefeat, opadj)
+            self.mod = SpOperator.OpMessagePassingOnSubg2D(
+                aggr, optuplefeat, opadj, message_func)
         elif mode == "SD":
+            assert message_func is None, "general message passing with message_func is not implemented for Dense"
             self.mod = MaOperator.OpSpMessagePassingOnSubg2D(aggr)
         elif mode == "DD":
+            assert message_func is None, "general message passing with message_func is not implemented for Dense"
             assert aggr == "sum", "only sum aggragation implemented for Dense adjacency"
             self.mod = MaOperator.OpMessagePassingOnSubg2D()
         else:
@@ -201,16 +207,22 @@ class OpMessagePassingOnSubg3D(Module):
     - MaOperator.OpMessagePassingOnSubg3D: Masked tensor operator for message passing on 3D subgraphs with dense adjacency.
 
     """
+
     def __init__(self,
                  mode: Literal["SD", "SS", "DD"] = "SS",
                  aggr: Literal["sum", "mean", "max"] = "sum",
-                 optuplefeat: str = "X", opadj: str="A") -> None:
+                 optuplefeat: str = "X",
+                 opadj: str = "A",
+                 message_func: Optional[Callable] = None) -> None:
         super().__init__()
         if mode == "SS":
-            self.mod = SpOperator.OpMessagePassingOnSubg3D(aggr, optuplefeat, opadj)
+            self.mod = SpOperator.OpMessagePassingOnSubg3D(
+                aggr, optuplefeat, opadj)
         elif mode == "SD":
+            assert message_func is None, "general message passing with message_func is not implemented for Dense"
             self.mod = MaOperator.OpSpMessagePassingOnSubg3D(aggr)
         elif mode == "DD":
+            assert message_func is None, "general message passing with message_func is not implemented for Dense"
             assert aggr == "sum", "only sum aggragation implemented for Dense adjacency"
             self.mod = MaOperator.OpMessagePassingOnSubg3D()
         else:
@@ -259,16 +271,22 @@ class OpMessagePassingCrossSubg2D(Module):
     - MaOperator.OpMessagePassingCrossSubg2D: Masked tensor operator for cross-subgraph message passing in 2D GNNs with dense adjacency.
 
     """
+
     def __init__(self,
                  mode: Literal["SD", "SS", "DD"] = "SS",
                  aggr: Literal["sum", "mean", "max"] = "sum",
-                 optuplefeat: str = "X", opadj: str="A") -> None:
+                 optuplefeat: str = "X",
+                 opadj: str = "A",
+                 message_func: Optional[Callable] = None) -> None:
         super().__init__()
         if mode == "SS":
-            self.mod = SpOperator.OpMessagePassingCrossSubg2D(aggr, optuplefeat, opadj)
+            self.mod = SpOperator.OpMessagePassingCrossSubg2D(
+                aggr, optuplefeat, opadj, message_func)
         elif mode == "SD":
+            assert message_func is None, "general message passing with message_func is not implemented for Dense"
             self.mod = MaOperator.OpMessagePassingCrossSubg2D(aggr)
         elif mode == "DD":
+            assert message_func is None, "general message passing with message_func is not implemented for Dense"
             assert aggr == "sum", "only sum aggragation implemented for Dense adjacency"
             self.mod = MaOperator.OpMessagePassingCrossSubg2D()
         else:
@@ -314,6 +332,7 @@ class OpDiag2D(Module):
     - MaOperator.OpDiag2D: Masked tensor operator for diagonalization in 2D GNNs.
 
     """
+
     def __init__(self, mode: Literal["D", "S"] = "S") -> None:
         super().__init__()
         if mode == "S":
@@ -355,6 +374,7 @@ class OpPoolingSubg2D(Module):
     - SpOperator.OpPoolingSubg2D: Sparse tensor operator for pooling in 2D GNNs.
     - MaOperator.OpPoolingSubg2D: Masked tensor operator for pooling in 2D GNNs.
     """
+
     def __init__(self,
                  mode: Literal["S", "D"] = "S",
                  pool: str = "sum") -> None:
@@ -386,6 +406,7 @@ class OpPoolingSubg3D(Module):
     - SpOperator.OpPoolingCrossSubg2D: Sparse tensor operator for cross-subgraph pooling in 2D GNNs.
     - MaOperator.OpPoolingCrossSubg2D: Masked tensor operator for cross-subgraph pooling in 2D GNNs.
     """
+
     def __init__(self,
                  mode: Literal["S", "D"] = "S",
                  pool: str = "sum") -> None:
@@ -436,6 +457,7 @@ class OpUnpoolingSubgNodes2D(Module):
     - SpOperator.OpUnpoolingSubgNodes2D: Sparse tensor operator for unpooling subgraph nodes in 2D GNNs.
     - MaOperator.OpUnpoolingSubgNodes2D: Masked tensor operator for unpooling subgraph nodes in 2D GNNs.
     """
+
     def __init__(self, mode: Literal["S", "D"] = "S") -> None:
         super().__init__()
         if mode == "S":
@@ -463,6 +485,7 @@ class OpUnpoolingRootNodes2D(Module):
     
     - SpOperator.OpUnpoolingRootNodes2D: Sparse tensor operator for unpooling
     """
+
     def __init__(self, mode: Literal["S", "D"] = "S") -> None:
         super().__init__()
         if mode == "S":

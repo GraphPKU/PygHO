@@ -33,7 +33,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--sparse", action="store_true")
 parser.add_argument("--aggr", choices=["sum", "mean", "max"], default="sum")
 parser.add_argument("--conv",
-                    choices=["NGNN", "GNNAK", "DSSGNN", "SSWL", "SUN", "PPGN", "I2GNN"], default="NGNN")
+                    choices=["NGNN", "NGAT", "GNNAK", "DSSGNN", "SSWL", "SUN", "PPGN", "I2GNN"], default="NGNN")
 parser.add_argument("--npool", choices=["mean", "sum", "max"], default="sum")
 parser.add_argument("--lpool", choices=["mean", "sum", "max"], default="mean")
 parser.add_argument("--cpool", choices=["mean", "sum", "max"], default="mean")
