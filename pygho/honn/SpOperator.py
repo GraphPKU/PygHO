@@ -163,6 +163,14 @@ class OpMessagePassing(Module):
 
         """
         if self.use_mpnn:
+            assert not (
+                tarX is None
+            ), "target representation is a must when message func is not None"
+            return spspmpnn(
+                A, self.dim1, B, self.dim2, tarX,
+                datadict.get(f"{self.precomputekey}{KEYSEP}acd", None),
+                self.message_func, self.aggr)
+        else:
             return spspmm(
                 A,
                 self.dim1,
@@ -173,15 +181,6 @@ class OpMessagePassing(Module):
                 bcd=datadict.get(f"{self.precomputekey}{KEYSEP}bcd", None),
                 tar_ind=datadict.get(f"{self.precomputekey}{KEYSEP}tarind",
                                      None) if tarX is None else tarX.indices)
-        else:
-            assert not (
-                tarX is None
-            ), "target representation is a must when message func is not None"
-            return spspmpnn(
-                A, self.dim1, B, self.dim2, tarX,
-                datadict.get(f"{self.precomputekey}{KEYSEP}acd", None),
-                self.message_func, self.aggr)
-
 
 class Op2FWL(OpMessagePassing):
     """

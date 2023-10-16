@@ -100,8 +100,10 @@ class MaskedTensor:
         self.__data = data
         self.__mask = mask
         self.__masked_dim = mask.ndim
-        while mask.ndim < data.ndim:
-            mask = mask.unsqueeze(-1)
+        if self.dense_dim > 0:
+          mask = mask.unsqueeze(-1)
+          if self.dense_dim > 1:
+              mask = mask.unflatten(-1, (self.dense_dim)*(1,))
         self.__fullmask = mask
         if not is_filled:
             self.__padvalue = torch.inf if padvalue != torch.inf else -torch.inf
