@@ -31,3 +31,5 @@ SUN
 .vscode
 */.vscode
 docs/build
+example/*.sh
+*.sh

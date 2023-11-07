@@ -514,6 +514,8 @@ class SparseTensor:
             return self.tuplewiseapply(lambda x: x + tarX.values)
 
     def catvalue(self, tarXs: Iterable, samesparse: bool):
+        if isinstance(tarXs, SparseTensor):
+            tarXs = [tarXs]
         assert samesparse == True, "must have the same sparcity to concat value"
         nvalues = torch.concat([self.values] + [_.values for _ in tarXs], dim=-1)
         return SparseTensor(self.indices,

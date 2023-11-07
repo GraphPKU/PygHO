@@ -28,8 +28,6 @@ from pygho.honn.utils import MLP
 import argparse
 
 torch.set_float32_matmul_precision('high')
-import torch._dynamo
-torch._dynamo.config.verbose=True
 parser = argparse.ArgumentParser()
 parser.add_argument("--sparse", action="store_true")
 parser.add_argument("--aggr", choices=["sum", "mean", "max"], default="sum")
@@ -209,14 +207,6 @@ class MaModel(nn.Module):
         X = datadict["X"]
         x = datadict["x"]
         X = self.tupleinit(datadict["X"], datadict["x"])
-        '''
-        for conv in self.subggnns:
-            tX = conv.forward(A, X, datadict)
-            if self.residual:
-                X = X.add(tX, samesparse=True)
-            else:
-                X = tX
-        '''
         for conv in self.subggnns:
             tX = conv.forward(A, X, datadict)
             if self.residual:
