@@ -31,7 +31,7 @@ def parseop(op: str):
         return NotImplementedError, f"operator name {op} not implemented now"
 
 
-def parsekey(key: str) -> Tuple[str, str, int, str, int]:
+def parsekey(key: str) -> Tuple[str, str, int, str, int, int]:
     '''
     Parse the operators in precomputation keys.
 
@@ -43,14 +43,15 @@ def parsekey(key: str) -> Tuple[str, str, int, str, int]:
     
     - Tuple[str, str, int, str, int]: A tuple containing parsed operators and dimensions.
     '''
-    assert len(key.split(KEYSEP)) == 5, "key format not match"
-    op0, op1, dim1, op2, dim2 = key.split(KEYSEP)
+    assert len(key.split(KEYSEP)) == 6, "key format not match"
+    op0, op1, dim1, op2, dim2, broadcast_dim = key.split(KEYSEP)
     dim1 = int(dim1)
     dim2 = int(dim2)
+    broadcast_dim = int(broadcast_dim)
     parseop(op0)
     parseop(op1)
     parseop(op2)
-    return op0, op1, dim1, op2, dim2
+    return op0, op1, dim1, op2, dim2, broadcast_dim
 
 
 class SpHoData(PygData):
@@ -64,7 +65,7 @@ class SpHoData(PygData):
                                -1, 1)
         if key.endswith(f"{KEYSEP}acd"):
             key = key.removesuffix(f"{KEYSEP}acd")
-            op0, op1, _, op2, _ = parsekey(key)
+            op0, op1, _, op2, _, _ = parsekey(key)
             return torch.tensor(
                 [[getattr(self, parseop(op0))], [getattr(self, parseop(op1))],
                  [getattr(self, parseop(op2))]],
@@ -113,7 +114,7 @@ def batch2sparse(batch: PygBatch, keys: List[str] = [""]) -> PygBatch:
 
 
 def sp_datapreprocess(data: PygData,
-                      tuplesamplers: List[Callable[[PygData], SparseTensor]],
+                      tuplesamplers: List[Callable[[PygData], SparseTensor|Iterable[SparseTensor]]],
                       annotate: List[str] = [""],
                       keys: List[str] = [""]) -> SpHoData:
     '''
@@ -122,7 +123,7 @@ def sp_datapreprocess(data: PygData,
     Args:
     
     - data (PygData): The input dense data in PyG Data format.
-    - tuplesamplers (Union[Callable, List[Callable]]): A single or list of tuple sampling functions.
+    - tuplesamplers (List[Callable]): A single or list of tuple sampling functions.
     - annotate (List[str]): A list of annotation strings for tuple sampling.
     - keys (List[str]): A list of precomputation keys.
 
@@ -136,7 +137,7 @@ def sp_datapreprocess(data: PygData,
     
     assert len(tuplesamplers) == len(
         annotate
-    ), "number of tuple sampler should match the number of annotate"
+    ), "number of sparse tensors should match the number of annotate"
 
     datadict = data.to_dict()
     datadict.update({
@@ -146,8 +147,12 @@ def sp_datapreprocess(data: PygData,
         "edge_index": data.edge_index,
         "edge_attr": data.edge_attr,
     })
-    for i, tuplesampler in enumerate(tuplesamplers):
-        feat = tuplesampler(data)
+
+    feats = [tuplesampler(data) for tuplesampler in tuplesamplers]
+    feats = [list(_) if isinstance(_, Iterable) else [_] for _ in feats]
+    feats = sum(feats, [])
+    assert len(feats) == len(annotate), "number of sparse tensors should match the number of annotate"
+    for i, feat in enumerate(feats):
         tupleid, tuplefeat, tupleshape = feat.indices, feat.values, feat.sparseshape 
         num_tuples = tupleid.shape[1]
         datadict.update({
@@ -161,12 +166,10 @@ def sp_datapreprocess(data: PygData,
             num_tuples
         })
     for key in keys:
-        op0, op1, dim1, op2, dim2 = parsekey(key)
-        datadict[key + f"{KEYSEP}acd"] = filterind(
-            datadict[f"tupleid{op0[1:]}"]
-            if op0[0] == "X" else datadict["edge_index"],
-            *spspmm_ind(
-                datadict[f"tupleid{op1[1:]}"] if op1[0] == "X" else
-                datadict["edge_index"], dim1, datadict[f"tupleid{op2[1:]}"]
-                if op2[0] == "X" else datadict["edge_index"], dim2))
+        op0, op1, dim1, op2, dim2, broadcast_dim = parsekey(key)
+        indop1 = datadict["edge_index"] if op1[0] == "A" else datadict[f"tupleid{op1[1:]}"]
+        indop2 = datadict["edge_index"] if op2[0] == "A" else datadict[f"tupleid{op2[1:]}"]
+        ind, acd = spspmm_ind(indop1, dim1, indop2, dim2, False, broadcast_dim)
+        tarind = datadict["edge_index"] if op0[0] == "A" else datadict[f"tupleid{op0[1:]}"]
+        datadict[key + f"{KEYSEP}acd"] = filterind(tarind, ind, acd)
     return SpHoData(**datadict)

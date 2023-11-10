@@ -309,8 +309,7 @@ class SparseTensor:
         '''
         diag dims is then put at the first dims in dims list.
         '''
-        mask = torch.all((self.indices[dims] - self.indices[[dims[0]]]) == 0,
-                         dims=0)
+        mask = torch.all((self.indices[dims] - self.indices[[dims[0]]]) == 0, dim=0)
         idx = [i for i in range(self.sparse_dim) if i not in dims[1:]]
         other_shape = tuple([self.shape[i] for i in idx]) + self.denseshape
         return SparseTensor(indices=self.indices[idx][:, mask],
@@ -465,7 +464,7 @@ class SparseTensor:
                           dtype=self.values.dtype,
                           device=self.values.device)
         ret[matchmask] = self.values[b2a[matchmask]]
-        return tarX.tuplewiseapply(lambda x: ret)
+        return tarX.setvalue(ret)
 
     def unpooling_fromdense1dim(self, dims: int, X: Tensor):
         '''
@@ -473,7 +472,7 @@ class SparseTensor:
         '''
         assert dims < self.sparse_dim, "only unpooling sparse dims"
         assert X.shape[0] == self.shape[dims], "shape not match"
-        return self.tuplewiseapply(lambda _: X[self.indices[dims]])
+        return self.setvalue(X[self.indices[dims]])
 
     @classmethod
     def from_torch_sparse_coo(cls, A: torch.Tensor):
@@ -490,19 +489,24 @@ class SparseTensor:
 
     def tuplewiseapply(self, func: Callable[[Tensor], Tensor]):
         nvalues = func(self.values)
+        return self.setvalue(nvalues)
+    
+    def setvalue(self, val: Tensor):
+        nvalues = val
         return SparseTensor(self.indices,
                             nvalues,
                             self.sparseshape + tuple(nvalues.shape[1:]),
                             is_coalesced=True)
 
-    def diagonalapply(self, func: Callable[[Tensor, LongTensor], Tensor]):
+    def diagonalapply(self, func_d: Callable[[Tensor], Tensor], func_nd: Callable[[Tensor], Tensor]):
         assert self.sparse_dim == 2, "only implemented for 2D"
-        nvalues = func(self.values,
-                       (self.indices[0] == self.indices[1]).to(torch.long))
-        return SparseTensor(self.indices,
-                            nvalues,
-                            self.sparseshape + tuple(nvalues.shape[1:]),
-                            is_coalesced=True)
+        val_d = func_d(self.values)
+        val_nd = func_nd(self.values)
+
+        val_d, val_nd = torch.movedim(val_d, 0, -1), torch.movedim(val_nd, 0, -1)
+        nvalues = torch.where((self.indices[0] == self.indices[1]), val_d, val_nd)
+        nvalues = torch.movedim(nvalues, -1, 0)
+        return self.setvalue(nvalues)
 
     def add(self, tarX, samesparse: bool):
         if not samesparse:
@@ -518,10 +522,7 @@ class SparseTensor:
             tarXs = [tarXs]
         assert samesparse == True, "must have the same sparcity to concat value"
         nvalues = torch.concat([self.values] + [_.values for _ in tarXs], dim=-1)
-        return SparseTensor(self.indices,
-                            nvalues,
-                            self.sparseshape + tuple(nvalues.shape[1:]),
-                            is_coalesced=True)
-
+        return self.setvalue(nvalues)
+    
     def __repr__(self):
         return f'SparseTensor(shape={self.shape}, sparse_dim={self.sparse_dim}, nnz={self.nnz})'

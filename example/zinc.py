@@ -180,7 +180,7 @@ class MaModel(nn.Module):
         self.subggnns = nn.ModuleList(
             [convfn(hiddim, mlp) for _ in range(num_layer)])
 
-        self.npool = OpPooling(1, pool=npool)
+        self.npool = OpPooling(0, pool=npool)
         self.lpool = OpPoolingSubg2D("D", pool=lpool)
         self.poolmlp = MLP(hiddim, hiddim, args.mlplayer, tailact=True, **mlp)
         self.data_encoder = InputEncoderMa(hiddim)
@@ -404,7 +404,7 @@ for i in range(args.repeat):
         model = SpModel(spconvdict[args.conv], npool=args.npool, lpool=args.lpool, outlayer=args.outlayer, mlp=mlpdict)
     else:
         model = MaModel(maconvdict[args.conv], npool=args.npool, lpool=args.lpool, outlayer=args.outlayer, mlp=mlpdict)
-    model = torch.compile(model)
+    model = torch.compile(model, dynamic=True)
     model = model.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.wd)
     scheduler = CosineAnnealingWarmRestarts(optimizer=optimizer,

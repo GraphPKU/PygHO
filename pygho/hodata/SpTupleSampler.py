@@ -1,5 +1,5 @@
 from torch_geometric.data import Data as PygData, Batch as PygBatch
-from torch_geometric.utils import to_scipy_sparse_matrix, k_hop_subgraph
+from torch_geometric.utils import to_scipy_sparse_matrix, k_hop_subgraph, to_undirected
 import torch
 from typing import List, Optional, Tuple, Union
 from torch import Tensor, LongTensor
@@ -172,3 +172,57 @@ def I2Sampler(
     subgbatch = PygBatch.from_data_list(subgraphs)
     tupleid, tuplefeat = subgbatch.subg_nodeidx.t(), subgbatch.x
     return SparseTensor(tupleid, tuplefeat, shape=3*[data.num_nodes]+list(tuplefeat.shape[1:]), is_coalesced=False, reduce="min")
+
+
+def EdgeDeleteKhopSampler(
+        data: PygData,
+        hop: int = 2) -> Tuple[SparseTensor, SparseTensor]:
+    """
+    sample k-hop subgraph on a given PyG graph.
+
+    Args:
+    
+    - data (PygData): The input PyG dataset.
+    - hop (int, optional): The number of hops for subgraph sampling. Defaults to 2.
+
+    Returns:
+    
+        SparseTensor for the precomputed tuple features.
+    """
+
+    subgraphs = []
+    edgeset = to_undirected(data.edge_index, num_nodes=data.num_nodes)
+    edgeset = edgeset[:, edgeset[0] > edgeset[1]]
+
+    for i in range(edgeset.shape[1]):
+        center = edgeset[:, i]
+        subset, _, _, eimask, dist = k_hop_subgraph(center,
+                                               hop,
+                                               data.edge_index,
+                                               relabel_nodes=False,
+                                               num_nodes=data.num_nodes,)
+        assert subset.shape[0] > 1, "empty subgraph!"
+
+        subgei = data.edge_index[:, eimask]
+        
+        centermask = torch.logical_and(subgei[0] == center[0], subgei[1] == center[1])
+        centermask.logical_or_(torch.logical_and(subgei[0] == center[1], subgei[1] == center[0]))
+        centermask = centermask.logical_not_()
+
+        subgei = subgei[:, centermask]
+
+        subgraphs.append(
+            PygData(
+                x=dist,
+                subg_nodeidx=torch.stack((subset.clone().fill_(center[0]), subset.clone().fill_(center[1]), subset), dim=-1),
+                eax=None if data.edge_attr is None else data.edge_attr[eimask][centermask],
+                eix=torch.stack((subgei[0].clone().fill_(center[0]), subgei[0].clone().fill_(center[1]), subgei[0], subgei[1]), dim=-1),
+                num_nodes=subset.shape[0],
+            ))
+    subgbatch = PygBatch.from_data_list(subgraphs)
+    tupleid, tuplefeat = subgbatch.subg_nodeidx.t(), subgbatch.x
+    eix, eax = subgbatch.eix.t(), subgbatch.eax
+    tuplefeature = SparseTensor(tupleid, tuplefeat, shape=3*[data.num_nodes]+list(tuplefeat.shape[1:]), is_coalesced=False, reduce="min")
+    tupleadj = SparseTensor(eix, eax, shape=4*[data.num_nodes]+([] if eax is None else list(eax.shape[1:])), is_coalesced=False, reduce="min")
+    return tuplefeature, tupleadj
+

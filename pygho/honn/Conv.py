@@ -54,7 +54,7 @@ class NGNNConv(Module):
                 X: Union[SparseTensor, MaskedTensor],
                 datadict: dict) -> Union[SparseTensor, MaskedTensor]:
         tX = X.tuplewiseapply(self.lin)
-        ret = self.aggr.forward(A, tX, datadict, tX)
+        ret = self.aggr.forward(A, tX, datadict)
         return ret
 
 
@@ -98,8 +98,8 @@ class SSWLConv(Module):
                 X: Union[SparseTensor, MaskedTensor],
                 datadict: dict) -> Union[SparseTensor, MaskedTensor]:
         tX = X
-        X1 = self.aggr1.forward(A, tX, datadict, tX)
-        X2 = self.aggr2.forward(A, tX, datadict, tX)
+        X1 = self.aggr1.forward(A, tX, datadict)
+        X2 = self.aggr2.forward(A, tX, datadict)
         return X.catvalue([X1, X2], True).tuplewiseapply(self.lin)
 
 
@@ -143,7 +143,7 @@ class I2Conv(Module):
                 X: Union[SparseTensor, MaskedTensor],
                 datadict: dict) -> Union[SparseTensor, MaskedTensor]:
         tX = X.tuplewiseapply(self.lin)
-        ret = self.aggr.forward(A, tX, datadict, tX)
+        ret = self.aggr.forward(A, tX, datadict)
         return ret
 
 
@@ -192,7 +192,7 @@ class DSSGNNConv(Module):
                 datadict: dict) -> Union[SparseTensor, MaskedTensor]:
         X1 = self.unpooling2subg.forward(
             self.aggr_global.forward(A, self.pool2global.forward(X)), X)
-        X2 = self.aggr_subg.forward(A, X, datadict, X)
+        X2 = self.aggr_subg.forward(A, X, datadict)
         return X2.catvalue(X1, True).tuplewiseapply(self.lin)
 
 
@@ -233,7 +233,7 @@ class PPGNConv(Module):
                 X: Union[SparseTensor, MaskedTensor],
                 datadict: dict) -> Union[SparseTensor, MaskedTensor]:
         return self.op.forward(X.tuplewiseapply(self.lin1),
-                               X.tuplewiseapply(self.lin2), datadict, X)
+                               X.tuplewiseapply(self.lin2), datadict)
 
 
 # GNNAKConv: Graph Neural Networks As Kernel Convolution layer
@@ -287,7 +287,7 @@ class GNNAKConv(Module):
     def forward(self, A: Union[SparseTensor, MaskedTensor],
                 X: Union[SparseTensor, MaskedTensor],
                 datadict: dict) -> Union[SparseTensor, MaskedTensor]:
-        X = self.aggr.forward(A, X.tuplewiseapply(self.lin0), datadict, X)
+        X = self.aggr.forward(A, X.tuplewiseapply(self.lin0), datadict)
         X1 = self.unpool4subg.forward(self.diag.forward(X), X)
         X2 = self.unpool4subg.forward(self.pool2subg.forward(X), X)
         if self.ctx:
@@ -342,13 +342,14 @@ class SUNConv(Module):
         self.unpool4subg = TensorOp.OpUnpoolingSubgNodes2D(mode[1])
         self.pool2node = TensorOp.OpPoolingCrossSubg2D(mode[1], pool)
         self.unpool4rootnode = TensorOp.OpUnpoolingRootNodes2D(mode[1])
-        self.lin1_0 = HeteroLinear(7 * indim, indim, 2, False)
+        self.lin1_0_0 = nn.Linear(7 * indim, indim)
+        self.lin1_0_1 = nn.Linear(7 * indim, indim)
         self.lin1_1 = MLP(indim, outdim, **mlp1)
 
     def forward(self, A: Union[SparseTensor, MaskedTensor],
                 X: Union[SparseTensor, MaskedTensor],
                 datadict: dict) -> Union[SparseTensor, MaskedTensor]:
-        X4 = self.aggr.forward(A, X.tuplewiseapply(self.lin0), datadict, X)
+        X4 = self.aggr.forward(A, X.tuplewiseapply(self.lin0), datadict)
         Xdiag = self.diag.forward(X)
         X1 = X
         X2 = self.unpool4subg.forward(Xdiag, X)
@@ -357,7 +358,6 @@ class SUNConv(Module):
         X6 = self.unpool4subg.forward(self.pool2subg(X), X)
         X7 = self.unpool4rootnode.forward(self.pool2node(X4), X)
         X = X1.catvalue([X2, X3, X4, X5, X6, X7], True)
-        X = X.diagonalapply(lambda val, ind: self.lin1_0(
-            val.flatten(0, -2), ind.flatten()).unflatten(0, val.shape[0:-1]))
+        X = X.diagonalapply(self.lin1_0_0, self.lin1_0_1)
         X = X.tuplewiseapply(self.lin1_1)
         return X

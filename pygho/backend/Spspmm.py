@@ -58,7 +58,8 @@ def spspmm_ind(ind1: LongTensor,
                dim1: int,
                ind2: LongTensor,
                dim2: int,
-               is_k2_sorted: bool = False) -> Tuple[LongTensor, LongTensor]:   
+               is_k2_sorted: bool = False,
+               broadcast_dims: int = 0) -> Tuple[LongTensor, LongTensor]:   
     """
     Sparse-sparse matrix multiplication for indices.
 
@@ -98,9 +99,21 @@ def spspmm_ind(ind1: LongTensor,
         0], f"ind1's reduced dim {dim1} is out of range"
     assert 0 <= dim2 < ind2.shape[
         0], f"ind2's reduced dim {dim2} is out of range"
+    if broadcast_dims > 0:
+        assert dim1 >= broadcast_dims, "reduced dim1 should not broadcast"
+        assert dim2 >= broadcast_dims, "reduced dim2 should not broadcast "
+        tmpind1 = ind1[broadcast_dims:].clone()
+        tmpind2 = ind2[broadcast_dims:].clone()
+        tmpdim1, tmpdim2 = dim1 - broadcast_dims, dim2 - broadcast_dims
+        tmpind1[tmpdim1] = indicehash(torch.concat((ind1[:broadcast_dims], tmpind1[tmpdim1].unsqueeze(0)), dim=0))
+        tmpind2[tmpdim2] = indicehash(torch.concat((ind2[:broadcast_dims], tmpind2[tmpdim2].unsqueeze(0)), dim=0))
+        tmpind1, tmpdim1 = torch.concat((ind1[:broadcast_dims], tmpind1), dim=0), tmpdim1 + broadcast_dims
+        tarind, bcd = spspmm_ind(tmpind1, tmpdim1, tmpind2, tmpdim2, False, 0)
+        return tarind, bcd
     if dim2 != 0 and not (is_k2_sorted):
+        assert broadcast_dims == 0, "bug"
         perm = torch.argsort(ind2[dim2])
-        tarind, bcd = spspmm_ind(ind1, dim1, ind2[:, perm], dim2, True)
+        tarind, bcd = spspmm_ind(ind1, dim1, ind2[:, perm], dim2, True, 0)
         bcd[2] = perm[bcd[2]]
         return tarind, bcd
     else:
@@ -274,7 +287,8 @@ def spspmm(A: SparseTensor,
            aggr: str = "sum",
            bcd: Optional[LongTensor] = None,
            tar_ind: Optional[LongTensor] = None,
-           acd: Optional[LongTensor] = None) -> SparseTensor:
+           acd: Optional[LongTensor] = None,
+           broadcast_dims: int = 0) -> SparseTensor:
     """
     SparseTensor SparseTensor matrix multiplication at a specified sparse dimension.
 
@@ -322,7 +336,7 @@ def spspmm(A: SparseTensor,
     else:
         warnings.warn("acd is not found")
         if bcd is None:
-            ind, bcd = spspmm_ind(A.indices, dim1, B.indices, dim2)
+            ind, bcd = spspmm_ind(A.indices, dim1, B.indices, dim2, dim2==broadcast_dims and A.is_coalesced(), broadcast_dims)
         if tar_ind is not None:
             acd = filterind(tar_ind, ind, bcd)
             return spspmm(A, dim1, B, dim2, aggr, acd=acd, tar_ind=tar_ind)
@@ -339,7 +353,8 @@ def spspmpnn(A: SparseTensor,
              acd: LongTensor,
              message_func: Callable[[Tensor, Tensor, Tensor, LongTensor],
                                     Tensor],
-             aggr: str = "sum") -> SparseTensor:
+             aggr: str = "sum",
+             broadcast_dims: int = 0) -> SparseTensor:
     """
     SparseTensor SparseTensor matrix multiplication at a specified sparse dimension using a message function.
 

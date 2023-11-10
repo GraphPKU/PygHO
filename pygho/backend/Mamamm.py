@@ -9,7 +9,7 @@ def mamamm(A: MaskedTensor,
            B: MaskedTensor,
            dim2: int,
            mask: BoolTensor,
-           broadcast_firstdim: bool = True) -> MaskedTensor:
+           broadcast_dims: int = 1) -> MaskedTensor:
     """
     Batched masked matrix multiplication of two MaskedTensors.
 
@@ -34,15 +34,19 @@ def mamamm(A: MaskedTensor,
     """
     tA, tB = A.fill_masked(0.), B.fill_masked(0.)
     catdim1, catdim2 = A.masked_dim, B.masked_dim
-    if broadcast_firstdim:
+    if broadcast_dims > 0:
         assert dim1 > 0, "0 dim of A is batch, need to be broadcasted"
         assert dim2 > 0, "0 dim of B is batch, need to be broadcasted"
+        assert tA.shape[:broadcast_dims] == tB.shape[:broadcast_dims], "broadcast dims should match"
+        if broadcast_dims > 1:
+            broadcastshape = tA.shape[:broadcast_dims]
+            tA, tB = tA.flatten(0, broadcast_dims-1), tB.flatten(0, broadcast_dims-1)
         tA = torch.movedim(tA, 0, -1)
         tB = torch.movedim(tB, 0, -1)
-        dim1 -= 1
-        dim2 -= 1
-        catdim1 -= 1
-        catdim2 -= 1
+        dim1 -= broadcast_dims
+        dim2 -= broadcast_dims
+        catdim1 -= broadcast_dims
+        catdim2 -= broadcast_dims
     if catdim1 == 1:
         tA.unsqueeze(catdim1)
         catdim1 += 1
@@ -59,6 +63,8 @@ def mamamm(A: MaskedTensor,
 
     prod = prod.flatten(-2, -1).movedim(-1, 0)
     prod = prod.unflatten(0, catshape1 + catshape2)
-    if broadcast_firstdim:
+    if broadcast_dims > 0:
         prod = prod.movedim(-1, 0)
+        if broadcast_dims > 1:
+            prod = prod.unflatten(broadcastshape)
     return MaskedTensor(prod, mask)

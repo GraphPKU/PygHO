@@ -238,14 +238,19 @@ class MaskedTensor:
         ndata = func(self.fill_masked(0.))
         return MaskedTensor(ndata, self.mask)
 
-    def diagonalapply(self, func: Callable[[Tensor, LongTensor], Tensor]):
+    def diagonalapply(self, func_d: Callable[[Tensor], Tensor], func_nd: Callable[[Tensor], Tensor]):
         assert self.masked_dim == 3, "only implemented for 2D"
-        diagonaltype = torch.eye(self.shape[1],
+        mask = torch.eye(self.shape[1],
                                  self.shape[2],
                                  dtype=torch.long,
                                  device=self.data.device)
-        diagonaltype = diagonaltype.unsqueeze(0).expand_as(self.mask)
-        ndata = func(self.data, diagonaltype)
+        val_d = func_d(self.fill_masked(0.0))
+        val_nd = func_d(self.fill_masked(0.0))
+        
+        val_d, val_nd = torch.movedim(val_d, (1, 2), (-2, -1)), torch.movedim(val_nd, (1, 2), (-2, -1))
+        ndata = torch.where(mask, val_d, val_nd)
+        ndata = torch.movedim(ndata, (-2, -1), (1, 2))
+        
         return MaskedTensor(ndata, self.mask)
 
     def add(self, tarX, samesparse: bool):
