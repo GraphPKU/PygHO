@@ -206,6 +206,34 @@ class SpspmmTest(unittest.TestCase):
                 C[tar_ind[0], tar_ind[1], tar_ind[2], tar_ind[3]]), 1e-5,
             "spspmm with target indice value not match")
 
+    def test_3dbmm(self):
+        from torch_scatter import scatter_add
+        n, m, l, k = 13, 5, 7, 11
+        A = torch.rand((n, k, m))
+        A[torch.rand_like(A) > 0.5] = 0
+        A = A.to_sparse_coo()
+        B = torch.rand((n, l, k))
+        B[torch.rand_like(B) > 0.5] = 0
+        B = B.to_sparse_coo()
+        ind1 = A.indices()
+        val1 = A.values()
+        ind2 = B.indices()
+        val2 = B.values()
+
+        C = torch.einsum("nkm,nlk->nml", A.to_dense(), B.to_dense())
+        Cs = C.to_sparse_coo().coalesce()
+
+        ind, bcd = Spspmm.spspmm_ind(ind1, 1, ind2, 2, broadcast_dims=1)
+        mult = val1[bcd[1]] * val2[bcd[2]]
+        outval = scatter_add(mult, bcd[0], dim_size=ind.shape[1])
+        out = torch.sparse_coo_tensor(ind, outval)
+        out = out.coalesce()
+
+        self.assertTrue(tensorequal(Cs.indices(), out.indices()),
+                        "spspmm indice not match")
+        self.assertLessEqual(maxdiff(Cs.values(), out.values()), 1e-5,
+                             "spspmm value not match")
+
     def test_3dhadamard(self):
         n, m, l = 3, 5, 11
         Ap = torch.rand((n, m, l))
