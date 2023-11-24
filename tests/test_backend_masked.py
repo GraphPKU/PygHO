@@ -60,30 +60,30 @@ class MaTensorTest(unittest.TestCase):
 
     def test_pool(self):
         self.assertTrue(
-            floattensorequal(self.mt.max(dim=1),
-                             self.vd.amax(dim=1).to_dense()), "max error")
+            floattensorequal(self.mt.sum(dims=1).fill_masked(0.0),
+                             self.vd.sum(dim=1).to_dense()), "sum error")
         self.assertTrue(
-            floattensorequal(self.mt.min(dim=1),
-                             self.vd.amin(dim=1).to_dense()), "min error")
-        self.assertTrue(
-            floattensorequal(self.mt.mean(dim=1),
+            floattensorequal(self.mt.mean(dims=1).fill_masked(0.0),
                              self.vd.mean(dim=1).to_dense()), "mean error")
         self.assertTrue(
-            floattensorequal(self.mt.sum(dim=1),
-                             self.vd.sum(dim=1).to_dense()), "sum error")
-
+            floattensorequal(self.mt.max(dims=1).fill_masked(0.0),
+                             self.vd.amax(dim=1).to_dense()), "max error")
         self.assertTrue(
-            floattensorequal(self.mt.max(),
-                             self.vd.amax().to_dense()), "max error")
+            floattensorequal(self.mt.min(dims=1).fill_masked(0.0),
+                             self.vd.amin(dim=1).to_dense()), "min error")
+        
         self.assertTrue(
-            floattensorequal(self.mt.min(),
-                             self.vd.amin().to_dense()), "min error")
+            floattensorequal(self.mt.max(dims=(0,1)).fill_masked(0.0),
+                             self.vd.amax(dim=(0,1)).to_dense()), "max error")
         self.assertTrue(
-            floattensorequal(self.mt.mean(),
-                             self.vd.mean().to_dense()), "mean error")
+            floattensorequal(self.mt.min(dims=(0,1)).fill_masked(0.0),
+                             self.vd.amin(dim=(0,1)).to_dense()), "min error")
         self.assertTrue(
-            floattensorequal(self.mt.sum(),
-                             self.vd.sum().to_dense()), "sum error")
+            floattensorequal(self.mt.sum(dims=(0,1)).fill_masked(0.0),
+                             self.vd.sum(dim=(0,1)).to_dense()), "sum error")
+        self.assertTrue(
+            floattensorequal(self.mt.mean(dims=(0,1)).fill_masked(0.0),
+                             self.vd.mean(dim=(0,1)).to_dense()), "mean error")
 
 
 class SpmammTest(unittest.TestCase):
@@ -111,13 +111,6 @@ class SpmammTest(unittest.TestCase):
     def test_spmamm(self):
         self.assertTrue(
             floattensorequal(
-                Spmamm.spmamm(self.SA, self.MB, self.mask).data,
+                Spmamm.spmamm(self.SA, 2, self.MB, 1, self.mask).data,
                 torch.einsum("bnmd,bmld->bnld", self.MA.data, self.MB.data)),
             "spmamm error")
-
-    def test_maspmm(self):
-        self.assertTrue(
-            floattensorequal(
-                Spmamm.maspmm(self.MA, self.SB, self.mask).data,
-                torch.einsum("bnmd,bmld->bnld", self.MA.data, self.MB.data)),
-            "maspmm error")

@@ -104,11 +104,9 @@ class MaskedTensor:
           if self.dense_dim > 1:
               mask = mask.unflatten(-1, (self.dense_dim)*(1,))
         self.__fullnegmask = torch.logical_not(mask)
+        self.__padvalue = padvalue
         if not is_filled:
-            self.__padvalue = padvalue
-            self.fill_masked_(padvalue)
-        else:
-            self.__padvalue = padvalue
+            self.__data = self.__data.masked_fill(self.fullnegmask, padvalue)
 
     def fill_masked_(self, val: float = 0.0) -> None:
         """
@@ -117,7 +115,7 @@ class MaskedTensor:
         if self.padvalue == val:
             return
         self.__padvalue = val
-        self.__data = self.data.masked_fill(self.fullnegmask, val)
+        self.__data = self.__data.masked_fill(self.fullnegmask, val)
 
     def fill_masked(self, val: float = 0.0) -> Tensor:
         """
@@ -200,7 +198,7 @@ class MaskedTensor:
     def min(self, dims: Union[Iterable[int], int], keepdim: bool = False):
         tmp = self.fill_masked(torch.inf)
         return MaskedTensor(filterinf(
-            torch.amax(tmp, dim=dims, keepdim=keepdim), 0),
+            torch.amin(tmp, dim=dims, keepdim=keepdim), 0),
                             torch.amax(self.mask, dims, keepdim=keepdim),
                             padvalue=0,
                             is_filled=True)

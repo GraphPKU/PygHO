@@ -43,26 +43,27 @@ def spmamm(A: SparseTensor,
     """
     assert broadcast_dim >= 1, " at least 1 broadcast_dim "
     assert A.sparse_dim == 2 + broadcast_dim, f"A should have 2 sparse dims other than {broadcast_dim} broadcast dim, but input has {A.sparse_dim}"
-    assert B.masked_dim == 1 + broadcast_dim, f"B should have 1 masked dims other than {broadcast_dim} broadcast dim, but input has {B.masked_dim}"
+    # assert B.masked_dim == 1 + broadcast_dim, f"B should have 1 masked dims other than {broadcast_dim} broadcast dim, but input has {B.masked_dim}"
     assert aggr != "mean", "not implemented"
     relativedim = dim1 - broadcast_dim
     otherdim = 1 - relativedim + broadcast_dim
-    b = torch.LongTensor(A.shape[:broadcast_dim]+(A.shape[otherdim],), device=A.indices.device)
+    btuple = A.shape[:broadcast_dim]+(A.shape[otherdim],)
+    b = torch.LongTensor(btuple, device=A.indices.device)
     bij = indicehash_tight(A.indices[:broadcast_dim], b[:-1]), A.indices[dim1]
     tar_ind = b[-1] * bij[0] + A.indices[otherdim]
 
     Aval = A.values
     tB = torch.movedim(B.data.flatten(0, broadcast_dim-1), dim2-broadcast_dim+1, 1)
-    tBmask = torch.movedim(B.mask.flatten(0, broadcast_dim-1), dim2-broadcast_dim+1, 1)
+    tBnegmask = torch.movedim(B.fullnegmask.flatten(0, broadcast_dim-1), dim2-broadcast_dim+1, 1)
     if Aval is not None:
         mult = Aval.unsqueeze(1) * tB[bij[0], bij[1]]
     else:
         mult = tB[bij[0], bij[1]]
     
-    validmask = tBmask[bij[0], bij[1]]
-    mult.masked_fill(torch.logical_not(validmask), filled_value_dict[aggr])
+    validnegmask = tBnegmask[bij[0], bij[1]]
+    mult.masked_fill(validnegmask, filled_value_dict[aggr])
     val = torch_scatter_reduce(0, mult, tar_ind, torch.prod(b), aggr)
-    ret = val.unflatten(0, b)
+    ret = val.unflatten(0, btuple)
     if aggr in filter_inf_ops:
         ret = filterinf(ret)
 

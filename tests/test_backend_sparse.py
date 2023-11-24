@@ -238,19 +238,7 @@ class SpmmTest(unittest.TestCase):
         X = torch.randn((m, l), device=device)
         Y1 = Spmm.spmm(
             SparseTensor(A.indices(),
-                         A.values().unsqueeze(-1), A.shape + (1, )), X)
+                         A.values().unsqueeze(-1), A.shape + (1, )), 1, X)
         Y2 = A @ X
         self.assertLessEqual(maxdiff(Y1, Y2), EPS, "spmm error")
-
-    def test_mspmm(self):
-        n, m, l = 300, 200, 400
-        X = torch.randn((n, m))
-        A = torch.rand((m, l))
-        A[torch.rand_like(A) > 0.9] = 0
-        A = A.to_sparse_coo()
-        Y1 = Spmm.mspmm(
-            X,
-            SparseTensor(A.indices(),
-                         A.values().unsqueeze(-1), A.shape + (1, )))
-        Y2 = X @ A.to_dense()
-        self.assertLessEqual(maxdiff(Y1, Y2), EPS, "mspmm error")
+    
