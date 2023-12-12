@@ -517,6 +517,25 @@ class SparseTensor:
         else:
             return self.tuplewiseapply(lambda x: x + tarX.values)
 
+    def is_indicesymmetric(self, dim1: int, dim2: int) -> bool:
+        dimension_ind = list(range(self.sparse_dim))
+        dimension_ind[dim1] = dim2
+        dimension_ind[dim2] = dim1
+        newind = self.indices[dimension_ind]
+        newindhash = indicehash(newind)
+        newindhash = torch.sort(newindhash).values
+        return torch.equal(newindhash, indicehash(self.indices))
+
+    def transpose(self, dim1: int, dim2: int):
+        assert self.is_indicesymmetric(dim1, dim2), "only support summetric indice now"
+        dimension_ind = list(range(self.sparse_dim))
+        dimension_ind[dim1] = dim2
+        dimension_ind[dim2] = dim1
+        newind = self.indices[dimension_ind]
+        newindhash = indicehash(newind)
+        retind = torch.argsort(newindhash)
+        return self.tuplewiseapply(lambda x: x[retind])
+
     def catvalue(self, tarXs: Iterable, samesparse: bool):
         if isinstance(tarXs, SparseTensor):
             tarXs = [tarXs]

@@ -9,7 +9,8 @@ from typing import Union, Tuple, List, Iterable, Literal, Dict, Optional, Callab
 from . import SpOperator
 from . import MaOperator
 from torch.nn import Module
-
+from pygho.backend.utils import torch_scatter_reduce
+import torch
 
 class OpNodeMessagePassing(Module):
     """
@@ -63,6 +64,92 @@ class OpNodeMessagePassing(Module):
         - Union[Tensor, MaskedTensor]: The result of node-wise message passing.
         """
         return self.mod.forward(A, X, X)
+
+
+class OpNodePooling(Module):
+    """
+    Pool node representations to graph representations with support for both sparse and masked routines.
+
+    Args:
+    
+    - mode (Literal["S", "D"], optional): The mode indicating tensor types (default: "S"). 
+      S means sparse routine,  D means dense routine.
+    - aggr (str, optional): The aggregation method for message passing (default: "sum").
+
+    Methods:
+
+    - forward(X: Union[Tensor, MaskedTensor]) -> Tensor:
+      Pool node representations to graph representations.
+    """
+
+    def __init__(self,
+                 mode: Literal["S", "D"] = "S",
+                 pool: str = "sum") -> None:
+        super().__init__()
+        self.mode = mode
+        self.pool = pool
+
+    def forward(self, X: Union[Tensor, MaskedTensor],
+        datadict: Optional[Dict] = None) -> Tensor:
+        """
+        Perform node-wise message passing on the input tensors.
+
+        Args:
+
+        - A (Union[SparseTensor, MaskedTensor]): The input adjacency tensor.
+        - X (Union[Tensor, MaskedTensor]): The input tensor representing tuple features.
+
+        Returns:
+
+        - Union[Tensor, MaskedTensor]: The result of node-wise message passing.
+        """
+        if self.mode == "S":
+            h_graph: Tensor = torch_scatter_reduce(0, X, datadict["batch"],
+                                        datadict["num_graphs"], self.pool)
+        elif self.mode == "D":
+            h_graph: Tensor = getattr(X, self.pool)(dims=[1], keepdim=False).data
+        return h_graph
+    
+class OpNodeUnPooling(Module):
+    """
+    Unpool graph representations to node representations with support for both sparse and masked routines.
+
+    Args:
+    
+    - mode (Literal["S", "D"], optional): The mode indicating tensor types (default: "S"). 
+      S means sparse routine,  D means dense routine.
+    - aggr (str, optional): The aggregation method for message passing (default: "sum").
+
+    Methods:
+
+    - forward(X: Union[Tensor, MaskedTensor]) -> Tensor:
+      Pool node representations to graph representations.
+    """
+
+    def __init__(self,
+                 mode: Literal["S", "D"] = "S") -> None:
+        super().__init__()
+        self.mode = mode
+
+    def forward(self, X: Tensor, datadict: Optional[Dict] = None) -> Union[Tensor, MaskedTensor]:
+        """
+        Perform node-wise message passing on the input tensors.
+
+        Args:
+
+        - A (Union[SparseTensor, MaskedTensor]): The input adjacency tensor.
+        - X (Union[Tensor, MaskedTensor]): The input tensor representing tuple features.
+
+        Returns:
+
+        - Union[Tensor, MaskedTensor]: The result of node-wise message passing.
+        """
+        if self.mode == "S":
+            ret: Tensor = X[datadict["batch"]]
+        elif self.mode == "D":
+            ret: MaskedTensor = datadict["x"].tuplewiseapply(lambda x: torch.repeat_interleave(X.unsqueeze(1), x.shape[1], dim=1))
+        return ret
+
 
 class OpMessagePassing(Module):
     """

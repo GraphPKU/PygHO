@@ -238,12 +238,9 @@ class MaskedTensor:
 
     def diagonalapply(self, func_d: Callable[[Tensor], Tensor], func_nd: Callable[[Tensor], Tensor]):
         assert self.masked_dim == 3, "only implemented for 2D"
-        mask = torch.eye(self.shape[1],
-                                 self.shape[2],
-                                 dtype=torch.long,
-                                 device=self.data.device)
+        mask = torch.eye(self.shape[1], self.shape[2], dtype=torch.bool, device=self.data.device)
         val_d = func_d(self.fill_masked(0.0))
-        val_nd = func_d(self.fill_masked(0.0))
+        val_nd = func_nd(self.fill_masked(0.0))
         
         val_d, val_nd = torch.movedim(val_d, (1, 2), (-2, -1)), torch.movedim(val_nd, (1, 2), (-2, -1))
         ndata = torch.where(mask, val_d, val_nd)
@@ -263,6 +260,13 @@ class MaskedTensor:
             return MaskedTensor(
                 tarX.fill_masked(0.) + self.fill_masked(0.),
                 torch.logical_or(self.mask, tarX.mask), 0, True)
+
+    def is_masksymmetric(self, dim1: int, dim2: int) -> bool:
+        return self.shape[dim1] == self.shape[dim2] and torch.equal(qself.mask.transpose(dim1, dim2), self.mask)
+
+    def transpose(self, dim1: int, dim2: int):
+        assert self.is_masksymmetric(dim1, dim2), "only support summetric mask now"
+        return self.tuplewiseapply(lambda x: x.transpose(dim1, dim2))
 
     def catvalue(self, tarX: Iterable, samesparse: bool):
         assert samesparse == True, "must have the same sparcity to concat value"

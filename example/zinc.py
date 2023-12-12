@@ -20,8 +20,8 @@ from pygho.hodata.MaTupleSampler import spdsampler
 from pygho.honn.SpOperator import parse_precomputekey
 
 from pygho.backend.utils import torch_scatter_reduce
-from pygho.honn.Conv import NGNNConv, GNNAKConv, DSSGNNConv, SSWLConv, SUNConv, PPGNConv, I2Conv
-from pygho.honn.TensorOp import OpPoolingSubg2D, OpPoolingSubg3D
+from pygho.honn.Conv import NGNNConv, GNNAKConv, DSSGNNConv, SSWLConv, SUNConv, PPGNConv, I2Conv, IGN2Conv
+from pygho.honn.TensorOp import OpPoolingSubg2D, OpPoolingSubg3D, OpNodePooling
 from pygho.honn.MaOperator import OpPooling
 from pygho.honn.utils import MLP
 
@@ -32,7 +32,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--sparse", action="store_true")
 parser.add_argument("--aggr", choices=["sum", "mean", "max"], default="sum")
 parser.add_argument("--conv",
-                    choices=["NGNN", "NGAT", "GNNAK", "DSSGNN", "SSWL", "SUN", "PPGN", "I2GNN"], default="NGNN")
+                    choices=["NGNN", "NGAT", "GNNAK", "DSSGNN", "SSWL", "SUN", "PPGN", "I2GNN", "2IGN"], default="NGNN")
 parser.add_argument("--npool", choices=["mean", "sum", "max"], default="sum")
 parser.add_argument("--lpool", choices=["mean", "sum", "max"], default="mean")
 parser.add_argument("--cpool", choices=["mean", "sum", "max"], default="mean")
@@ -126,7 +126,9 @@ spconvdict = {
     lambda dim, mlp: PPGNConv(dim, dim, args.aggr, "SS", transfermlpparam(mlp)
                               ),
     "I2GNN":
-    lambda dim, mlp: I2Conv(dim, dim, args.aggr, "SS", transfermlpparam(mlp))
+    lambda dim, mlp: I2Conv(dim, dim, args.aggr, "SS", transfermlpparam(mlp)),
+    "2IGN":
+    lambda dim, mlp: IGN2Conv(dim, dim, args.aggr, "S", transfermlpparam(mlp))
 }
 
 maconvdict = {
@@ -148,7 +150,9 @@ maconvdict = {
     "PPGN":
     lambda dim, mlp: PPGNConv(dim, dim, args.aggr, "DD", transfermlpparam(mlp)),
     "I2GNN":
-    lambda dim, mlp: I2Conv(dim, dim, args.aggr, "DD", transfermlpparam(mlp))
+    lambda dim, mlp: I2Conv(dim, dim, args.aggr, "DD", transfermlpparam(mlp)),
+    "2IGN":
+    lambda dim, mlp: IGN2Conv(dim, dim, args.aggr, "D", transfermlpparam(mlp))
 }
 
 

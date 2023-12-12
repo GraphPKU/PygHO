@@ -14,7 +14,7 @@ from .utils import MLP
 from . import TensorOp
 from torch_geometric.nn import HeteroLinear
 import torch.nn as nn
-
+import torch
 
 # NGNNConv: Nested Graph Neural Network Convolution Layer
 class NGNNConv(Module):
@@ -361,3 +361,88 @@ class SUNConv(Module):
         X = X.diagonalapply(self.lin1_0_0, self.lin1_0_1)
         X = X.tuplewiseapply(self.lin1_1)
         return X
+    
+
+class IGN2Conv(nn.Module):
+    """
+    Implementation of the SUNConv layer based on the paper "Understanding and extending subgraph GNNs by rethinking their symmetries" by Fabrizio Frasca et al., NeurIPS 2022.
+    This layer performs message passing on 2D subgraph representations with subgraph and cross-subgraph pooling.
+
+    Args:
+
+    - indim (int): Input feature dimension.
+    - outdim (int): Output feature dimension.
+    - aggr (str): Aggregation method for message passing (e.g., "sum").
+    - pool (str): Pooling method (e.g., "mean").
+    - mode (str): Mode for specifying tensor types (e.g., "SS" for sparse adjacency and sparse X).
+    - mlp0 (dict): Parameters for the first MLP layer.
+    - mlp1 (dict): Parameters for the second MLP layer.
+
+    Methods:
+    
+    - forward(A: Union[SparseTensor, MaskedTensor], X: Union[SparseTensor, MaskedTensor], datadict: dict) -> Union[SparseTensor, MaskedTensor]:
+      Forward pass of the SUNConv layer.
+
+    Notes:
+    
+    - This layer is based on Symmetry Understanding Networks (SUN) and performs message passing on 2D subgraph representations with subgraph and cross-subgraph pooling.
+    """
+    def __init__(self, 
+                 indim: int,
+                 outdim: int,
+                 pool: str = "mean",
+                 mode: Literal["S", "D"] = "S",
+                 mlp: dict = {},
+                 optuplefeat: str = "X"):
+        super().__init__()
+        self.mode = mode
+        self.diag = TensorOp.OpDiag2D(mode)
+        self.pool2subg = TensorOp.OpPoolingSubg2D(mode, pool)
+        self.unpool4subg = TensorOp.OpUnpoolingSubgNodes2D(mode)
+        self.pool2node = TensorOp.OpPoolingCrossSubg2D(mode, pool)
+        self.unpool4rootnode = TensorOp.OpUnpoolingRootNodes2D(mode)
+        self.poolnode2full = TensorOp.OpNodePooling(mode, pool)
+        self.unpoolnode = TensorOp.OpNodeUnPooling(mode)
+        self.lins = nn.ModuleList([nn.Identity()] + [nn.Linear(indim, outdim, bias=False) for _ in range(15)])
+        self.lin2 = MLP(outdim, outdim, **mlp)
+
+    def forward(self, A: Union[SparseTensor, MaskedTensor],
+                X: Union[SparseTensor, MaskedTensor],
+                datadict: dict) -> Union[SparseTensor, MaskedTensor]:
+        diag_part = self.diag(X)
+        sum_diag_part = self.poolnode2full.forward(diag_part, datadict)
+        sum_of_rows = self.pool2subg.forward(X)
+        sum_of_cols = self.pool2node.forward(X)
+        sum_all = self.poolnode2full(sum_of_rows, datadict)  # N x D
+        # op10 - (1234) + (14)(23) - identity
+        op10 = X.tuplewiseapply(self.lins[10])
+        ret = op10
+        # op1 - (1234) - extract diag
+        ret = ret.add(X.diagonalapply(self.lins[1], torch.zeros_like), True)
+        # op2 - (1234) + (12)(34) - place sum of diag on diag
+        ret = ret.add(self.unpool4subg.forward(self.unpoolnode.forward(sum_diag_part, datadict), X).diagonalapply(self.lins[2], torch.zeros_like), True)
+        # op3 - (1234) + (123)(4) - place sum of row i on diag ii
+        ret = ret.add(self.unpool4subg.forward(sum_of_rows, X).diagonalapply(self.lins[3], torch.zeros_like), True)
+        # op4 - (1234) + (124)(3) - place sum of col i on diag ii
+        ret = ret.add(self.unpool4subg.forward(sum_of_cols, X).diagonalapply(self.lins[4], torch.zeros_like), True)
+        # op5 - (1234) + (124)(3) + (123)(4) + (12)(34) + (12)(3)(4) - place sum of all entries on diag
+        ret = ret.add(self.unpool4subg.forward(self.unpoolnode.forward(sum_all, datadict), X).diagonalapply(self.lins[5], torch.zeros_like), True)
+        # op6 - (14)(23) + (13)(24) + (24)(1)(3) + (124)(3) + (1234) - place sum of col i on row i
+        ret = ret.add(self.unpool4subg.forward(sum_of_rows, X).tuplewiseapply(self.lins[6]), True)
+        # op7 - (14)(23) + (23)(1)(4) + (234)(1) + (123)(4) + (1234) - place sum of row i on row i
+        ret = ret.add(self.unpool4rootnode.forward(sum_of_rows, X).tuplewiseapply(self.lins[7]), True)
+        # op8 - (14)(2)(3) + (134)(2) + (14)(23) + (124)(3) + (1234) - place sum of col i on col i
+        ret = ret.add(self.unpool4subg.forward(sum_of_cols, X).tuplewiseapply(self.lins[8]), True)
+        # op9 - (13)(24) + (13)(2)(4) + (134)(2) + (123)(4) + (1234) - place sum of row i on col i
+        ret = ret.add(self.unpool4rootnode.forward(sum_of_cols, X).tuplewiseapply(self.lins[9]), True)
+        # op11 - (1234) + (13)(24) - transpose
+        ret = ret.add(X.transpose(1, {"S": 0, "D": 2}[self.mode]).tuplewiseapply(self.lins[11]), True) 
+        # op12 - (1234) + (234)(1) - place ii element in row i
+        ret = ret.add(self.unpool4subg.forward(diag_part, X).tuplewiseapply(self.lins[12]), True)
+        # op13 - (1234) + (134)(2) - place ii element in col i
+        ret = ret.add(self.unpool4rootnode.forward(diag_part, X).tuplewiseapply(self.lins[13]), True)
+        # op14 - (34)(1)(2) + (234)(1) + (134)(2) + (1234) + (12)(34) - place sum of diag in all entries
+        ret = ret.add(self.unpool4rootnode.forward(self.unpoolnode.forward(sum_diag_part, datadict), X).tuplewiseapply(self.lins[14]), True)
+        # op15 - sum of all ops - place sum of all entries in all entries
+        ret = ret.add(self.unpool4rootnode.forward(self.unpoolnode.forward(sum_diag_part, datadict), X).tuplewiseapply(self.lins[14]), True)
+        return ret.tuplewiseapply(self.lin2)
