@@ -253,7 +253,7 @@ class SparseTensor:
             # print(self.shape, self.denseshape, self.sparseshape, values.shape)
             if values is not None:
                 assert self.denseshape == values.shape[
-                    1:], "shape, value not match"
+                    1:], f"shape {self.denseshape}, value {values.shape} not match"
         else:
             self.__shape = tuple(
                 list(map(lambda x: x + 1,

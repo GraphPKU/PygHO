@@ -48,15 +48,16 @@ def spmamm(A: SparseTensor,
     relativedim = dim1 - broadcast_dim
     otherdim = 1 - relativedim + broadcast_dim
     btuple = A.shape[:broadcast_dim]+(A.shape[otherdim],)
-    b = torch.LongTensor(btuple, device=A.indices.device)
+    b = torch.tensor(btuple, dtype=torch.long, device=A.indices.device)
     bij = indicehash_tight(A.indices[:broadcast_dim], b[:-1]), A.indices[dim1]
     tar_ind = b[-1] * bij[0] + A.indices[otherdim]
 
     Aval = A.values
     tB = torch.movedim(B.data.flatten(0, broadcast_dim-1), dim2-broadcast_dim+1, 1)
     tBnegmask = torch.movedim(B.fullnegmask.flatten(0, broadcast_dim-1), dim2-broadcast_dim+1, 1)
+    # print(tB.shape, tB[bij[0], bij[1]].shape, Aval.shape)
     if Aval is not None:
-        mult = Aval.unsqueeze(1) * tB[bij[0], bij[1]]
+        mult = Aval * tB[bij[0], bij[1]]
     else:
         mult = tB[bij[0], bij[1]]
     

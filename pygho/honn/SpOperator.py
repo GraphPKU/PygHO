@@ -171,7 +171,7 @@ class OpMessagePassing(Module):
             return spspmpnn(
                 A, self.dim1, B, self.dim2, tarX,
                 datadict.get(f"{self.precomputekey}{KEYSEP}acd", None),
-                self.message_func, self.aggr)
+                self.message_func, self.aggr, self.broadcast_dims)
         else:
             return spspmm(
                 A,
@@ -182,7 +182,8 @@ class OpMessagePassing(Module):
                 acd=datadict.get(f"{self.precomputekey}{KEYSEP}acd", None),
                 bcd=datadict.get(f"{self.precomputekey}{KEYSEP}bcd", None),
                 tar_ind=datadict.get(f"{self.precomputekey}{KEYSEP}tarind",
-                                     None) if tarX is None else tarX.indices)
+                                     None) if tarX is None else tarX.indices,
+                broadcast_dims=self.broadcast_dims)
 
 
 class OpDiag(Module):

@@ -330,7 +330,7 @@ def spspmm(A: SparseTensor,
         return SparseTensor(tar_ind,
                             retval,
                             shape=A.sparseshape[:dim1] +
-                            A.sparseshape[dim1 + 1:] + B.sparseshape[:dim2] +
+                            A.sparseshape[dim1 + 1:] + B.sparseshape[broadcast_dims:dim2] +
                             B.sparseshape[dim2 + 1:] + retval.shape[1:],
                             is_coalesced=True)
     else:
@@ -382,6 +382,7 @@ def spspmpnn(A: SparseTensor,
     - The `message_func` should take four arguments: `A_values`, `B_values`, `C_values`, and `acd`, and return messages based on custom logic.
 
     """
+    # print(A.values.shape, B.values.shape, C.values.shape)
     mult = message_func(None if A.values is None else A.values[acd[1]],
                         None if B.values is None else B.values[acd[2]],
                         None if C.values is None else C.values[acd[0]], acd[0])
@@ -390,6 +391,6 @@ def spspmpnn(A: SparseTensor,
     return SparseTensor(tar_ind,
                         retval,
                         shape=A.sparseshape[:dim1] + A.sparseshape[dim1 + 1:] +
-                        B.sparseshape[:dim2] + B.sparseshape[dim2 + 1:] +
+                        B.sparseshape[broadcast_dims:dim2] + B.sparseshape[dim2 + 1:] +
                         retval.shape[1:],
                         is_coalesced=True)
