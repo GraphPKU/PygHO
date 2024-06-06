@@ -130,14 +130,14 @@ class OpSpMessagePassing(Module):
     """
     def __init__(self, dim1: int, dim2: int, aggr: str = "sum", broadcast_dim: int = 0) -> None:
         super().__init__()
-        self.dim1 = dim1
-        self.dim2 = dim2
-        self.aggr = aggr
-        self.broadcast_dim = broadcast_dim
+        self.__dim1 = int(dim1) + 1
+        self.__dim2 = int(dim2) + 1
+        self.__aggr = aggr
+        self.__broadcast_dim = int(broadcast_dim) + 1
 
     def forward(self, A: SparseTensor, X: MaskedTensor,
                 tarX: MaskedTensor) -> MaskedTensor:
-        return spmamm(A, self.dim1+1, X, self.dim2+1, tarX.mask, self.aggr, broadcast_dim=self.broadcast_dim+1)
+        return spmamm(A, self.__dim1, X, self.__dim2, tarX.mask, self.__aggr, broadcast_dim=self.__broadcast_dim)
 
 
 class OpDiag(Module):

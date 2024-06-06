@@ -5,7 +5,7 @@ from typing import Iterable, Union
 import numpy as np
 from .utils import torch_scatter_reduce
 from typing import Final
-
+import math
 
 def indicehash(indice: LongTensor) -> LongTensor:
     """
@@ -87,7 +87,7 @@ def decodehash(indhash: LongTensor, sparse_dim: int) -> LongTensor:
     return ret
 
 
-def indicehash_tight(indice: LongTensor, dimsize: LongTensor) -> LongTensor:
+def indicehash_tight(indice: LongTensor, dimsize: Iterable[int]) -> LongTensor:
     """
     Hashes a 2D LongTensor of indices tightly into a single LongTensor.
     Equivalently, it compute the indice of flattened sparse tensor with indice and dimsize
@@ -112,13 +112,13 @@ def indicehash_tight(indice: LongTensor, dimsize: LongTensor) -> LongTensor:
 
     """
     assert indice.ndim == 2, "indice shoule be of shape (sparse_dim, nnz) "
-    assert dimsize.ndim == 1, "dim size should be of shape (sparse_dim)"
-    assert dimsize.shape[0] == indice.shape[
-        0], "indice dim and dim size not match"
-    assert torch.all(indice.max(dim=1)[0] < dimsize), "indice exceeds dimsize"
-    assert torch.prod(dimsize) < (
+    # assert dimsize.ndim == 1, "dim size should be of shape (sparse_dim)"
+    assert len(dimsize) == indice.shape[0], "indice dim and dim size not match"
+    assert math.prod(dimsize) < (
         1 << 62), "total size exceeds the range that torch.long can express"
     assert torch.all(indice >= 0), "indice cannot be negative"
+    dimsize = torch.tensor(dimsize, dtype=torch.long, device=indice.device)
+    assert torch.all(indice.max(dim=1)[0] < dimsize), "indice exceeds dimsize"
     if indice.shape[0] == 1:
         return indice[0]
     step = torch.ones_like(dimsize)
@@ -401,7 +401,7 @@ class SparseTensor:
 
             thash = indicehash_tight(
                 other_ind,
-                torch.LongTensor(nsparse_shape).to(other_ind.device))
+                nsparse_shape)
             ret = torch_scatter_reduce(0, self.values, thash, nsparse_size,
                                        reduce)
             ret = ret.reshape(nsparse_shape + tuple(ret.shape[1:]))

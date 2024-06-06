@@ -1,6 +1,7 @@
 from .MaTensor import MaskedTensor, filterinf
 import torch
 from torch import BoolTensor, Tensor
+import math
 from typing import Optional
 from .SpTensor import SparseTensor, indicehash_tight
 from .utils import torch_scatter_reduce
@@ -48,7 +49,7 @@ def spmamm(A: SparseTensor,
     relativedim = dim1 - broadcast_dim
     otherdim = 1 - relativedim + broadcast_dim
     btuple = A.shape[:broadcast_dim]+(A.shape[otherdim],)
-    b = torch.tensor(btuple, dtype=torch.long, device=A.indices.device)
+    b = btuple  # torch.tensor(btuple, dtype=torch.long, device=A.indices.device)
     bij = indicehash_tight(A.indices[:broadcast_dim], b[:-1]), A.indices[dim1]
     tar_ind = b[-1] * bij[0] + A.indices[otherdim]
 
@@ -63,7 +64,7 @@ def spmamm(A: SparseTensor,
     
     validnegmask = tBnegmask[bij[0], bij[1]]
     mult.masked_fill(validnegmask, filled_value_dict[aggr])
-    val = torch_scatter_reduce(0, mult, tar_ind, torch.prod(b), aggr)
+    val = torch_scatter_reduce(0, mult, tar_ind, math.prod(b), aggr)
     ret = val.unflatten(0, btuple)
     if aggr in filter_inf_ops:
         ret = filterinf(ret)
