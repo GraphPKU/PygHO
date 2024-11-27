@@ -364,6 +364,53 @@ class SparseTensor:
         else:
             return self._diag_to_dense(dims)
 
+    def index_select(self, dims: Iterable[int], index: LongTensor):
+        assert np.all(
+            np.array(dims) < self.__sparse_dim
+        ), "please use tuplewiseapply for operation on dense dims"
+        assert np.all(np.array(dims) >= 0), "do not support negative dims"
+        # assert np.diff(np.array(dims)), "dims should be sorted in ascending order"
+        assert len(dims)==index.shape[0], "index of shape (#dims, #elems)"
+        noneedsort = ((dims)==list(range(len(dims))))
+        nnz1 = index.shape[-1]
+
+        index = indicehash(index)
+        ind_to_match = self.indices[list(dims)]
+        ind_to_match = indicehash(ind_to_match)
+        if not noneedsort:
+            objidx = torch.argsort(ind_to_match)
+            ind_to_match = ind_to_match[objidx]
+        
+        # for each k in k1, it can match a interval of k2 as k2 is sorted
+        upperbound = torch.searchsorted(ind_to_match, index, right=True)
+        lowerbound = torch.searchsorted(ind_to_match, index, right=False)
+        matched_num = torch.clamp_min_(upperbound - lowerbound, 0)
+
+        # ptr[i] provide the offset to place pair of ind1[:, i] and the matched ind2
+        retptr = torch.zeros((nnz1 + 1),
+                             dtype=matched_num.dtype,
+                             device=matched_num.device)
+        torch.cumsum(matched_num, dim=0, out=retptr[1:])
+        retsize = retptr[-1]
+
+        # fill the output with ptr
+        ret1 = torch.repeat_interleave(matched_num, output_size=retsize)#deg2batch(matched_num, retsize)
+        ret2 = torch.arange(retsize, device=matched_num.device, dtype=matched_num.dtype)
+        ret2 += (lowerbound - retptr[:-1])[ret1]
+
+        if not noneedsort:
+            ret2 = objidx[ret2]
+
+        nidx = self.indices[[_ for _ in range(self.sparse_dim) if _ not in list(dims)]][:, ret2]
+        nidx = torch.concat((ret1.unsqueeze(0), nidx), dim=0)
+        nvalue = self.values[ret2]
+        nshape = tuple([index.shape[-1]]+[self.shape[i] for i in range(self.sparse_dim) if i not in list(dims)]) + self.denseshape
+        return SparseTensor(indices=nidx,
+                            values=nvalue,
+                            shape=nshape,
+                            is_coalesced=False,
+                            reduce="sum")
+    
     def _reduce_to_sparse(self, dims: Iterable[int], reduce: str):
         assert np.all(
             np.array(dims) < self.__sparse_dim

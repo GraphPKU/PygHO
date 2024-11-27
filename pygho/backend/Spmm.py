@@ -13,7 +13,7 @@ def spmm(A: SparseTensor, dim1: int, X: Tensor, aggr: str = "sum") -> Tensor:
 
     - A (SparseTensor): The SparseTensor used for multiplication.
     - dim1 (int): The dimension along which `A` is reduced.
-    - X (Tensor): The dense tensor to be multiplied with `A`. It dim 0 will be reduced.
+    - X (Tensor): The dense tensor to be multiplied with `A`. Its dim 0 will be reduced.
     - aggr (str, optional): The reduction operation to use for merging edge features ("sum", "min", "max", "mean"). Defaults to "sum".
 
     Returns:
