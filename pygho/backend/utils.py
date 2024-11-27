@@ -47,7 +47,7 @@ def torch_scatter_reduce(dim: int, src: Tensor, ind: LongTensor, dim_size: int,
         aggr = "a" + aggr
     onedim = src.ndim - 1
     dim_size = dim_size
-    ret = torch.zeros_like(src[[0]].expand((dim_size, ) + (-1, ) * onedim))
+    ret = src.new_zeros((dim_size,)+src.shape[1:])
     ret.scatter_reduce_(dim,
                         ind.reshape((-1, ) + (1, ) * onedim).expand_as(src),
                         src,
