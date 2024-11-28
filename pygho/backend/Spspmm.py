@@ -259,6 +259,12 @@ def spsphadamard(A: SparseTensor,
     - Both `A` and `B` must be coalesced SparseTensors.
     - The dense shapes of `A` and `B` must be broadcastable.
     """
+    if A.nnz == 0 or B.nnz ==0:
+        assert A.denseshape == B.denseshape
+        return SparseTensor(A.indices.new_zeros((A.sparse_dim, 0)),
+                    A.values.new_zeros((0,)+A.denseshape),
+                            shape=A.shape,
+                            is_coalesced=True)
     assert A.is_coalesced(), "A should be coalesced"
     assert B.is_coalesced(), "B should be coalesced"
     assert A.sparseshape == B.sparseshape, "A, B should be of the same sparse shape"
@@ -318,6 +324,14 @@ def spspmm(A: SparseTensor,
     """
     assert A.is_coalesced(), "A should be coalesced"
     assert B.is_coalesced(), "B should be coalesced"
+    if A.nnz == 0 or B.nnz == 0:
+        assert A.denseshape == B.denseshape
+        return SparseTensor(A.indices.new_zeros((A.sparse_dim+B.sparse_dim-2, 0)),
+                    A.values.new_zeros((0,)+A.denseshape),
+                            shape=A.sparseshape[:dim1] +
+                            A.sparseshape[dim1 + 1:] + B.sparseshape[broadcast_dims:dim2] +
+                            B.sparseshape[dim2 + 1:]+A.denseshape,
+                            is_coalesced=True)
     if acd is not None:
         assert tar_ind is not None
         if A.values is None:
